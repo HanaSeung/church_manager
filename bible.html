@@ -33,15 +33,19 @@
 
     <div class="controls" id="controls">
       <div class="row main">
-        <select id="verSel" class="sel ver" title="번역본"></select>
-        <select id="bookSel" class="sel book"></select>
-        <select id="chapSel" class="sel num"></select>
-        <select id="verseSel" class="sel num" title="절로 이동"></select>
-        <button id="prevBtn" class="navb ic" title="이전 장">‹</button>
-        <button id="nextBtn" class="navb ic" title="다음 장">›</button>
-        <button id="searchToggle" class="navb ic" title="검색">🔍</button>
-        <button id="fsDown" class="navb ic" title="글자 작게">가−</button>
-        <button id="fsUp" class="navb ic" title="글자 크게">가＋</button>
+        <div class="grp sels">
+          <select id="verSel" class="sel ver" title="번역본"></select>
+          <select id="bookSel" class="sel book"></select>
+          <select id="chapSel" class="sel num"></select>
+          <select id="verseSel" class="sel num" title="절로 이동"></select>
+        </div>
+        <div class="grp btns">
+          <button id="prevBtn" class="navb ic" title="이전 장">‹</button>
+          <button id="nextBtn" class="navb ic" title="다음 장">›</button>
+          <button id="searchToggle" class="navb ic" title="검색">🔍</button>
+          <button id="fsDown" class="navb ic" title="글자 작게">가−</button>
+          <button id="fsUp" class="navb ic" title="글자 크게">가＋</button>
+        </div>
       </div>
       <div class="row searchbar" id="searchBar" style="display:none;">
         <input id="searchInput" type="text" placeholder="단어로 검색 (예: 사랑)">
@@ -59,18 +63,25 @@
   <style>
     .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:8px; margin-bottom:14px; }
-    .row { display:flex; gap:5px; align-items:center; }
-    .row.main { flex-wrap:nowrap; }
+    .row { display:flex; gap:6px; align-items:center; }
+    .row.main { flex-wrap:wrap; }
     .row.searchbar { margin-top:8px; }
+    .grp { display:flex; gap:5px; align-items:center; }
+    .grp.sels { flex:1 1 auto; min-width:0; }
+    .grp.btns { flex:1 1 auto; justify-content:flex-end; }
     .sel { padding:10px 2px; font-size:14px; border:1px solid var(--line);
       border-radius:7px; background:#fff; color:var(--text); min-width:0; }
     .sel.ver { flex:0 0 auto; width:74px; }
-    .sel.book { flex:1 1 auto; min-width:84px; }
+    .sel.book { flex:1 1 auto; min-width:70px; }
     .sel.num { flex:0 0 auto; width:48px; padding-left:2px; padding-right:2px; }
     .navb { padding:10px 8px; font-size:14px; border:1px solid var(--line); border-radius:7px;
       background:#fff; color:var(--text); cursor:pointer; white-space:nowrap; }
     .navb:hover { border-color:var(--green); color:var(--green); }
-    .navb.ic { flex:0 0 auto; padding:10px 0; width:38px; text-align:center; }
+    .navb.ic { flex:1 1 auto; padding:10px 0; min-width:40px; text-align:center; }
+    @media (max-width:560px) {
+      .grp.sels, .grp.btns { flex:1 1 100%; }
+      .grp.btns { justify-content:space-between; margin-top:6px; }
+    }
     .row.searchbar input { flex:1; padding:9px 12px; font-size:15px;
       border:1px solid var(--line); border-radius:8px; }
     .status { color:var(--muted); font-size:14px; padding:20px 4px; text-align:center; }
