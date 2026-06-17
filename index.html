@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2f6f4f">
+  <link rel="manifest" href="manifest.json">
+  <title>교회 통합 관리</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #2f6f4f; --green-soft: #e7f1ec;
+      --bg: #f5f6f4; --card: #ffffff;
+      --text: #1f2421; --muted: #6b726d; --line: #e2e5e1;
+      --blue: #2f6896; --blue-soft: #e7eff6;
+      --amber: #9a6a16; --amber-soft: #f6efe1;
+    }
+    body { font-family: 'Malgun Gothic', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6; }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header style="display:flex; align-items:center; justify-content:space-between;
+      padding:14px 4px 18px; border-bottom:1px solid var(--line); margin-bottom:22px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="width:42px; height:42px; border-radius:10px; background:var(--green-soft);
+          display:flex; align-items:center; justify-content:center; font-size:22px;">⛪</div>
+        <div>
+          <div style="font-size:19px; font-weight:700;">교회 통합 관리</div>
+          <div style="font-size:13px; color:var(--muted);">church_manager · 성도 30명</div>
+        </div>
+      </div>
+      <button id="loginBtn" style="display:flex; align-items:center; gap:6px; font-size:14px;
+        padding:9px 18px; border:1px solid var(--line); border-radius:8px; background:var(--card);
+        color:var(--text); cursor:pointer;">로그인</button>
+    </header>
+
+    <section style="margin-bottom:26px;">
+      <div style="display:flex; align-items:center; gap:8px; margin:0 4px 12px;">
+        <span style="font-size:14px; font-weight:700; color:var(--muted);">1단계 · 콘텐츠 뷰어</span>
+        <span style="font-size:12px; background:var(--green-soft); color:var(--green);
+          padding:3px 9px; border-radius:7px;">누구나 · 사용 가능</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px;">
+        <a href="bible.html" class="card-on">
+          <div class="ic">📖</div><div class="tt">성경 뷰어</div><div class="sb">역본 선택 · 장절 검색</div></a>
+        <a href="hymn.html" class="card-on">
+          <div class="ic">🎵</div><div class="tt">찬송 뷰어</div><div class="sb">번호 · 가사 · 송출</div></a>
+        <a href="responsive.html" class="card-on">
+          <div class="ic">📜</div><div class="tt">교독문 뷰어</div><div class="sb">인도자 · 회중 구분</div></a>
+      </div>
+    </section>
+
+    <section style="margin-bottom:26px;">
+      <div style="display:flex; align-items:center; gap:8px; margin:0 4px 12px;">
+        <span style="font-size:14px; font-weight:700; color:var(--muted);">2단계 · 소통</span>
+        <span style="font-size:12px; background:var(--blue-soft); color:var(--blue);
+          padding:3px 9px; border-radius:7px;">🔒 회원 · 로그인 필요</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
+        <div class="card-off" data-need="member"><div class="ic">💬</div><div class="tt">게시판</div><div class="sb">공지 · 댓글</div></div>
+        <div class="card-off" data-need="member"><div class="ic">🗨️</div><div class="tt">채팅</div><div class="sb">실시간 대화</div></div>
+        <div class="card-off" data-need="member"><div class="ic">🔔</div><div class="tt">알림</div><div class="sb">공지 발송</div></div>
+      </div>
+    </section>
+
+    <section style="margin-bottom:26px;">
+      <div style="display:flex; align-items:center; gap:8px; margin:0 4px 12px;">
+        <span style="font-size:14px; font-weight:700; color:var(--muted);">3단계 · 관리</span>
+        <span style="font-size:12px; background:var(--amber-soft); color:var(--amber);
+          padding:3px 9px; border-radius:7px;">🔒 허가된 회원만</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
+        <div class="card-off" data-need="admin"><div class="ic">👥</div><div class="tt">성도 관리</div><div class="sb">명부 · 새신자</div></div>
+        <div class="card-off" data-need="admin"><div class="ic">✅</div><div class="tt">출석 관리</div><div class="sb">예배 · 구역</div></div>
+        <div class="card-off" data-need="admin"><div class="ic">💰</div><div class="tt">헌금 관리</div><div class="sb">항목별 · 영수증</div></div>
+        <div class="card-off" data-need="admin"><div class="ic">🤝</div><div class="tt">심방 관리</div><div class="sb">기록 · 기도제목</div></div>
+      </div>
+    </section>
+
+    <div id="installArea" style="display:none; margin:0 4px 24px; padding:14px 16px;
+      background:var(--green-soft); border-radius:10px; font-size:14px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <span>📲 이 페이지를 앱으로 설치하면 알림을 받을 수 있어요.</span>
+        <button id="installBtn" style="padding:8px 16px; border:none; border-radius:8px;
+          background:var(--green); color:#fff; cursor:pointer; white-space:nowrap;">앱 설치</button>
+      </div>
+    </div>
+
+    <footer style="text-align:center; color:var(--muted); font-size:12px;
+      padding:16px 0 8px; border-top:1px solid var(--line);">
+      church_manager · PWA 준비 중
+    </footer>
+  </div>
+
+  <style>
+    .card-on, .card-off {
+      display:block; background:var(--card); border:1px solid var(--line);
+      border-radius:12px; padding:16px 18px; text-decoration:none; color:var(--text); }
+    .card-on { cursor:pointer; transition:border-color .15s, transform .1s; }
+    .card-on:hover { border-color:var(--green); transform:translateY(-1px); }
+    .card-off { background:#eef0ed; cursor:pointer; opacity:.9; }
+    .ic { font-size:24px; }
+    .tt { font-weight:700; font-size:15px; margin:9px 0 2px; }
+    .sb { font-size:12px; color:var(--muted); }
+  </style>
+
+  <script>
+    document.getElementById('loginBtn').addEventListener('click', function () {
+      alert('로그인 기능은 2단계(Firebase 연결) 작업 때 준비됩니다.');
+    });
+
+    document.querySelectorAll('.card-off').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var need = el.getAttribute('data-need');
+        if (need === 'member') {
+          alert('회원 로그인 후 사용할 수 있습니다.\n(2단계 작업 때 연결됩니다.)');
+        } else {
+          alert('관리자 허가를 받은 회원만 사용할 수 있습니다.\n(3단계 작업 때 연결됩니다.)');
+        }
+      });
+    });
+
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('installArea').style.display = 'block';
+    });
+    document.getElementById('installBtn').addEventListener('click', function () {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt = null;
+      document.getElementById('installArea').style.display = 'none';
+    });
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('service-worker.js').catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
