@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2f6f4f">
+  <title>성경 뷰어 · 교회 통합 관리</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --green:#2f6f4f; --green-d:#245a40; --green-soft:#e7f1ec;
+      --bg:#f5f6f4; --card:#fff; --text:#1f2421; --muted:#6b726d; --line:#e2e5e1;
+      --fs:20px;
+    }
+    body { font-family:'Malgun Gothic',system-ui,sans-serif; background:var(--bg);
+      color:var(--text); line-height:1.6; }
+    .topbar { background:var(--green); color:#fff; padding:12px 16px;
+      display:flex; align-items:center; gap:12px; }
+    .topbar a { color:#fff; text-decoration:none; font-size:14px; opacity:.9; }
+    .topbar h1 { font-size:17px; font-weight:700; }
+    #fixedHead { position:fixed; top:0; left:0; right:0; z-index:20;
+      background:var(--bg); box-shadow:0 2px 6px rgba(0,0,0,.08); }
+    #fixedHead .controls { margin:0; border-radius:0; border-left:none; border-right:none; }
+    .wrap { max-width:860px; margin:0 auto; padding:14px 16px 60px; }
+  </style>
+</head>
+<body>
+  <div id="fixedHead">
+  <div class="topbar">
+    <a href="index.html">← 홈</a>
+    <h1>성경 뷰어</h1>
+  </div>
+
+    <div class="controls" id="controls">
+      <div class="row main">
+        <select id="verSel" class="sel ver" title="번역본"></select>
+        <select id="bookSel" class="sel book"></select>
+        <select id="chapSel" class="sel num"></select>
+        <select id="verseSel" class="sel num" title="절로 이동"></select>
+        <button id="prevBtn" class="navb ic" title="이전 장">‹</button>
+        <button id="nextBtn" class="navb ic" title="다음 장">›</button>
+        <button id="searchToggle" class="navb ic" title="검색">🔍</button>
+        <button id="fsDown" class="navb ic" title="글자 작게">가−</button>
+        <button id="fsUp" class="navb ic" title="글자 크게">가＋</button>
+      </div>
+      <div class="row searchbar" id="searchBar" style="display:none;">
+        <input id="searchInput" type="text" placeholder="단어로 검색 (예: 사랑)">
+        <button id="searchBtn" class="navb">검색</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="status" class="status">데이터를 불러오는 중…</div>
+    <div id="content"></div>
+    <div id="searchResults" class="searchres" style="display:none;"></div>
+  </div>
+
+  <style>
+    .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:8px; margin-bottom:14px; }
+    .row { display:flex; gap:5px; align-items:center; }
+    .row.main { flex-wrap:nowrap; }
+    .row.searchbar { margin-top:8px; }
+    .sel { padding:8px 4px; font-size:14px; border:1px solid var(--line);
+      border-radius:7px; background:#fff; color:var(--text); min-width:0; }
+    .sel.ver { flex:0 0 auto; max-width:96px; }
+    .sel.book { flex:1 1 auto; }
+    .sel.num { flex:0 0 auto; width:52px; padding-left:2px; padding-right:2px; }
+    .navb { padding:8px 10px; font-size:14px; border:1px solid var(--line); border-radius:7px;
+      background:#fff; color:var(--text); cursor:pointer; white-space:nowrap; }
+    .navb:hover { border-color:var(--green); color:var(--green); }
+    .navb.ic { flex:0 0 auto; padding:8px 7px; }
+    .row.searchbar input { flex:1; padding:9px 12px; font-size:15px;
+      border:1px solid var(--line); border-radius:8px; }
+    .status { color:var(--muted); font-size:14px; padding:20px 4px; text-align:center; }
+    .chap-title { font-size:22px; font-weight:700; color:var(--green-d);
+      margin:8px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--green-soft); }
+    .verse { font-size:var(--fs); margin-bottom:10px; display:flex; }
+    .vnum { flex:0 0 auto; min-width:26px; color:var(--green); font-weight:700;
+      font-size:.82em; line-height:1.9; margin-right:6px; }
+    .vtext { flex:1; }
+    .verse mark { background:#fdf3c0; padding:0 1px; }
+    .verse.hl { background:#fff6d8; border-left:3px solid var(--green); border-radius:0;
+      padding:6px 10px; margin-left:-13px; transition:background .3s; }
+    .searchres { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; }
+    .sr-item { padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; }
+    .sr-item:last-child { border-bottom:none; }
+    .sr-item:hover { background:var(--green-soft); }
+    .sr-ref { color:var(--green); font-weight:700; font-size:13px; margin-right:8px; }
+    .sr-cnt { font-size:14px; }
+    .sr-head { display:flex; justify-content:space-between; align-items:center;
+      padding:6px 12px 12px; color:var(--muted); font-size:13px; }
+    .sr-close { cursor:pointer; color:var(--green); font-weight:700; }
+  </style>
+
+  <script>
+    function adjustHeadSpace() {
+      var head = document.getElementById('fixedHead');
+      var wrap = document.querySelector('.wrap');
+      if (head && wrap) wrap.style.paddingTop = (head.offsetHeight + 12) + 'px';
+    }
+    window.addEventListener('resize', adjustHeadSpace);
+    window.addEventListener('load', adjustHeadSpace);
+
+    var BIBLE = null;
+    var curBook = 0, curChap = 0;
+    var FS = 20, FS_MIN = 14, FS_MAX = 40;
+    var VERSIONS = [];
+    var curVersion = '개역개정';
+
+    var verSel = document.getElementById('verSel');
+    var bookSel = document.getElementById('bookSel');
+    var chapSel = document.getElementById('chapSel');
+    var verseSel = document.getElementById('verseSel');
+    var contentEl = document.getElementById('content');
+    var statusEl = document.getElementById('status');
+    var searchInput = document.getElementById('searchInput');
+    var searchResults = document.getElementById('searchResults');
+
+    fetch('data/bible/versions.json')
+      .then(function (r) { return r.ok ? r.json() : ['개역개정']; })
+      .then(function (list) {
+        VERSIONS = (list && list.length) ? list : ['개역개정'];
+        buildVersionOptions();
+        curVersion = VERSIONS[0];
+        loadVersion(curVersion, 0, 0);
+      })
+      .catch(function () {
+        VERSIONS = ['개역개정'];
+        buildVersionOptions();
+        loadVersion('개역개정', 0, 0);
+      });
+
+    function buildVersionOptions() {
+      verSel.innerHTML = '';
+      VERSIONS.forEach(function (v) {
+        var o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        verSel.appendChild(o);
+      });
+    }
+
+    function loadVersion(version, bookIdx, chapIdx) {
+      statusEl.style.display = 'block';
+      statusEl.textContent = version + ' 데이터를 불러오는 중…';
+      contentEl.style.display = 'none';
+      fetch('data/bible/' + encodeURIComponent(version) + '.json')
+        .then(function (r) {
+          if (!r.ok) throw new Error('not found');
+          return r.json();
+        })
+        .then(function (data) {
+          BIBLE = data;
+          curVersion = version;
+          verSel.value = version;
+          statusEl.style.display = 'none';
+          buildBookOptions();
+          showChapter(bookIdx || 0, chapIdx || 0);
+          adjustHeadSpace();
+        })
+        .catch(function () {
+          statusEl.style.display = 'block';
+          statusEl.textContent = version + ' 데이터를 불러오지 못했습니다. data/bible/' + version + '.json 파일을 확인하세요.';
+        });
+    }
+
+    verSel.addEventListener('change', function () {
+      loadVersion(this.value, curBook, curChap);
+    });
+
+    function buildBookOptions() {
+      bookSel.innerHTML = '';
+      BIBLE.books.forEach(function (b, i) {
+        var o = document.createElement('option');
+        o.value = i; o.textContent = b.name;
+        bookSel.appendChild(o);
+      });
+    }
+
+    function buildChapOptions(bookIdx) {
+      chapSel.innerHTML = '';
+      var n = BIBLE.books[bookIdx].chapters.length;
+      for (var c = 0; c < n; c++) {
+        var o = document.createElement('option');
+        o.value = c; o.textContent = (c + 1) + '장';
+        chapSel.appendChild(o);
+      }
+    }
+
+    function showChapter(bookIdx, chapIdx, jumpVerse) {
+      curBook = bookIdx; curChap = chapIdx;
+      searchResults.style.display = 'none';
+      contentEl.style.display = 'block';
+
+      bookSel.value = bookIdx;
+      buildChapOptions(bookIdx);
+      chapSel.value = chapIdx;
+
+      var book = BIBLE.books[bookIdx];
+      var verses = book.chapters[chapIdx];
+      buildVerseOptions(verses.length);
+
+      var html = '<div class="chap-title">' + book.name + ' ' + (chapIdx + 1) + '장</div>';
+      verses.forEach(function (txt, i) {
+        html += '<p class="verse" id="v' + (i + 1) + '"><span class="vnum">' + (i + 1) + '</span>' +
+          '<span class="vtext">' + escapeHtml(txt) + '</span></p>';
+      });
+      contentEl.innerHTML = html;
+
+      if (jumpVerse && jumpVerse >= 1 && jumpVerse <= verses.length) {
+        verseSel.value = jumpVerse;
+        highlightVerse(jumpVerse);
+      } else {
+        verseSel.value = '';
+        window.scrollTo(0, 0);
+      }
+    }
+
+    function buildVerseOptions(n) {
+      verseSel.innerHTML = '<option value="">절</option>';
+      for (var v = 1; v <= n; v++) {
+        var o = document.createElement('option');
+        o.value = v; o.textContent = v + '절';
+        verseSel.appendChild(o);
+      }
+    }
+
+    function highlightVerse(v) {
+      var el = document.getElementById('v' + v);
+      if (!el) return;
+      document.querySelectorAll('.verse.hl').forEach(function (e) { e.classList.remove('hl'); });
+      el.classList.add('hl');
+      var y = el.getBoundingClientRect().top + window.pageYOffset - 120;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+
+    verseSel.addEventListener('change', function () {
+      var v = parseInt(this.value, 10);
+      if (v) highlightVerse(v);
+    });
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    bookSel.addEventListener('change', function () {
+      showChapter(parseInt(this.value, 10), 0);
+    });
+    chapSel.addEventListener('change', function () {
+      showChapter(curBook, parseInt(this.value, 10));
+    });
+
+    document.getElementById('prevBtn').addEventListener('click', function () {
+      if (curChap > 0) showChapter(curBook, curChap - 1);
+      else if (curBook > 0) showChapter(curBook - 1, BIBLE.books[curBook - 1].chapters.length - 1);
+    });
+    document.getElementById('nextBtn').addEventListener('click', function () {
+      if (curChap < BIBLE.books[curBook].chapters.length - 1) showChapter(curBook, curChap + 1);
+      else if (curBook < BIBLE.books.length - 1) showChapter(curBook + 1, 0);
+    });
+
+    function setFont(v) {
+      FS = Math.max(FS_MIN, Math.min(FS_MAX, v));
+      document.documentElement.style.setProperty('--fs', FS + 'px');
+    }
+    document.getElementById('fsUp').addEventListener('click', function () { setFont(FS + 2); });
+    document.getElementById('fsDown').addEventListener('click', function () { setFont(FS - 2); });
+
+    function runSearch() {
+      var q = searchInput.value.trim();
+      if (!q) return;
+      var hits = [];
+      for (var bi = 0; bi < BIBLE.books.length; bi++) {
+        var book = BIBLE.books[bi];
+        for (var ci = 0; ci < book.chapters.length; ci++) {
+          var vs = book.chapters[ci];
+          for (var vi = 0; vi < vs.length; vi++) {
+            if (vs[vi].indexOf(q) !== -1) {
+              hits.push({ bi: bi, ci: ci, vi: vi, ref: book.abbr + ' ' + (ci + 1) + ':' + (vi + 1), txt: vs[vi] });
+              if (hits.length >= 300) break;
+            }
+          }
+          if (hits.length >= 300) break;
+        }
+        if (hits.length >= 300) break;
+      }
+      renderSearch(q, hits);
+    }
+
+    function renderSearch(q, hits) {
+      contentEl.style.display = 'none';
+      searchResults.style.display = 'block';
+      var html = '<div class="sr-head"><span>"' + escapeHtml(q) + '" 검색 결과 ' + hits.length +
+        '건' + (hits.length >= 300 ? ' (최대 300건)' : '') +
+        '</span><span class="sr-close" id="srClose">닫기 ✕</span></div>';
+      if (hits.length === 0) html += '<div class="sr-item">검색 결과가 없습니다.</div>';
+      hits.forEach(function (h, idx) {
+        var marked = escapeHtml(h.txt).split(escapeHtml(q)).join('<mark>' + escapeHtml(q) + '</mark>');
+        html += '<div class="sr-item" data-idx="' + idx + '">' +
+          '<span class="sr-ref">' + h.ref + '</span><span class="sr-cnt">' + marked + '</span></div>';
+      });
+      searchResults.innerHTML = html;
+      document.getElementById('srClose').addEventListener('click', function () {
+        searchResults.style.display = 'none';
+        contentEl.style.display = 'block';
+      });
+      searchResults.querySelectorAll('.sr-item[data-idx]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var h = hits[parseInt(this.getAttribute('data-idx'), 10)];
+          showChapter(h.bi, h.ci, h.vi + 1);
+        });
+      });
+      window.scrollTo(0, 0);
+    }
+
+    document.getElementById('searchToggle').addEventListener('click', function () {
+      var bar = document.getElementById('searchBar');
+      var show = bar.style.display === 'none';
+      bar.style.display = show ? 'flex' : 'none';
+      adjustHeadSpace();
+      if (show) searchInput.focus();
+    });
+
+    document.getElementById('searchBtn').addEventListener('click', runSearch);
+    searchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') runSearch();
+    });
+  </script>
+</body>
+</html>
