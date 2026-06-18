@@ -118,6 +118,7 @@
       if (n > maxNum) n = maxNum;
       curNum = n;
       numInput.value = n;
+      zoom = 100;
       img.src = 'data/hymn/' + encodeURIComponent(curBook) + '/p' + n + '.png';
       img.alt = curBook + ' ' + n + '장';
       applyZoom();
