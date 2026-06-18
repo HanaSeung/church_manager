@@ -8,3 +8,6 @@ __pycache__/
 # 임시 파일
 *.tmp
 _*.txt
+
+# 작업 기록 (개인용 — push 제외)
+worklog/
