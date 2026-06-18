@@ -84,31 +84,31 @@
   <style>
     .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:8px; margin-bottom:14px; }
-    .row { display:flex; gap:6px; align-items:center; }
-    .row.main { flex-wrap:wrap; }
-    .grp { display:flex; gap:5px; align-items:center; }
+    .row { display:flex; gap:4px; align-items:center; }
+    .row.main { flex-wrap:nowrap; }
+    .grp { display:flex; gap:4px; align-items:center; }
     .grp.sels { flex:1 1 auto; min-width:0; }
-    .grp.btns { flex:0 0 auto; justify-content:flex-end; gap:2px; }
+    .grp.btns { flex:0 0 auto; justify-content:flex-end; gap:0; }
     .sel { padding:10px 2px; font-size:14px; border:1px solid var(--line);
       border-radius:7px; background:#fff; color:var(--text); min-width:0; }
-    .locbox { flex:0 0 auto; padding:9px 4px; font-size:19px; font-weight:800;
+    .locbox { flex:0 0 auto; padding:8px 2px; font-size:17px; font-weight:800;
       border:none; background:none;
       cursor:pointer; text-align:left; white-space:nowrap;
-      display:flex; align-items:baseline; gap:6px; }
+      display:flex; align-items:baseline; gap:5px; }
     .locbox:hover .loc-book, .locbox:hover .loc-cv { opacity:.7; }
     .loc-book { color:var(--green); }
     .loc-cv { color:var(--text); }
-    .verbtn { flex:0 0 auto; padding:9px 4px; font-size:19px; font-weight:800;
+    .verbtn { flex:0 0 auto; padding:8px 2px; font-size:17px; font-weight:800;
       border:none; background:none; color:#d6442f;
       cursor:pointer; white-space:nowrap; }
     .verbtn:hover { opacity:.7; }
     .pk-title { font-size:16px; font-weight:700; color:var(--text); }
-    .navb { padding:9px 6px; font-size:15px; border:none; border-radius:0;
+    .navb { padding:8px 4px; font-size:14px; border:none; border-radius:0;
       background:none; color:var(--text); cursor:pointer; white-space:nowrap; }
     .navb:hover { color:var(--green); opacity:.8; }
-    .navb.ic { flex:0 0 auto; padding:9px 8px; min-width:34px; text-align:center;
-      font-size:20px; line-height:1.2; }
-    #prevBtn, #nextBtn { font-size:22px; color:var(--green); }
+    .navb.ic { flex:0 0 auto; padding:8px 5px; min-width:28px; text-align:center;
+      font-size:17px; line-height:1.2; }
+    #prevBtn, #nextBtn { font-size:18px; color:var(--green); }
     .picker-overlay { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.4);
       display:flex; align-items:center; justify-content:center; padding:16px; }
     .picker-box { background:#fff; border-radius:14px; width:100%; max-width:460px;
