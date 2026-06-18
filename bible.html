@@ -35,9 +35,7 @@
       <div class="row main">
         <div class="grp sels">
           <select id="verSel" class="sel ver" title="번역본"></select>
-          <select id="bookSel" class="sel book"></select>
-          <select id="chapSel" class="sel num"></select>
-          <select id="verseSel" class="sel num" title="절로 이동"></select>
+          <button id="locBtn" class="locbtn" title="책·장·절 선택">창세기 1장</button>
         </div>
         <div class="grp btns">
           <button id="prevBtn" class="navb ic" title="이전 장">‹</button>
@@ -50,6 +48,23 @@
       <div class="row searchbar" id="searchBar" style="display:none;">
         <input id="searchInput" type="text" placeholder="단어로 검색 (예: 사랑)">
         <button id="searchBtn" class="navb">검색</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pickerOverlay" class="picker-overlay" style="display:none;">
+    <div class="picker-box">
+      <div class="picker-head">
+        <button id="pickerBack" class="pk-back" title="닫기">‹</button>
+        <button id="otTab" class="pk-ot">구약</button>
+        <button id="ntTab" class="pk-nt">신약</button>
+        <span class="pk-spacer"></span>
+        <button id="pickerOk" class="pk-ok">확인</button>
+      </div>
+      <div class="picker-cols">
+        <div id="colBook" class="picker-col"></div>
+        <div id="colChap" class="picker-col"></div>
+        <div id="colVerse" class="picker-col"></div>
       </div>
     </div>
   </div>
@@ -72,8 +87,10 @@
     .sel { padding:10px 2px; font-size:14px; border:1px solid var(--line);
       border-radius:7px; background:#fff; color:var(--text); min-width:0; }
     .sel.ver { flex:0 0 auto; width:74px; }
-    .sel.book { flex:1 1 auto; min-width:70px; }
-    .sel.num { flex:0 0 auto; width:48px; padding-left:2px; padding-right:2px; }
+    .locbtn { flex:1 1 auto; min-width:90px; padding:10px 12px; font-size:15px; font-weight:700;
+      border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--green-d);
+      cursor:pointer; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .locbtn:hover { border-color:var(--green); }
     .navb { padding:10px 8px; font-size:14px; border:1px solid var(--line); border-radius:7px;
       background:#fff; color:var(--text); cursor:pointer; white-space:nowrap; }
     .navb:hover { border-color:var(--green); color:var(--green); }
@@ -86,6 +103,34 @@
     }
     .row.searchbar input { flex:1; padding:9px 12px; font-size:15px;
       border:1px solid var(--line); border-radius:8px; }
+    .picker-overlay { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.4);
+      display:flex; align-items:center; justify-content:center; padding:16px; }
+    .picker-box { background:#fff; border-radius:14px; width:100%; max-width:460px;
+      max-height:80vh; display:flex; flex-direction:column; overflow:hidden; }
+    .picker-head { display:flex; align-items:center; gap:10px;
+      padding:12px 14px; border-bottom:1px solid var(--line); }
+    .pk-back { border:none; background:none; font-size:24px; font-weight:700; line-height:1;
+      color:#2f6fd6; cursor:pointer; padding:0 2px; }
+    .pk-ot { border:none; background:none; font-size:16px; font-weight:700;
+      color:#2f6fd6; cursor:pointer; padding:2px 4px; }
+    .pk-nt { border:none; background:none; font-size:16px; font-weight:700;
+      color:#d6442f; cursor:pointer; padding:2px 4px; }
+    .pk-ot.on, .pk-nt.on { text-decoration:underline; text-underline-offset:5px; }
+    .pk-spacer { flex:1; }
+    .pk-direct { border:1px solid var(--line); background:#f5f6f4; color:var(--text);
+      font-size:14px; padding:7px 14px; border-radius:8px; cursor:pointer; }
+    .pk-ok { border:none; background:none; font-size:16px; font-weight:700;
+      color:#d6442f; cursor:pointer; padding:2px 4px; }
+    .picker-cols { display:flex; flex:1; min-height:0; }
+    .picker-col { flex:1; overflow-y:auto; border-right:1px solid var(--line);
+      position:relative; -webkit-overflow-scrolling:touch; }
+    .picker-col:last-child { border-right:none; }
+    #colChap, #colVerse { flex:0.5; }
+    .pick-item { padding:12px 8px; font-size:15px; text-align:center; cursor:pointer;
+      border-bottom:1px solid #f0f2ef; }
+    .pick-item:hover { background:var(--green-soft); }
+    .pick-item.on { background:var(--green); color:#fff; font-weight:700; }
+    #colBook .pick-item { font-size:14px; }
     .status { color:var(--muted); font-size:14px; padding:20px 4px; text-align:center; }
     .chap-title { font-size:22px; font-weight:700; color:var(--green-d);
       margin:8px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--green-soft); }
@@ -123,9 +168,11 @@
     var curVersion = '개역개정';
 
     var verSel = document.getElementById('verSel');
-    var bookSel = document.getElementById('bookSel');
-    var chapSel = document.getElementById('chapSel');
-    var verseSel = document.getElementById('verseSel');
+    var locBtn = document.getElementById('locBtn');
+    var pickerOverlay = document.getElementById('pickerOverlay');
+    var colBook = document.getElementById('colBook');
+    var colChap = document.getElementById('colChap');
+    var colVerse = document.getElementById('colVerse');
     var contentEl = document.getElementById('content');
     var statusEl = document.getElementById('status');
     var searchInput = document.getElementById('searchInput');
@@ -183,22 +230,12 @@
     });
 
     function buildBookOptions() {
-      bookSel.innerHTML = '';
-      BIBLE.books.forEach(function (b, i) {
-        var o = document.createElement('option');
-        o.value = i; o.textContent = b.name;
-        bookSel.appendChild(o);
-      });
+      // 피커는 열 때 동적으로 그리므로 여기선 위치 버튼만 갱신
     }
 
-    function buildChapOptions(bookIdx) {
-      chapSel.innerHTML = '';
-      var n = BIBLE.books[bookIdx].chapters.length;
-      for (var c = 0; c < n; c++) {
-        var o = document.createElement('option');
-        o.value = c; o.textContent = (c + 1) + '장';
-        chapSel.appendChild(o);
-      }
+    function updateLocBtn() {
+      if (!BIBLE) return;
+      locBtn.textContent = BIBLE.books[curBook].name + ' ' + (curChap + 1) + '장';
     }
 
     function showChapter(bookIdx, chapIdx, jumpVerse) {
@@ -206,13 +243,10 @@
       searchResults.style.display = 'none';
       contentEl.style.display = 'block';
 
-      bookSel.value = bookIdx;
-      buildChapOptions(bookIdx);
-      chapSel.value = chapIdx;
+      updateLocBtn();
 
       var book = BIBLE.books[bookIdx];
       var verses = book.chapters[chapIdx];
-      buildVerseOptions(verses.length);
 
       var html = '<div class="chap-title">' + book.name + ' ' + (chapIdx + 1) + '장</div>';
       verses.forEach(function (txt, i) {
@@ -222,20 +256,9 @@
       contentEl.innerHTML = html;
 
       if (jumpVerse && jumpVerse >= 1 && jumpVerse <= verses.length) {
-        verseSel.value = jumpVerse;
         highlightVerse(jumpVerse);
       } else {
-        verseSel.value = '';
         window.scrollTo(0, 0);
-      }
-    }
-
-    function buildVerseOptions(n) {
-      verseSel.innerHTML = '<option value="">절</option>';
-      for (var v = 1; v <= n; v++) {
-        var o = document.createElement('option');
-        o.value = v; o.textContent = v + '절';
-        verseSel.appendChild(o);
       }
     }
 
@@ -248,20 +271,120 @@
       window.scrollTo({ top: y, behavior: 'smooth' });
     }
 
-    verseSel.addEventListener('change', function () {
-      var v = parseInt(this.value, 10);
-      if (v) highlightVerse(v);
-    });
-
     function escapeHtml(s) {
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    bookSel.addEventListener('change', function () {
-      showChapter(parseInt(this.value, 10), 0);
+    // ===== 3단 피커 (책·장·절) =====
+    var pickBook = 0, pickChap = 0;
+
+    function openPicker() {
+      pickBook = curBook; pickChap = curChap;
+      renderBookCol();
+      renderChapCol();
+      renderVerseCol();
+      pickerOverlay.style.display = 'flex';
+      setTimeout(scrollPickerToSelected, 0);
+    }
+    function closePicker() { pickerOverlay.style.display = 'none'; }
+
+    function renderBookCol() {
+      var html = '';
+      BIBLE.books.forEach(function (b, i) {
+        html += '<div class="pick-item' + (i === pickBook ? ' on' : '') +
+          '" data-i="' + i + '">' + b.name + '</div>';
+      });
+      colBook.innerHTML = html;
+      colBook.querySelectorAll('.pick-item').forEach(function (el) {
+        el.addEventListener('click', function () {
+          pickBook = parseInt(this.getAttribute('data-i'), 10);
+          pickChap = 0;
+          renderBookCol(); renderChapCol(); renderVerseCol();
+        });
+      });
+    }
+
+    function renderChapCol() {
+      var n = BIBLE.books[pickBook].chapters.length;
+      var html = '';
+      for (var c = 0; c < n; c++) {
+        html += '<div class="pick-item' + (c === pickChap ? ' on' : '') +
+          '" data-i="' + c + '">' + (c + 1) + '</div>';
+      }
+      colChap.innerHTML = html;
+      colChap.querySelectorAll('.pick-item').forEach(function (el) {
+        el.addEventListener('click', function () {
+          pickChap = parseInt(this.getAttribute('data-i'), 10);
+          renderChapCol(); renderVerseCol();
+        });
+      });
+    }
+
+    function renderVerseCol() {
+      var verses = BIBLE.books[pickBook].chapters[pickChap];
+      var html = '';
+      for (var v = 1; v <= verses.length; v++) {
+        html += '<div class="pick-item" data-v="' + v + '">' + v + '</div>';
+      }
+      colVerse.innerHTML = html;
+      colVerse.querySelectorAll('.pick-item').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var v = parseInt(this.getAttribute('data-v'), 10);
+          closePicker();
+          showChapter(pickBook, pickChap, v);
+        });
+      });
+    }
+
+    function scrollPickerToSelected() {
+      [colBook, colChap].forEach(function (col) {
+        var on = col.querySelector('.pick-item.on');
+        if (on) col.scrollTop = on.offsetTop - col.clientHeight / 2 + on.clientHeight / 2;
+      });
+    }
+
+    function findBookIndex(name) {
+      for (var i = 0; i < BIBLE.books.length; i++) {
+        if (BIBLE.books[i].name === name) return i;
+      }
+      return -1;
+    }
+
+    function scrollBookToIndex(idx) {
+      if (idx < 0) return;
+      var items = colBook.querySelectorAll('.pick-item');
+      if (items[idx]) colBook.scrollTop = items[idx].offsetTop;
+    }
+
+    locBtn.addEventListener('click', openPicker);
+
+    // '<' : 적용 없이 창 닫기 (나가기)
+    document.getElementById('pickerBack').addEventListener('click', closePicker);
+
+    // 구약 : 책 목록을 창세기로 스크롤
+    document.getElementById('otTab').addEventListener('click', function () {
+      this.classList.add('on');
+      document.getElementById('ntTab').classList.remove('on');
+      var i = findBookIndex('창세기');
+      scrollBookToIndex(i >= 0 ? i : 0);
     });
-    chapSel.addEventListener('change', function () {
-      showChapter(curBook, parseInt(this.value, 10));
+
+    // 신약 : 책 목록을 마태복음으로 스크롤
+    document.getElementById('ntTab').addEventListener('click', function () {
+      this.classList.add('on');
+      document.getElementById('otTab').classList.remove('on');
+      var i = findBookIndex('마태복음');
+      scrollBookToIndex(i >= 0 ? i : 39);
+    });
+
+    // 확인 : 현재 선택(책·장)으로 본문 표시 후 닫기
+    document.getElementById('pickerOk').addEventListener('click', function () {
+      closePicker();
+      showChapter(pickBook, pickChap);
+    });
+
+    pickerOverlay.addEventListener('click', function (e) {
+      if (e.target === pickerOverlay) closePicker();
     });
 
     document.getElementById('prevBtn').addEventListener('click', function () {
