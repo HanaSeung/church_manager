@@ -34,20 +34,17 @@
     <div class="controls" id="controls">
       <div class="row main">
         <div class="grp sels">
-          <select id="verSel" class="sel ver" title="번역본"></select>
-          <button id="locBtn" class="locbtn" title="책·장·절 선택">창세기 1장</button>
+          <button id="verBtn" class="verbtn" title="번역본 선택">개역개정</button>
+          <button id="locBtn" class="locbox" title="책·장·절 선택">
+            <span id="locBook" class="loc-book">창</span><span id="locCV" class="loc-cv">1:1</span>
+          </button>
         </div>
         <div class="grp btns">
-          <button id="prevBtn" class="navb ic" title="이전 장">‹</button>
-          <button id="nextBtn" class="navb ic" title="다음 장">›</button>
-          <button id="searchToggle" class="navb ic" title="검색">🔍</button>
+          <button id="prevBtn" class="navb ic" title="이전 장">◀</button>
+          <button id="nextBtn" class="navb ic" title="다음 장">▶</button>
           <button id="fsDown" class="navb ic" title="글자 작게">가−</button>
           <button id="fsUp" class="navb ic" title="글자 크게">가＋</button>
         </div>
-      </div>
-      <div class="row searchbar" id="searchBar" style="display:none;">
-        <input id="searchInput" type="text" placeholder="단어로 검색 (예: 사랑)">
-        <button id="searchBtn" class="navb">검색</button>
       </div>
     </div>
   </div>
@@ -69,10 +66,19 @@
     </div>
   </div>
 
+  <div id="verOverlay" class="picker-overlay" style="display:none;">
+    <div class="picker-box" style="max-width:300px;">
+      <div class="picker-head">
+        <button id="verBack" class="pk-back" title="닫기">‹</button>
+        <span class="pk-title">번역본 선택</span>
+      </div>
+      <div id="verList" class="picker-col" style="max-height:60vh;"></div>
+    </div>
+  </div>
+
   <div class="wrap">
     <div id="status" class="status">데이터를 불러오는 중…</div>
     <div id="content"></div>
-    <div id="searchResults" class="searchres" style="display:none;"></div>
   </div>
 
   <style>
@@ -80,29 +86,33 @@
       padding:8px; margin-bottom:14px; }
     .row { display:flex; gap:6px; align-items:center; }
     .row.main { flex-wrap:wrap; }
-    .row.searchbar { margin-top:8px; }
     .grp { display:flex; gap:5px; align-items:center; }
     .grp.sels { flex:1 1 auto; min-width:0; }
     .grp.btns { flex:1 1 auto; justify-content:flex-end; }
     .sel { padding:10px 2px; font-size:14px; border:1px solid var(--line);
       border-radius:7px; background:#fff; color:var(--text); min-width:0; }
-    .sel.ver { flex:0 0 auto; width:74px; }
-    .locbtn { flex:1 1 auto; min-width:90px; padding:10px 12px; font-size:15px; font-weight:700;
-      border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--green-d);
-      cursor:pointer; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .locbtn:hover { border-color:var(--green); }
-    .navb { padding:10px 8px; font-size:14px; border:1px solid var(--line); border-radius:7px;
-      background:#fff; color:var(--text); cursor:pointer; white-space:nowrap; }
-    .navb:hover { border-color:var(--green); color:var(--green); }
-    .navb.ic { flex:1 1 auto; padding:8px 0; min-width:40px; text-align:center;
-      font-size:18px; line-height:1.2; }
-    #prevBtn, #nextBtn { font-size:24px; font-weight:700; }
+    .locbox { flex:0 0 auto; padding:9px 4px; font-size:19px; font-weight:800;
+      border:none; background:none;
+      cursor:pointer; text-align:left; white-space:nowrap;
+      display:flex; align-items:baseline; gap:6px; }
+    .locbox:hover .loc-book, .locbox:hover .loc-cv { opacity:.7; }
+    .loc-book { color:var(--green); }
+    .loc-cv { color:var(--text); }
+    .verbtn { flex:0 0 auto; padding:9px 4px; font-size:19px; font-weight:800;
+      border:none; background:none; color:#d6442f;
+      cursor:pointer; white-space:nowrap; }
+    .verbtn:hover { opacity:.7; }
+    .pk-title { font-size:16px; font-weight:700; color:var(--text); }
+    .navb { padding:9px 6px; font-size:15px; border:none; border-radius:0;
+      background:none; color:var(--text); cursor:pointer; white-space:nowrap; }
+    .navb:hover { color:var(--green); opacity:.8; }
+    .navb.ic { flex:0 0 auto; padding:9px 8px; min-width:34px; text-align:center;
+      font-size:20px; line-height:1.2; }
+    #prevBtn, #nextBtn { font-size:22px; color:var(--green); }
     @media (max-width:560px) {
       .grp.sels, .grp.btns { flex:1 1 100%; }
       .grp.btns { justify-content:space-between; margin-top:6px; }
     }
-    .row.searchbar input { flex:1; padding:9px 12px; font-size:15px;
-      border:1px solid var(--line); border-radius:8px; }
     .picker-overlay { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.4);
       display:flex; align-items:center; justify-content:center; padding:16px; }
     .picker-box { background:#fff; border-radius:14px; width:100%; max-width:460px;
@@ -167,16 +177,19 @@
     var VERSIONS = [];
     var curVersion = '개역개정';
 
-    var verSel = document.getElementById('verSel');
     var locBtn = document.getElementById('locBtn');
+    var locBook = document.getElementById('locBook');
+    var locCV = document.getElementById('locCV');
+    var verBtn = document.getElementById('verBtn');
+    var verOverlay = document.getElementById('verOverlay');
+    var verList = document.getElementById('verList');
     var pickerOverlay = document.getElementById('pickerOverlay');
     var colBook = document.getElementById('colBook');
     var colChap = document.getElementById('colChap');
     var colVerse = document.getElementById('colVerse');
     var contentEl = document.getElementById('content');
     var statusEl = document.getElementById('status');
-    var searchInput = document.getElementById('searchInput');
-    var searchResults = document.getElementById('searchResults');
+    var curVerse = 1;
 
     fetch('data/bible/versions.json')
       .then(function (r) { return r.ok ? r.json() : ['개역개정']; })
@@ -193,11 +206,16 @@
       });
 
     function buildVersionOptions() {
-      verSel.innerHTML = '';
+      verList.innerHTML = '';
       VERSIONS.forEach(function (v) {
-        var o = document.createElement('option');
-        o.value = v; o.textContent = v;
-        verSel.appendChild(o);
+        var el = document.createElement('div');
+        el.className = 'pick-item' + (v === curVersion ? ' on' : '');
+        el.textContent = v;
+        el.addEventListener('click', function () {
+          verOverlay.style.display = 'none';
+          if (v !== curVersion) loadVersion(v, curBook, curChap);
+        });
+        verList.appendChild(el);
       });
     }
 
@@ -213,9 +231,9 @@
         .then(function (data) {
           BIBLE = data;
           curVersion = version;
-          verSel.value = version;
+          verBtn.textContent = version;
+          buildVersionOptions();
           statusEl.style.display = 'none';
-          buildBookOptions();
           showChapter(bookIdx || 0, chapIdx || 0);
           adjustHeadSpace();
         })
@@ -225,22 +243,27 @@
         });
     }
 
-    verSel.addEventListener('change', function () {
-      loadVersion(this.value, curBook, curChap);
+    // 버전 선택창
+    verBtn.addEventListener('click', function () {
+      buildVersionOptions();
+      verOverlay.style.display = 'flex';
     });
-
-    function buildBookOptions() {
-      // 피커는 열 때 동적으로 그리므로 여기선 위치 버튼만 갱신
-    }
+    document.getElementById('verBack').addEventListener('click', function () {
+      verOverlay.style.display = 'none';
+    });
+    verOverlay.addEventListener('click', function (e) {
+      if (e.target === verOverlay) verOverlay.style.display = 'none';
+    });
 
     function updateLocBtn() {
       if (!BIBLE) return;
-      locBtn.textContent = BIBLE.books[curBook].name + ' ' + (curChap + 1) + '장';
+      locBook.textContent = BIBLE.books[curBook].abbr || BIBLE.books[curBook].name;
+      locCV.textContent = (curChap + 1) + ':' + curVerse;
     }
 
     function showChapter(bookIdx, chapIdx, jumpVerse) {
       curBook = bookIdx; curChap = chapIdx;
-      searchResults.style.display = 'none';
+      curVerse = jumpVerse && jumpVerse >= 1 ? jumpVerse : 1;
       contentEl.style.display = 'block';
 
       updateLocBtn();
@@ -260,7 +283,35 @@
       } else {
         window.scrollTo(0, 0);
       }
+      updateTopVerse();
     }
+
+    // 화면 맨 위에 보이는 절을 찾아 표시 갱신
+    function updateTopVerse() {
+      if (!BIBLE) return;
+      var head = document.getElementById('fixedHead');
+      var threshold = (head ? head.offsetHeight : 0) + 8;
+      var verses = contentEl.querySelectorAll('.verse');
+      var top = 1;
+      for (var i = 0; i < verses.length; i++) {
+        if (verses[i].getBoundingClientRect().top <= threshold) top = i + 1;
+        else break;
+      }
+      if (top !== curVerse) {
+        curVerse = top;
+        locCV.textContent = (curChap + 1) + ':' + curVerse;
+      }
+    }
+
+    var scrollTick = false;
+    window.addEventListener('scroll', function () {
+      if (scrollTick) return;
+      scrollTick = true;
+      window.requestAnimationFrame(function () {
+        updateTopVerse();
+        scrollTick = false;
+      });
+    });
 
     function highlightVerse(v) {
       var el = document.getElementById('v' + v);
@@ -402,66 +453,6 @@
     }
     document.getElementById('fsUp').addEventListener('click', function () { setFont(FS + 2); });
     document.getElementById('fsDown').addEventListener('click', function () { setFont(FS - 2); });
-
-    function runSearch() {
-      var q = searchInput.value.trim();
-      if (!q) return;
-      var hits = [];
-      for (var bi = 0; bi < BIBLE.books.length; bi++) {
-        var book = BIBLE.books[bi];
-        for (var ci = 0; ci < book.chapters.length; ci++) {
-          var vs = book.chapters[ci];
-          for (var vi = 0; vi < vs.length; vi++) {
-            if (vs[vi].indexOf(q) !== -1) {
-              hits.push({ bi: bi, ci: ci, vi: vi, ref: book.abbr + ' ' + (ci + 1) + ':' + (vi + 1), txt: vs[vi] });
-              if (hits.length >= 300) break;
-            }
-          }
-          if (hits.length >= 300) break;
-        }
-        if (hits.length >= 300) break;
-      }
-      renderSearch(q, hits);
-    }
-
-    function renderSearch(q, hits) {
-      contentEl.style.display = 'none';
-      searchResults.style.display = 'block';
-      var html = '<div class="sr-head"><span>"' + escapeHtml(q) + '" 검색 결과 ' + hits.length +
-        '건' + (hits.length >= 300 ? ' (최대 300건)' : '') +
-        '</span><span class="sr-close" id="srClose">닫기 ✕</span></div>';
-      if (hits.length === 0) html += '<div class="sr-item">검색 결과가 없습니다.</div>';
-      hits.forEach(function (h, idx) {
-        var marked = escapeHtml(h.txt).split(escapeHtml(q)).join('<mark>' + escapeHtml(q) + '</mark>');
-        html += '<div class="sr-item" data-idx="' + idx + '">' +
-          '<span class="sr-ref">' + h.ref + '</span><span class="sr-cnt">' + marked + '</span></div>';
-      });
-      searchResults.innerHTML = html;
-      document.getElementById('srClose').addEventListener('click', function () {
-        searchResults.style.display = 'none';
-        contentEl.style.display = 'block';
-      });
-      searchResults.querySelectorAll('.sr-item[data-idx]').forEach(function (el) {
-        el.addEventListener('click', function () {
-          var h = hits[parseInt(this.getAttribute('data-idx'), 10)];
-          showChapter(h.bi, h.ci, h.vi + 1);
-        });
-      });
-      window.scrollTo(0, 0);
-    }
-
-    document.getElementById('searchToggle').addEventListener('click', function () {
-      var bar = document.getElementById('searchBar');
-      var show = bar.style.display === 'none';
-      bar.style.display = show ? 'flex' : 'none';
-      adjustHeadSpace();
-      if (show) searchInput.focus();
-    });
-
-    document.getElementById('searchBtn').addEventListener('click', runSearch);
-    searchInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') runSearch();
-    });
   </script>
 </body>
 </html>
