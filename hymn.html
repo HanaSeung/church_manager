@@ -32,10 +32,8 @@
 
     <div class="controls">
       <div class="row">
-        <select id="bookSel" class="sel" title="찬송가 종류"></select>
         <button id="prevBtn" class="navb ic" title="이전 장">‹</button>
         <input id="numInput" class="num" type="number" min="1" inputmode="numeric" placeholder="장">
-        <button id="goBtn" class="navb">이동</button>
         <button id="nextBtn" class="navb ic" title="다음 장">›</button>
         <button id="zoomOut" class="navb ic" title="축소">－</button>
         <button id="zoomIn" class="navb ic" title="확대">＋</button>
@@ -52,15 +50,14 @@
     .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:8px; }
     .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-    .sel { flex:0 0 auto; padding:10px 6px; font-size:14px; border:1px solid var(--line);
-      border-radius:7px; background:#fff; color:var(--text); }
     .num { flex:1 1 auto; min-width:60px; width:60px; padding:10px 8px; font-size:16px;
       text-align:center; border:1px solid var(--line); border-radius:7px; }
-    .navb { padding:10px 12px; font-size:15px; border:1px solid var(--line); border-radius:7px;
-      background:#fff; color:var(--text); cursor:pointer; white-space:nowrap; }
-    .navb:hover { border-color:var(--green); color:var(--green); }
-    .navb.ic { flex:0 0 auto; padding:10px 0; width:44px; text-align:center;
-      font-size:22px; font-weight:700; }
+    .navb { padding:8px 4px; font-size:14px; border:none; border-radius:0;
+      background:none; color:var(--text); cursor:pointer; white-space:nowrap; }
+    .navb:hover { color:var(--green); opacity:.8; }
+    .navb.ic { flex:0 0 auto; padding:8px 5px; min-width:28px; text-align:center;
+      font-size:22px; line-height:1.2; font-weight:700; }
+    #prevBtn, #nextBtn { color:var(--green); }
     .status { color:var(--muted); font-size:14px; padding:30px 4px; text-align:center; }
     .stage { text-align:center; }
     .stage img { max-width:100%; height:auto; border:1px solid var(--line);
@@ -82,7 +79,6 @@
     var curNum = 1;
     var zoom = 100;
 
-    var bookSel = document.getElementById('bookSel');
     var numInput = document.getElementById('numInput');
     var statusEl = document.getElementById('status');
     var stage = document.getElementById('stage');
@@ -93,12 +89,6 @@
       .then(function (list) {
         BOOKS = (list && list.length) ? list : [];
         if (!BOOKS.length) throw new Error('no books');
-        bookSel.innerHTML = '';
-        BOOKS.forEach(function (b) {
-          var o = document.createElement('option');
-          o.value = b; o.textContent = b;
-          bookSel.appendChild(o);
-        });
         loadBook(BOOKS[0]);
       })
       .catch(function () {
@@ -139,8 +129,6 @@
       else { img.style.maxWidth = 'none'; }
     }
 
-    bookSel.addEventListener('change', function () { loadBook(this.value); });
-    document.getElementById('goBtn').addEventListener('click', function () { showNum(numInput.value); });
     numInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') showNum(numInput.value);
     });
