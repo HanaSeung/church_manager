@@ -129,8 +129,13 @@
       else { img.style.maxWidth = 'none'; }
     }
 
+    // 입력칸을 누르면 기존 숫자를 전체 선택 → 새 숫자 입력 시 바로 교체
+    function selectNum() { numInput.select(); }
+    numInput.addEventListener('focus', selectNum);
+    numInput.addEventListener('click', selectNum);
+
     numInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') showNum(numInput.value);
+      if (e.key === 'Enter') { showNum(numInput.value); numInput.blur(); }
     });
     document.getElementById('prevBtn').addEventListener('click', function () {
       if (curNum > 1) showNum(curNum - 1);
