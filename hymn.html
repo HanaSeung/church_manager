@@ -12,7 +12,7 @@
       --bg:#f5f6f4; --card:#fff; --text:#1f2421; --muted:#6b726d; --line:#e2e5e1;
     }
     body { font-family:'Malgun Gothic',system-ui,sans-serif; background:var(--bg);
-      color:var(--text); line-height:1.6; }
+      color:var(--text); line-height:1.6; overflow-x:hidden; }
     .topbar { background:var(--green); color:#fff; padding:12px 16px;
       display:flex; align-items:center; gap:12px; }
     .topbar a { color:#fff; text-decoration:none; font-size:14px; opacity:.9; }
@@ -59,9 +59,9 @@
       font-size:22px; line-height:1.2; font-weight:700; }
     #prevBtn, #nextBtn { color:var(--green); }
     .status { color:var(--muted); font-size:14px; padding:30px 4px; text-align:center; }
-    .stage { text-align:center; }
-    .stage img { max-width:100%; height:auto; border:1px solid var(--line);
-      border-radius:8px; background:#fff; }
+    .stage { overflow:auto; -webkit-overflow-scrolling:touch; }
+    .stage img { display:block; width:100%; height:auto; margin:0 auto;
+      border:1px solid var(--line); border-radius:8px; background:#fff; }
   </style>
 
   <script>
@@ -120,13 +120,12 @@
       numInput.value = n;
       img.src = 'data/hymn/' + encodeURIComponent(curBook) + '/p' + n + '.png';
       img.alt = curBook + ' ' + n + '장';
+      applyZoom();
       window.scrollTo(0, 0);
     }
 
     function applyZoom() {
       img.style.width = zoom + '%';
-      if (zoom <= 100) { img.style.width = ''; img.style.maxWidth = '100%'; }
-      else { img.style.maxWidth = 'none'; }
     }
 
     // 입력칸을 누르면 기존 숫자를 전체 선택 → 새 숫자 입력 시 바로 교체
