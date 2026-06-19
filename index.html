@@ -360,7 +360,7 @@
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const lv = snap.data().level;
-        return (typeof lv === 'number') ? lv : 2;
+        return (typeof lv === 'number') ? lv : 1;
       }
       // 신규 사용자: 실명 확보
       let name = pendingName;   // 이메일 회원가입에서 입력한 이름
@@ -373,18 +373,18 @@
       await setDoc(ref, {
         email: user.email || '',
         name: name,
-        level: 2,
+        level: 1,
         createdAt: serverTimestamp()
       });
       try { await updateProfile(user, { displayName: name }); } catch (e) {}
-      return 2;
+      return 1;
     }
 
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         let level;
         try { level = await resolveProfile(user); }
-        catch (e) { console.error('프로필 처리 실패:', e); level = 2; }
+        catch (e) { console.error('프로필 처리 실패:', e); level = 1; }
         if (level === null) return; // 실명 입력 취소 → 로그아웃됨
         $('loginBtn').style.display = 'none';
         $('logoutBtn').style.display = '';
