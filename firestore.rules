@@ -21,6 +21,12 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && myLevel() >= 4;
     }
+    // 회원 = 로그인 + 내 문서 존재 + level 2 이상 (사랑방 이용 가능)
+    function isMember() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myLevel() >= 2;
+    }
 
     // ===== 사용자 문서 =====
     match /users/{uid} {
@@ -41,6 +47,40 @@ service cloud.firestore {
 
       // 삭제: 관리자만
       allow delete: if isAdmin();
+    }
+
+    // ===== 사랑방 게시판 =====
+    match /posts/{postId} {
+      // 읽기: 회원(2단계 이상)
+      allow read: if isMember();
+
+      // 생성: 회원이며 본인이 작성자. 공지(notice)는 관리자만.
+      allow create: if isMember()
+        && request.resource.data.authorUid == request.auth.uid
+        && (
+          request.resource.data.board == 'share'
+          || (request.resource.data.board == 'notice' && isAdmin())
+        );
+
+      // 수정:
+      //  - 작성자 본인 또는 관리자: 전체 수정 가능
+      //  - 그 외 회원: 댓글수(commentCount)만 변경 가능(댓글 달기/지우기용)
+      allow update: if (isSignedIn() && (resource.data.authorUid == request.auth.uid || isAdmin()))
+        || (isMember()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount']));
+
+      // 삭제: 작성자 본인 또는 관리자
+      allow delete: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isAdmin());
+
+      // ----- 댓글 -----
+      match /comments/{commentId} {
+        allow read: if isMember();
+        allow create: if isMember()
+          && request.resource.data.authorUid == request.auth.uid;
+        allow delete: if isSignedIn()
+          && (resource.data.authorUid == request.auth.uid || isAdmin());
+      }
     }
 
     // ===== 그 외 모든 문서 =====

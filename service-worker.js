@@ -1,12 +1,14 @@
-const CACHE = 'church-manager-v2';
+const CACHE = 'church-manager-v3';
 const ASSETS = [
   'index.html',
   'manifest.json',
   'icon-192.png',
   'icon-512.png',
+  'firebase-config.js',
   'bible.html',
   'hymn.html',
-  'responsive.html'
+  'responsive.html',
+  'board.html'
 ];
 
 self.addEventListener('install', (e) => {

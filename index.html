@@ -64,7 +64,7 @@
         <span style="font-size:14px; font-weight:700; color:var(--muted);">사랑방</span>
       </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
-        <div class="card-off" data-need="member"><div class="ic">💬</div><div class="tt">게시판</div><div class="sb">공지 · 댓글</div></div>
+        <a href="board.html" class="card-on"><div class="ic">💬</div><div class="tt">게시판</div><div class="sb">공지 · 나눔 · 댓글</div></a>
         <div class="card-off" data-need="member"><div class="ic">🗨️</div><div class="tt">채팅</div><div class="sb">실시간 대화</div></div>
         <div class="card-off" data-need="member"><div class="ic">🔔</div><div class="tt">알림</div><div class="sb">공지 발송</div></div>
       </div>
@@ -272,30 +272,16 @@
 
   <!-- ===== Firebase: 로그인 / 회원가입 / 권한 ===== -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+    import { auth, db } from "./firebase-config.js";
     import {
-      getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+      onAuthStateChanged, createUserWithEmailAndPassword,
       signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup,
       updateProfile, sendPasswordResetEmail
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
     import {
-      getFirestore, doc, getDoc, setDoc, serverTimestamp,
+      doc, getDoc, setDoc, serverTimestamp,
       collection, getDocs, updateDoc
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-
-    // Firebase 설정 (공개 가능한 값. apiKey는 콘솔 값과 정확히 일치해야 함)
-    const firebaseConfig = {
-      apiKey: "AIzaSyDuw77cPbQWQK0o4J9MG6dqW1f87RQVra0",
-      authDomain: "church-manager-5f6a0.firebaseapp.com",
-      projectId: "church-manager-5f6a0",
-      storageBucket: "church-manager-5f6a0.firebasestorage.app",
-      messagingSenderId: "502227266989",
-      appId: "1:502227266989:web:b0520770053748f5f54524"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
 
     const $ = (id) => document.getElementById(id);
     const modal = $('authModal');

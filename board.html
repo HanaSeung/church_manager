@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2f6f4f">
+  <link rel="manifest" href="manifest.json">
+  <title>사랑방 · 예닮교회</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #2f6f4f; --green-soft: #e7f1ec; --green-deep: #245540;
+      --bg: #f5f6f4; --card: #ffffff;
+      --text: #1f2421; --muted: #6b726d; --line: #e2e5e1;
+      --danger: #c0392b;
+    }
+    body { font-family: 'Malgun Gothic', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 0 0 90px; min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- 상단바 -->
+    <header style="position:sticky; top:0; z-index:10; background:var(--card);
+      display:flex; align-items:center; gap:12px; padding:14px 16px;
+      border-bottom:1px solid var(--line);">
+      <a id="backBtn" href="index.html" style="color:var(--muted); text-decoration:none; font-size:22px;
+        line-height:1; display:flex; align-items:center;" aria-label="뒤로">‹</a>
+      <div id="barTitle" style="font-size:18px; font-weight:700; flex:1;">사랑방</div>
+      <span id="userName" style="font-size:13px; color:var(--muted); max-width:120px;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+    </header>
+
+    <!-- ===== 목록 화면 ===== -->
+    <div id="listView">
+      <!-- 탭: 나눔 / 공지 -->
+      <div style="display:flex; padding:6px 12px 0; background:var(--card);
+        border-bottom:1px solid var(--line); position:sticky; top:57px; z-index:9;">
+        <button class="tab tab-on" data-board="share" style="flex:1;">나눔</button>
+        <button class="tab" data-board="notice" style="flex:1;">공지</button>
+      </div>
+      <div id="postList" style="padding:8px 12px;">
+        <div class="empty">불러오는 중…</div>
+      </div>
+    </div>
+
+    <!-- ===== 상세 화면 ===== -->
+    <div id="detailView" style="display:none; padding:18px 16px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <div id="dAvatar" class="avatar"></div>
+        <div style="flex:1; min-width:0;">
+          <div id="dAuthor" style="font-size:14px; font-weight:700;"></div>
+          <div id="dTime" style="font-size:12px; color:var(--muted);"></div>
+        </div>
+        <button id="dDelete" style="display:none; border:1px solid var(--line);
+          background:var(--card); color:var(--danger); font-size:13px; padding:6px 12px;
+          border-radius:8px; cursor:pointer;">삭제</button>
+      </div>
+      <h1 id="dTitle" style="font-size:20px; font-weight:700; line-height:1.4; margin-bottom:12px;"></h1>
+      <div id="dBody" style="font-size:15px; white-space:pre-wrap; word-break:break-word;
+        padding-bottom:20px; border-bottom:1px solid var(--line);"></div>
+
+      <div style="margin:18px 0 10px; font-size:14px; font-weight:700; color:var(--muted);">
+        댓글 <span id="cCount">0</span></div>
+      <div id="commentList" style="display:flex; flex-direction:column; gap:12px;"></div>
+
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <input id="cInput" type="text" placeholder="따뜻한 댓글을 남겨 주세요"
+          style="flex:1; padding:11px 12px; border:1px solid var(--line); border-radius:8px;
+          font-size:14px;">
+        <button id="cSend" style="border:none; background:var(--green); color:#fff;
+          padding:0 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">등록</button>
+      </div>
+    </div>
+
+    <!-- ===== 작성 화면 ===== -->
+    <div id="writeView" style="display:none; padding:18px 16px;">
+      <div id="wBoardRow" style="display:none; margin-bottom:12px;">
+        <label style="font-size:13px; color:var(--muted); display:block; margin-bottom:6px;">게시판</label>
+        <select id="wBoard" style="padding:10px 12px; border:1px solid var(--line);
+          border-radius:8px; font-size:14px; background:var(--card);">
+          <option value="share">나눔</option>
+          <option value="notice">공지</option>
+        </select>
+      </div>
+      <input id="wTitle" type="text" placeholder="제목"
+        style="width:100%; padding:12px; border:1px solid var(--line); border-radius:8px;
+        font-size:16px; font-weight:600; margin-bottom:10px;">
+      <textarea id="wBody" placeholder="내용을 입력하세요" rows="10"
+        style="width:100%; padding:12px; border:1px solid var(--line); border-radius:8px;
+        font-size:15px; resize:vertical; font-family:inherit; line-height:1.6;"></textarea>
+      <div id="wMsg" style="display:none; font-size:13px; color:var(--danger); margin-top:8px;"></div>
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button id="wCancel" style="flex:1; padding:12px; border:1px solid var(--line);
+          background:var(--card); color:var(--text); border-radius:8px; font-size:15px;
+          cursor:pointer;">취소</button>
+        <button id="wSubmit" style="flex:2; padding:12px; border:none;
+          background:var(--green); color:#fff; border-radius:8px; font-size:15px;
+          font-weight:600; cursor:pointer;">올리기</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 글쓰기 버튼 (목록 화면에서만 노출) -->
+  <button id="fab" style="position:fixed; right:max(16px, calc(50% - 360px + 16px)); bottom:22px;
+    width:54px; height:54px; border-radius:50%; border:none; background:var(--green);
+    color:#fff; font-size:26px; line-height:1; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.22);
+    display:flex; align-items:center; justify-content:center;" aria-label="글쓰기">✎</button>
+
+  <style>
+    .tab { border:none; background:none; padding:12px 0; font-size:15px; color:var(--muted);
+      cursor:pointer; border-bottom:2px solid transparent; font-family:inherit; }
+    .tab-on { color:var(--text); font-weight:700; border-bottom-color:var(--green); }
+    .avatar { width:38px; height:38px; border-radius:50%; flex-shrink:0; display:flex;
+      align-items:center; justify-content:center; font-weight:700; font-size:15px;
+      background:var(--green-soft); color:var(--green); }
+    .empty { text-align:center; color:var(--muted); font-size:14px; padding:48px 16px; }
+    .post-row { display:flex; gap:12px; padding:14px 6px; border-bottom:1px solid var(--line);
+      cursor:pointer; }
+    .post-row:active { background:var(--green-soft); }
+    .notice-row { background:var(--green-soft); border-radius:10px; border-bottom:none;
+      margin-bottom:8px; padding:14px 12px; }
+    ::placeholder { color:#b3b8b3; }
+    input:focus, textarea:focus, select:focus { outline:none; border-color:var(--green); }
+    @media (max-width:760px) { #fab { right:16px; } }
+  </style>
+
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+    import {
+      collection, addDoc, getDoc, getDocs, doc, deleteDoc,
+      query, where, serverTimestamp, updateDoc, increment
+    } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+
+    const $ = (id) => document.getElementById(id);
+    let me = { uid: null, name: '', level: 1 };
+    let currentBoard = 'share';
+    let openPostData = null;
+
+    // ── 유틸 ──
+    const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function timeAgo(ts) {
+      if (!ts) return '';
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60) return '방금';
+      if (diff < 3600) return Math.floor(diff / 60) + '분 전';
+      if (diff < 86400) return Math.floor(diff / 3600) + '시간 전';
+      if (diff < 172800) return '어제';
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return (d.getFullYear() + '.' + mm + '.' + dd);
+    }
+
+    // ── 인증 가드: 비로그인/등급 미달이면 메인으로 ──
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { location.replace('index.html'); return; }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        const lv = snap.exists() ? (snap.data().level || 1) : 1;
+        if (lv < 2) { alert('사랑방은 회원(2단계 이상)만 이용할 수 있습니다.'); location.replace('index.html'); return; }
+        me = { uid: user.uid, name: (snap.data().name || user.displayName || '성도'), level: lv };
+        $('userName').textContent = me.name;
+        loadPosts();
+      } catch (e) {
+        alert('정보를 불러오지 못했습니다. 다시 시도해 주세요.');
+        location.replace('index.html');
+      }
+    });
+
+    // ── 화면 전환 ──
+    let currentView = 'list';
+    function show(view) {
+      currentView = view;
+      $('listView').style.display = (view === 'list') ? '' : 'none';
+      $('detailView').style.display = (view === 'detail') ? '' : 'none';
+      $('writeView').style.display = (view === 'write') ? '' : 'none';
+      $('fab').style.display = (view === 'list') ? 'flex' : 'none';
+      $('barTitle').textContent = (view === 'list') ? '사랑방'
+        : (view === 'write') ? '글쓰기' : '사랑방';
+      window.scrollTo(0, 0);
+    }
+
+    // 상단 ‹ : 목록이 아니면 목록으로, 목록이면 메인으로(링크 기본 동작)
+    $('backBtn').addEventListener('click', (e) => {
+      if (currentView !== 'list') {
+        e.preventDefault();
+        show('list');
+        loadPosts();
+      }
+    });
+
+    // ── 탭 ──
+    document.querySelectorAll('.tab').forEach((t) => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((x) => x.classList.remove('tab-on'));
+        t.classList.add('tab-on');
+        currentBoard = t.getAttribute('data-board');
+        loadPosts();
+      });
+    });
+
+    // ── 목록 로드 ──
+    async function loadPosts() {
+      const el = $('postList');
+      el.innerHTML = '<div class="empty">불러오는 중…</div>';
+      try {
+        const q = query(collection(db, 'posts'), where('board', '==', currentBoard));
+        const snap = await getDocs(q);
+        const rows = [];
+        snap.forEach((d) => rows.push(Object.assign({ id: d.id }, d.data())));
+        rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        if (rows.length === 0) {
+          el.innerHTML = '<div class="empty">' +
+            (currentBoard === 'notice' ? '등록된 공지가 없습니다.' : '첫 글을 남겨 보세요.') + '</div>';
+          return;
+        }
+        el.innerHTML = '';
+        rows.forEach((p) => el.appendChild(postRow(p)));
+      } catch (e) {
+        el.innerHTML = '<div class="empty">불러오기 실패: ' + esc(e.code || e.message) + '</div>';
+      }
+    }
+
+    // ── 목록 행 ──
+    function postRow(p) {
+      const row = document.createElement('div');
+      const preview = (p.body || '').replace(/\s+/g, ' ').trim();
+      row.className = 'post-row';
+      row.innerHTML =
+        '<div class="avatar">' + esc((p.authorName || '?').slice(0, 1)) + '</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:15px; font-weight:700; margin-bottom:3px; word-break:break-word;">' +
+            esc(p.title || '(제목 없음)') + '</div>' +
+          '<div style="font-size:13px; color:var(--muted); margin-bottom:5px; overflow:hidden;' +
+            'text-overflow:ellipsis; white-space:nowrap;">' + esc(preview) + '</div>' +
+          '<div style="font-size:12px; color:#9aa09a; display:flex; align-items:center; gap:8px;">' +
+            '<span>' + esc(p.authorName || '') + '</span><span>·</span>' +
+            '<span>' + timeAgo(p.createdAt) + '</span>' +
+            '<span>💬 ' + (p.commentCount || 0) + '</span>' +
+          '</div>' +
+        '</div>';
+      row.addEventListener('click', () => openPost(p.id));
+      return row;
+    }
+
+    // ── 상세 열기 ──
+    async function openPost(id) {
+      try {
+        const snap = await getDoc(doc(db, 'posts', id));
+        if (!snap.exists()) { alert('삭제되었거나 없는 글입니다.'); loadPosts(); return; }
+        const p = Object.assign({ id: snap.id }, snap.data());
+        openPostData = p;
+        $('dAvatar').textContent = (p.authorName || '?').slice(0, 1);
+        $('dAuthor').textContent = p.authorName || '';
+        $('dTime').textContent = timeAgo(p.createdAt);
+        $('dTitle').textContent = p.title || '(제목 없음)';
+        $('dBody').textContent = p.body || '';
+        // 삭제 버튼: 작성자 본인 또는 관리자
+        $('dDelete').style.display = (p.authorUid === me.uid || me.level >= 4) ? '' : 'none';
+        show('detail');
+        loadComments(id);
+      } catch (e) {
+        alert('글을 불러오지 못했습니다.');
+      }
+    }
+
+    // ── 댓글 로드 ──
+    async function loadComments(postId) {
+      const el = $('commentList');
+      el.innerHTML = '';
+      try {
+        const snap = await getDocs(collection(db, 'posts', postId, 'comments'));
+        const rows = [];
+        snap.forEach((d) => rows.push(Object.assign({ id: d.id }, d.data())));
+        rows.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+        $('cCount').textContent = rows.length;
+        if (rows.length === 0) {
+          el.innerHTML = '<div style="font-size:13px; color:var(--muted); padding:6px 0;">아직 댓글이 없습니다.</div>';
+          return;
+        }
+        rows.forEach((c) => el.appendChild(commentRow(postId, c)));
+      } catch (e) {
+        el.innerHTML = '<div style="font-size:13px; color:var(--danger);">댓글을 불러오지 못했습니다.</div>';
+      }
+    }
+
+    function commentRow(postId, c) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex; gap:10px;';
+      const canDel = (c.authorUid === me.uid || me.level >= 4);
+      wrap.innerHTML =
+        '<div class="avatar" style="width:30px; height:30px; font-size:13px;">' +
+          esc((c.authorName || '?').slice(0, 1)) + '</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:13px;"><b>' + esc(c.authorName || '') + '</b> ' +
+            '<span style="color:#9aa09a; font-size:12px;">' + timeAgo(c.createdAt) + '</span></div>' +
+          '<div style="font-size:14px; white-space:pre-wrap; word-break:break-word;">' +
+            esc(c.body || '') + '</div>' +
+        '</div>';
+      if (canDel) {
+        const del = document.createElement('button');
+        del.textContent = '×';
+        del.style.cssText = 'border:none; background:none; color:#9aa09a; font-size:18px; cursor:pointer; flex-shrink:0;';
+        del.addEventListener('click', () => deleteComment(postId, c.id));
+        wrap.appendChild(del);
+      }
+      return wrap;
+    }
+
+    // ── 댓글 등록 ──
+    async function submitComment() {
+      const v = $('cInput').value.trim();
+      if (!v || !openPostData) return;
+      $('cSend').disabled = true;
+      try {
+        await addDoc(collection(db, 'posts', openPostData.id, 'comments'), {
+          body: v, authorUid: me.uid, authorName: me.name, createdAt: serverTimestamp()
+        });
+        await updateDoc(doc(db, 'posts', openPostData.id), { commentCount: increment(1) });
+        $('cInput').value = '';
+        loadComments(openPostData.id);
+      } catch (e) {
+        alert('댓글 등록에 실패했습니다.');
+      } finally {
+        $('cSend').disabled = false;
+      }
+    }
+    $('cSend').addEventListener('click', submitComment);
+    $('cInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitComment(); });
+
+    async function deleteComment(postId, cid) {
+      if (!confirm('이 댓글을 삭제할까요?')) return;
+      try {
+        await deleteDoc(doc(db, 'posts', postId, 'comments', cid));
+        await updateDoc(doc(db, 'posts', postId), { commentCount: increment(-1) });
+        loadComments(postId);
+      } catch (e) { alert('삭제에 실패했습니다.'); }
+    }
+
+    // ── 글 삭제 ──
+    $('dDelete').addEventListener('click', async () => {
+      if (!openPostData) return;
+      if (!confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.')) return;
+      try {
+        await deleteDoc(doc(db, 'posts', openPostData.id));
+        show('list'); loadPosts();
+      } catch (e) { alert('삭제에 실패했습니다.'); }
+    });
+
+    // ── 글쓰기 진입 ──
+    $('fab').addEventListener('click', () => {
+      $('wTitle').value = ''; $('wBody').value = '';
+      $('wMsg').style.display = 'none';
+      const isAdmin = me.level >= 4;
+      // 관리자만 게시판(공지/나눔) 선택 가능. 일반 회원은 나눔 고정.
+      $('wBoardRow').style.display = isAdmin ? 'block' : 'none';
+      $('wBoard').value = isAdmin ? currentBoard : 'share';
+      show('write');
+      $('wTitle').focus();
+    });
+    $('wCancel').addEventListener('click', () => show('list'));
+
+    // ── 글 올리기 ──
+    $('wSubmit').addEventListener('click', async () => {
+      const title = $('wTitle').value.trim();
+      const body = $('wBody').value.trim();
+      const board = (me.level >= 4) ? $('wBoard').value : 'share';
+      if (!title) { showWMsg('제목을 입력하세요.'); return; }
+      if (!body) { showWMsg('내용을 입력하세요.'); return; }
+      $('wSubmit').disabled = true;
+      try {
+        await addDoc(collection(db, 'posts'), {
+          board, title, body,
+          authorUid: me.uid, authorName: me.name,
+          commentCount: 0, createdAt: serverTimestamp()
+        });
+        // 작성한 게시판 탭으로 전환
+        currentBoard = board;
+        document.querySelectorAll('.tab').forEach((x) =>
+          x.classList.toggle('tab-on', x.getAttribute('data-board') === board));
+        show('list'); loadPosts();
+      } catch (e) {
+        showWMsg('등록에 실패했습니다: ' + (e.code || e.message));
+      } finally {
+        $('wSubmit').disabled = false;
+      }
+    });
+    function showWMsg(t) { const m = $('wMsg'); m.textContent = t; m.style.display = 'block'; }
+  </script>
+</body>
+</html>
