@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2f6f4f">
+  <title>교독문 뷰어 · 교회 통합 관리</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --green:#2f6f4f; --green-d:#245a40; --green-soft:#e7f1ec;
+      --bg:#f5f6f4; --card:#fff; --text:#1f2421; --muted:#6b726d; --line:#e2e5e1;
+    }
+    body { font-family:'Malgun Gothic',system-ui,sans-serif; background:var(--bg);
+      color:var(--text); line-height:1.6; overflow-x:hidden; }
+    .topbar { background:var(--green); color:#fff; padding:12px 16px;
+      display:flex; align-items:center; gap:12px; }
+    .topbar a { color:#fff; text-decoration:none; font-size:14px; opacity:.9; }
+    .topbar h1 { font-size:17px; font-weight:700; }
+    #fixedHead { position:fixed; top:0; left:0; right:0; z-index:20;
+      background:var(--bg); box-shadow:0 2px 6px rgba(0,0,0,.08); }
+    #fixedHead .controls { margin:0; border-radius:0; border-left:none; border-right:none; }
+    .wrap { max-width:760px; margin:0 auto; padding:14px 16px 60px; }
+  </style>
+</head>
+<body>
+  <div id="fixedHead">
+    <div class="topbar">
+      <a href="index.html">← 홈</a>
+      <h1>교독문 뷰어</h1>
+    </div>
+    <div class="controls">
+      <div class="row">
+        <button id="prevBtn" class="navb cir" title="이전 교독문" aria-label="이전 교독문">‹</button>
+        <div class="numwrap">
+          <input id="numInput" class="num" type="number" min="1" inputmode="numeric" placeholder="번호">
+          <span class="suffix">편</span>
+        </div>
+        <button id="nextBtn" class="navb cir" title="다음 교독문" aria-label="다음 교독문">›</button>
+        <div class="zoomgroup">
+          <button id="fontDown" class="navb zb" title="글자 작게" aria-label="글자 작게">－</button>
+          <span class="zdiv"></span>
+          <button id="fontUp" class="navb zb" title="글자 크게" aria-label="글자 크게">＋</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="status" class="status">데이터를 불러오는 중…</div>
+    <article id="reading" style="display:none"></article>
+  </div>
+
+  <style>
+    .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:8px 12px; }
+    .row { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .navb { border:none; background:none; cursor:pointer; white-space:nowrap; }
+    .navb.cir { flex:0 0 auto; width:42px; height:42px; border-radius:50%;
+      background:var(--green); color:#fff; display:flex; align-items:center;
+      justify-content:center; font-size:22px; font-weight:700; line-height:1; }
+    .navb.cir:hover { background:var(--green-d); }
+    .navb.cir:active { transform:scale(.94); }
+    .numwrap { display:flex; align-items:baseline; justify-content:center; gap:3px; }
+    .num { width:54px; border:none; background:transparent; padding:0; font-size:23px;
+      font-weight:700; text-align:center; color:var(--text);
+      -moz-appearance:textfield; appearance:textfield; }
+    .num:focus { outline:none; }
+    .num::-webkit-outer-spin-button, .num::-webkit-inner-spin-button {
+      -webkit-appearance:none; margin:0; }
+    .suffix { font-size:13px; color:var(--muted); }
+    .zoomgroup { flex:0 0 auto; display:flex; align-items:center;
+      border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+    .zoomgroup .navb.zb { width:38px; height:38px; display:flex; align-items:center;
+      justify-content:center; font-size:20px; color:var(--muted); }
+    .zoomgroup .navb.zb:hover { color:var(--green); }
+    .zdiv { width:1px; height:20px; background:var(--line); }
+  </style>
+
+  <style>
+    .status { color:var(--muted); font-size:14px; padding:30px 4px; text-align:center; }
+    #reading { font-size:18px; }
+    .r-head { text-align:center; padding:6px 0 18px; border-bottom:1px solid var(--line);
+      margin-bottom:16px; }
+    .r-no { font-size:13px; color:var(--green); font-weight:700; }
+    .r-title { font-size:22px; font-weight:700; margin-top:3px; }
+    .r-ref { font-size:13px; color:var(--muted); margin-top:5px; }
+    .line { display:flex; gap:12px; padding:9px 0; align-items:baseline; }
+    .tag { flex:0 0 auto; width:46px; font-size:12px; font-weight:700; }
+    .txt { flex:1 1 auto; font-size:1em; line-height:1.75; }
+    .role-L .tag { color:var(--muted); }
+    .role-C .tag, .role-A .tag { color:var(--green); }
+    .role-C .txt, .role-A .txt { color:var(--green-d); font-weight:700; }
+    .role-A { border-top:1px dashed var(--line); margin-top:6px; padding-top:14px; }
+  </style>
+
+  <script>
+    function adjustHeadSpace() {
+      var head = document.getElementById('fixedHead');
+      var wrap = document.querySelector('.wrap');
+      if (head && wrap) wrap.style.paddingTop = (head.offsetHeight + 12) + 'px';
+    }
+    window.addEventListener('resize', adjustHeadSpace);
+    window.addEventListener('load', adjustHeadSpace);
+
+    var ITEMS = [], cur = 0, fontPx = 18;
+    var numInput = document.getElementById('numInput');
+    var statusEl = document.getElementById('status');
+    var reading = document.getElementById('reading');
+
+    fetch('data/responsive/responsive.json')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        ITEMS = (data && data.items) ? data.items : [];
+        if (!ITEMS.length) throw new Error('no items');
+        statusEl.style.display = 'none';
+        reading.style.display = 'block';
+        showIndex(0);
+        adjustHeadSpace();
+      })
+      .catch(function () {
+        statusEl.textContent = '교독문 데이터를 찾을 수 없습니다. data/responsive/responsive.json 을 확인하세요.';
+      });
+
+    function roleLabel(r) {
+      return r === 'C' ? '회중' : r === 'A' ? '다 함께' : '인도자';
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    function showIndex(i) {
+      if (i < 0) i = 0;
+      if (i >= ITEMS.length) i = ITEMS.length - 1;
+      cur = i;
+      var it = ITEMS[i];
+      numInput.value = it.no;
+      var html = '<div class="r-head"><div class="r-no">교독문 ' + it.no + '</div>'
+        + '<div class="r-title">' + escapeHtml(it.title || '') + '</div>'
+        + (it.ref ? '<div class="r-ref">' + escapeHtml(it.ref) + '</div>' : '')
+        + '</div>';
+      (it.lines || []).forEach(function (ln) {
+        var r = ln.r || 'L';
+        html += '<div class="line role-' + r + '"><span class="tag">'
+          + roleLabel(r) + '</span><p class="txt">' + escapeHtml(ln.t || '') + '</p></div>';
+      });
+      reading.innerHTML = html;
+      reading.style.fontSize = fontPx + 'px';
+      window.scrollTo(0, 0);
+    }
+
+    function gotoNo(no) {
+      no = parseInt(no, 10);
+      if (isNaN(no)) return;
+      for (var i = 0; i < ITEMS.length; i++) {
+        if (ITEMS[i].no === no) { showIndex(i); return; }
+      }
+      showIndex(cur);
+    }
+
+    function selectNum() { numInput.select(); }
+    numInput.addEventListener('focus', selectNum);
+    numInput.addEventListener('click', selectNum);
+    numInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { gotoNo(numInput.value); numInput.blur(); }
+    });
+
+    document.getElementById('prevBtn').addEventListener('click', function () {
+      if (cur > 0) showIndex(cur - 1);
+    });
+    document.getElementById('nextBtn').addEventListener('click', function () {
+      if (cur < ITEMS.length - 1) showIndex(cur + 1);
+    });
+    document.getElementById('fontUp').addEventListener('click', function () {
+      fontPx = Math.min(fontPx + 2, 34); reading.style.fontSize = fontPx + 'px';
+    });
+    document.getElementById('fontDown').addEventListener('click', function () {
+      fontPx = Math.max(fontPx - 2, 14); reading.style.fontSize = fontPx + 'px';
+    });
+  </script>
+</body>
+</html>
