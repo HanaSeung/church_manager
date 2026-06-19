@@ -87,6 +87,7 @@
         <div class="card-off" data-need="admin"><div class="ic">👥</div><div class="tt">성도 관리</div><div class="sb">명부 · 새신자</div></div>
         <div class="card-off" data-need="admin"><div class="ic">✅</div><div class="tt">출석 관리</div><div class="sb">예배 · 구역</div></div>
         <div class="card-off" data-need="admin"><div class="ic">🤝</div><div class="tt">심방 관리</div><div class="sb">기록 · 기도제목</div></div>
+        <div class="card-on" id="adminPermCard" style="cursor:pointer;"><div class="ic">🛡️</div><div class="tt">권한 관리</div><div class="sb">회원 등급 부여</div></div>
       </div>
     </section>
 
@@ -169,6 +170,26 @@
       <button id="nameSubmit" class="btn-primary">확인</button>
       <div style="text-align:center; margin-top:14px; font-size:13px;">
         <a id="nameCancel" href="#" style="color:var(--muted); text-decoration:none;">취소(로그아웃)</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 회원 권한 관리 모달 (관리자 전용) -->
+  <div id="permModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+    z-index:1100; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--card); border-radius:14px; padding:22px; width:100%; max-width:480px;
+      max-height:85vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.25);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+        <div style="font-size:17px; font-weight:700;">회원 권한 관리</div>
+        <button id="permClose" style="border:none; background:none; font-size:20px;
+          cursor:pointer; color:var(--muted); line-height:1;">✕</button>
+      </div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:14px; line-height:1.6;">
+        등급을 바꾸면 해당 회원은 다음 로그인 때 반영됩니다.<br>
+        1·예배　2·사랑방　3·헌금　4·전체
+      </div>
+      <div id="permList" style="display:flex; flex-direction:column; gap:8px; overflow:auto;">
+        <div style="font-size:13px; color:var(--muted); text-align:center; padding:20px;">불러오는 중…</div>
       </div>
     </div>
   </div>
@@ -258,7 +279,8 @@
       updateProfile, sendPasswordResetEmail
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
     import {
-      getFirestore, doc, getDoc, setDoc, serverTimestamp
+      getFirestore, doc, getDoc, setDoc, serverTimestamp,
+      collection, getDocs, updateDoc
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
     // Firebase 설정 (공개 가능한 값. apiKey는 콘솔 값과 정확히 일치해야 함)
@@ -462,6 +484,110 @@
         btn.setAttribute('aria-label', reveal ? '비밀번호 숨기기' : '비밀번호 표시');
       });
     });
+
+    // ===== 회원 권한 관리 (관리자 전용) =====
+    const TIER_LABEL = { 1: '예배', 2: '사랑방', 3: '헌금', 4: '전체' };
+
+    async function loadMembers() {
+      const listEl = $('permList');
+      listEl.innerHTML = '<div style="font-size:13px; color:var(--muted); text-align:center; padding:20px;">불러오는 중…</div>';
+      try {
+        const snap = await getDocs(collection(db, 'users'));
+        const meUid = auth.currentUser ? auth.currentUser.uid : null;
+        const rows = [];
+        snap.forEach((d) => rows.push(Object.assign({ uid: d.id }, d.data())));
+        rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+        listEl.innerHTML = '';
+        if (rows.length === 0) {
+          listEl.innerHTML = '<div style="font-size:13px; color:var(--muted); text-align:center; padding:20px;">등록된 회원이 없습니다.</div>';
+          return;
+        }
+        rows.forEach((m) => listEl.appendChild(memberRow(m, meUid)));
+      } catch (e) {
+        listEl.innerHTML = '<div style="font-size:13px; color:#c0392b; text-align:center; padding:20px;">불러오기 실패: ' + (e.code || e.message) + '</div>';
+      }
+    }
+
+    function memberRow(m, meUid) {
+      const isMe = (m.uid === meUid);
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:10px; padding:10px 12px;';
+
+      const av = document.createElement('div');
+      av.style.cssText = 'width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; background:var(--green-soft); color:var(--green);';
+      av.textContent = (m.name || '?').slice(0, 1);
+
+      const who = document.createElement('div');
+      who.style.cssText = 'flex:1; min-width:0;';
+      const nm = document.createElement('div');
+      nm.style.cssText = 'font-size:14px; font-weight:700;';
+      nm.textContent = m.name || '(이름 없음)';
+      if (isMe) {
+        const tag = document.createElement('span');
+        tag.textContent = '본인';
+        tag.style.cssText = 'margin-left:6px; font-size:11px; font-weight:400; background:var(--bg); color:var(--muted); border-radius:6px; padding:1px 7px;';
+        nm.appendChild(tag);
+      }
+      const em = document.createElement('div');
+      em.style.cssText = 'font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+      em.textContent = m.email || '';
+      who.appendChild(nm); who.appendChild(em);
+
+      const sel = document.createElement('select');
+      sel.style.cssText = 'flex-shrink:0; padding:7px 8px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:var(--card); color:var(--text);';
+      [1, 2, 3, 4].forEach((v) => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v + '·' + TIER_LABEL[v];
+        if (v === (m.level || 1)) o.selected = true;
+        sel.appendChild(o);
+      });
+
+      if (isMe) {
+        sel.disabled = true; sel.style.opacity = '.6';
+        const lock = document.createElement('span');
+        lock.textContent = '🔒';
+        lock.style.cssText = 'flex-shrink:0; width:54px; text-align:right; font-size:13px;';
+        row.append(av, who, sel, lock);
+        return row;
+      }
+
+      const btn = document.createElement('button');
+      btn.textContent = '적용';
+      btn.disabled = true;
+      btn.style.cssText = 'flex-shrink:0; padding:7px 12px; border:none; border-radius:8px; background:var(--green); color:#fff; font-size:13px; cursor:pointer; opacity:.4;';
+      const note = document.createElement('span');
+      note.style.cssText = 'flex-shrink:0; width:54px; font-size:12px; text-align:right; color:var(--green);';
+
+      sel.addEventListener('change', () => {
+        const changed = parseInt(sel.value, 10) !== (m.level || 1);
+        btn.disabled = !changed;
+        btn.style.opacity = changed ? '1' : '.4';
+        note.textContent = '';
+      });
+      btn.addEventListener('click', async () => {
+        const newLevel = parseInt(sel.value, 10);
+        btn.disabled = true; btn.style.opacity = '.4';
+        note.textContent = '저장 중…'; note.style.color = 'var(--muted)';
+        try {
+          await updateDoc(doc(db, 'users', m.uid), { level: newLevel });
+          m.level = newLevel;
+          note.textContent = '✓ 저장됨'; note.style.color = 'var(--green)';
+          setTimeout(() => { note.textContent = ''; }, 2500);
+        } catch (e) {
+          note.textContent = '실패'; note.style.color = '#c0392b';
+          btn.disabled = false; btn.style.opacity = '1';
+        }
+      });
+      row.append(av, who, sel, btn, note);
+      return row;
+    }
+
+    $('adminPermCard').addEventListener('click', () => {
+      $('permModal').style.display = 'flex';
+      loadMembers();
+    });
+    $('permClose').addEventListener('click', () => { $('permModal').style.display = 'none'; });
+    $('permModal').addEventListener('click', (e) => { if (e.target === $('permModal')) $('permModal').style.display = 'none'; });
   </script>
 </body>
 </html>
