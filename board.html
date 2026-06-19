@@ -199,6 +199,8 @@
 
     // ── 목록 로드 ──
     async function loadPosts() {
+      openAcc = null;
+      $('fab').style.display = 'flex';
       const el = $('postList');
       el.innerHTML = '<div class="empty">불러오는 중…</div>';
       try {
@@ -323,11 +325,13 @@
       if (acc.classList.contains('open')) {
         acc.classList.remove('open');
         openAcc = null;
+        $('fab').style.display = 'flex';   // 접으면 글쓰기 버튼 복원
         return;
       }
       if (openAcc) openAcc.classList.remove('open');
       acc.classList.add('open');
       openAcc = acc;
+      $('fab').style.display = 'none';     // 펼친 동안 글쓰기 버튼 숨김(겹침 방지)
       if (!acc.dataset.bound) {
         acc.dataset.bound = '1';
         bindAccActions(acc, p);
