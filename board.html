@@ -46,35 +46,6 @@
       </div>
     </div>
 
-    <!-- ===== 상세 화면 ===== -->
-    <div id="detailView" style="display:none; padding:18px 16px;">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-        <div id="dAvatar" class="avatar"></div>
-        <div style="flex:1; min-width:0;">
-          <div id="dAuthor" style="font-size:14px; font-weight:700;"></div>
-          <div id="dTime" style="font-size:12px; color:var(--muted);"></div>
-        </div>
-        <button id="dDelete" style="display:none; border:1px solid var(--line);
-          background:var(--card); color:var(--danger); font-size:13px; padding:6px 12px;
-          border-radius:8px; cursor:pointer;">삭제</button>
-      </div>
-      <h1 id="dTitle" style="font-size:20px; font-weight:700; line-height:1.4; margin-bottom:12px;"></h1>
-      <div id="dBody" style="font-size:15px; white-space:pre-wrap; word-break:break-word;
-        padding-bottom:20px; border-bottom:1px solid var(--line);"></div>
-
-      <div style="margin:18px 0 10px; font-size:14px; font-weight:700; color:var(--muted);">
-        댓글 <span id="cCount">0</span></div>
-      <div id="commentList" style="display:flex; flex-direction:column; gap:12px;"></div>
-
-      <div style="display:flex; gap:8px; margin-top:16px;">
-        <input id="cInput" type="text" placeholder="따뜻한 댓글을 남겨 주세요"
-          style="flex:1; padding:11px 12px; border:1px solid var(--line); border-radius:8px;
-          font-size:14px;">
-        <button id="cSend" style="border:none; background:var(--green); color:#fff;
-          padding:0 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">등록</button>
-      </div>
-    </div>
-
     <!-- ===== 작성 화면 ===== -->
     <div id="writeView" style="display:none; padding:18px 16px;">
       <div id="wBoardRow" style="display:none; margin-bottom:12px;">
@@ -123,6 +94,14 @@
     .post-row:active { background:var(--green-soft); }
     .notice-row { background:var(--green-soft); border-radius:10px; border-bottom:none;
       margin-bottom:8px; padding:14px 12px; }
+    .acc-wrap { display:grid; grid-template-rows:0fr;
+      transition:grid-template-rows .32s cubic-bezier(.4,0,.2,1); }
+    .acc.open .acc-wrap { grid-template-rows:1fr; }
+    .acc-inner { overflow:hidden; min-height:0; }
+    .chev { font-style:normal; color:#9aa09a; font-size:13px; flex-shrink:0; margin-top:2px;
+      transition:transform .32s cubic-bezier(.4,0,.2,1); }
+    .acc.open .chev { transform:rotate(180deg); }
+    .acc.open .prev { display:none; }
     ::placeholder { color:#b3b8b3; }
     input:focus, textarea:focus, select:focus { outline:none; border-color:var(--green); }
     @media (max-width:760px) { #fab { right:16px; } }
@@ -139,7 +118,6 @@
     const $ = (id) => document.getElementById(id);
     let me = { uid: null, name: '', level: 1 };
     let currentBoard = 'share';
-    let openPostData = null;
 
     // ── 유틸 ──
     const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
@@ -179,11 +157,9 @@
     function show(view) {
       currentView = view;
       $('listView').style.display = (view === 'list') ? '' : 'none';
-      $('detailView').style.display = (view === 'detail') ? '' : 'none';
       $('writeView').style.display = (view === 'write') ? '' : 'none';
       $('fab').style.display = (view === 'list') ? 'flex' : 'none';
-      $('barTitle').textContent = (view === 'list') ? '사랑방'
-        : (view === 'write') ? '글쓰기' : '사랑방';
+      $('barTitle').textContent = (view === 'write') ? '글쓰기' : '사랑방';
       window.scrollTo(0, 0);
     }
 
@@ -253,88 +229,165 @@
       }
     }
 
-    // ── 공지 핀 카드 (나눔 탭 상단) ──
+    // ── 공지 핀 카드 (나눔 탭 상단, 아코디언) ──
     function noticePinRow(p) {
-      const row = document.createElement('div');
+      const acc = document.createElement('div');
+      acc.className = 'acc';
+      acc.style.cssText = 'background:var(--green-soft); border-radius:10px; margin-bottom:8px; overflow:hidden;';
       const preview = (p.body || '').replace(/\s+/g, ' ').trim();
-      row.className = 'notice-row';
-      row.style.cssText = 'display:flex; gap:11px; cursor:pointer;';
-      row.innerHTML =
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex; gap:11px; padding:14px 12px; cursor:pointer; align-items:flex-start;';
+      head.innerHTML =
         '<div style="font-size:18px; flex-shrink:0; line-height:1.4;">📌</div>' +
         '<div style="flex:1; min-width:0;">' +
           '<div style="font-size:14px; font-weight:700; color:var(--green-deep); ' +
             'margin-bottom:2px; word-break:break-word;">' + esc(p.title || '(제목 없음)') + '</div>' +
-          '<div style="font-size:12px; color:var(--green); overflow:hidden; ' +
+          '<div class="prev" style="font-size:12px; color:var(--green); overflow:hidden; ' +
             'text-overflow:ellipsis; white-space:nowrap;">' + esc(preview) + '</div>' +
-        '</div>';
-      row.addEventListener('click', () => openPost(p.id));
-      return row;
+        '</div>' +
+        '<i class="chev" style="color:var(--green);">▾</i>';
+      acc.appendChild(head);
+      acc.appendChild(bodyWrap(p));
+      head.addEventListener('click', () => toggleAcc(acc, p));
+      return acc;
     }
 
-    // ── 목록 행 ──
+    // ── 목록 행 (아코디언) ──
     function postRow(p) {
-      const row = document.createElement('div');
+      const acc = document.createElement('div');
+      acc.className = 'acc';
+      acc.style.borderBottom = '1px solid var(--line)';
       const preview = (p.body || '').replace(/\s+/g, ' ').trim();
-      row.className = 'post-row';
-      row.innerHTML =
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex; gap:12px; padding:14px 6px; cursor:pointer; align-items:flex-start;';
+      head.innerHTML =
         '<div class="avatar">' + esc((p.authorName || '?').slice(0, 1)) + '</div>' +
         '<div style="flex:1; min-width:0;">' +
           '<div style="font-size:15px; font-weight:700; margin-bottom:3px; word-break:break-word;">' +
             esc(p.title || '(제목 없음)') + '</div>' +
-          '<div style="font-size:13px; color:var(--muted); margin-bottom:5px; overflow:hidden;' +
+          '<div class="prev" style="font-size:13px; color:var(--muted); margin-bottom:5px; overflow:hidden;' +
             'text-overflow:ellipsis; white-space:nowrap;">' + esc(preview) + '</div>' +
           '<div style="font-size:12px; color:#9aa09a; display:flex; align-items:center; gap:8px;">' +
             '<span>' + esc(p.authorName || '') + '</span><span>·</span>' +
             '<span>' + timeAgo(p.createdAt) + '</span>' +
-            '<span>💬 ' + (p.commentCount || 0) + '</span>' +
+            '<span class="cc">💬 ' + (p.commentCount || 0) + '</span>' +
           '</div>' +
-        '</div>';
-      row.addEventListener('click', () => openPost(p.id));
-      return row;
+        '</div>' +
+        '<i class="chev">▾</i>';
+      acc.appendChild(head);
+      acc.appendChild(bodyWrap(p));
+      head.addEventListener('click', () => toggleAcc(acc, p));
+      return acc;
     }
 
-    // ── 상세 열기 ──
-    async function openPost(id) {
-      try {
-        const snap = await getDoc(doc(db, 'posts', id));
-        if (!snap.exists()) { alert('삭제되었거나 없는 글입니다.'); loadPosts(); return; }
-        const p = Object.assign({ id: snap.id }, snap.data());
-        openPostData = p;
-        $('dAvatar').textContent = (p.authorName || '?').slice(0, 1);
-        $('dAuthor').textContent = p.authorName || '';
-        $('dTime').textContent = timeAgo(p.createdAt);
-        $('dTitle').textContent = p.title || '(제목 없음)';
-        $('dBody').textContent = p.body || '';
-        // 삭제 버튼: 작성자 본인 또는 관리자
-        $('dDelete').style.display = (p.authorUid === me.uid || me.level >= 4) ? '' : 'none';
-        show('detail');
-        loadComments(id);
-      } catch (e) {
-        alert('글을 불러오지 못했습니다.');
+    // ── 펼침 영역(본문 + 댓글 + 입력) 생성 ──
+    function bodyWrap(p) {
+      const wrap = document.createElement('div');
+      wrap.className = 'acc-wrap';
+      const inner = document.createElement('div');
+      inner.className = 'acc-inner';
+      const pad = document.createElement('div');
+      pad.style.cssText = 'padding:2px 12px 18px 56px;';
+      const delBtn = (p.authorUid === me.uid || me.level >= 4)
+        ? '<button class="del-post" style="float:right; border:1px solid var(--line); background:var(--card); ' +
+          'color:var(--danger); font-size:12px; padding:4px 10px; border-radius:7px; cursor:pointer;">삭제</button>'
+        : '';
+      pad.innerHTML =
+        delBtn +
+        '<div style="font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; margin:4px 0 16px;">' +
+          esc(p.body || '') + '</div>' +
+        '<div style="font-size:13px; font-weight:700; color:var(--muted); margin-bottom:10px;">' +
+          '댓글 <span class="ccount">0</span></div>' +
+        '<div class="clist" style="display:flex; flex-direction:column; gap:12px; margin-bottom:14px;"></div>' +
+        '<div style="display:flex; gap:8px;">' +
+          '<input class="cinput" type="text" placeholder="따뜻한 댓글을 남겨 주세요" ' +
+            'style="flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px;">' +
+          '<button class="csend" style="border:none; background:var(--green); color:#fff; ' +
+            'padding:0 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">등록</button>' +
+        '</div>';
+      inner.appendChild(pad);
+      wrap.appendChild(inner);
+      return wrap;
+    }
+
+    // ── 펼치기/접기 (한 번에 하나만) ──
+    let openAcc = null;
+    function toggleAcc(acc, p) {
+      if (acc.classList.contains('open')) {
+        acc.classList.remove('open');
+        openAcc = null;
+        return;
       }
+      if (openAcc) openAcc.classList.remove('open');
+      acc.classList.add('open');
+      openAcc = acc;
+      if (!acc.dataset.bound) {
+        acc.dataset.bound = '1';
+        bindAccActions(acc, p);
+      }
+      loadComments(acc, p.id);
+    }
+
+    // ── 펼친 영역의 동작 바인딩 (최초 1회) ──
+    function bindAccActions(acc, p) {
+      const delBtn = acc.querySelector('.del-post');
+      if (delBtn) delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.')) return;
+        try { await deleteDoc(doc(db, 'posts', p.id)); openAcc = null; loadPosts(); }
+        catch (err) { alert('삭제에 실패했습니다.'); }
+      });
+      const input = acc.querySelector('.cinput');
+      const send = acc.querySelector('.csend');
+      const doSend = async () => {
+        const v = input.value.trim();
+        if (!v) return;
+        send.disabled = true;
+        try {
+          await addDoc(collection(db, 'posts', p.id, 'comments'), {
+            body: v, authorUid: me.uid, authorName: me.name, createdAt: serverTimestamp()
+          });
+          await updateDoc(doc(db, 'posts', p.id), { commentCount: increment(1) });
+          input.value = '';
+          loadComments(acc, p.id);
+          bumpCount(acc, 1);
+        } catch (e) { alert('댓글 등록에 실패했습니다.'); }
+        finally { send.disabled = false; }
+      };
+      send.addEventListener('click', doSend);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSend(); });
+    }
+
+    // 목록 메타의 댓글 수 뱃지 갱신
+    function bumpCount(acc, delta) {
+      const cc = acc.querySelector('.cc');
+      if (!cc) return;
+      const n = Math.max(0, (parseInt(cc.textContent.replace(/\D/g, '')) || 0) + delta);
+      cc.textContent = '💬 ' + n;
     }
 
     // ── 댓글 로드 ──
-    async function loadComments(postId) {
-      const el = $('commentList');
-      el.innerHTML = '';
+    async function loadComments(acc, postId) {
+      const list = acc.querySelector('.clist');
+      const ccount = acc.querySelector('.ccount');
+      list.innerHTML = '';
       try {
         const snap = await getDocs(collection(db, 'posts', postId, 'comments'));
         const rows = [];
         snap.forEach((d) => rows.push(Object.assign({ id: d.id }, d.data())));
         rows.sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
-        $('cCount').textContent = rows.length;
+        if (ccount) ccount.textContent = rows.length;
         if (rows.length === 0) {
-          el.innerHTML = '<div style="font-size:13px; color:var(--muted); padding:6px 0;">아직 댓글이 없습니다.</div>';
+          list.innerHTML = '<div style="font-size:13px; color:var(--muted);">아직 댓글이 없습니다.</div>';
           return;
         }
-        rows.forEach((c) => el.appendChild(commentRow(postId, c)));
+        rows.forEach((c) => list.appendChild(commentRow(acc, postId, c)));
       } catch (e) {
-        el.innerHTML = '<div style="font-size:13px; color:var(--danger);">댓글을 불러오지 못했습니다.</div>';
+        list.innerHTML = '<div style="font-size:13px; color:var(--danger);">댓글을 불러오지 못했습니다.</div>';
       }
     }
 
-    function commentRow(postId, c) {
+    function commentRow(acc, postId, c) {
       const wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex; gap:10px;';
       const canDel = (c.authorUid === me.uid || me.level >= 4);
@@ -351,51 +404,19 @@
         const del = document.createElement('button');
         del.textContent = '×';
         del.style.cssText = 'border:none; background:none; color:#9aa09a; font-size:18px; cursor:pointer; flex-shrink:0;';
-        del.addEventListener('click', () => deleteComment(postId, c.id));
+        del.addEventListener('click', async () => {
+          if (!confirm('이 댓글을 삭제할까요?')) return;
+          try {
+            await deleteDoc(doc(db, 'posts', postId, 'comments', c.id));
+            await updateDoc(doc(db, 'posts', postId), { commentCount: increment(-1) });
+            loadComments(acc, postId);
+            bumpCount(acc, -1);
+          } catch (e) { alert('삭제에 실패했습니다.'); }
+        });
         wrap.appendChild(del);
       }
       return wrap;
     }
-
-    // ── 댓글 등록 ──
-    async function submitComment() {
-      const v = $('cInput').value.trim();
-      if (!v || !openPostData) return;
-      $('cSend').disabled = true;
-      try {
-        await addDoc(collection(db, 'posts', openPostData.id, 'comments'), {
-          body: v, authorUid: me.uid, authorName: me.name, createdAt: serverTimestamp()
-        });
-        await updateDoc(doc(db, 'posts', openPostData.id), { commentCount: increment(1) });
-        $('cInput').value = '';
-        loadComments(openPostData.id);
-      } catch (e) {
-        alert('댓글 등록에 실패했습니다.');
-      } finally {
-        $('cSend').disabled = false;
-      }
-    }
-    $('cSend').addEventListener('click', submitComment);
-    $('cInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitComment(); });
-
-    async function deleteComment(postId, cid) {
-      if (!confirm('이 댓글을 삭제할까요?')) return;
-      try {
-        await deleteDoc(doc(db, 'posts', postId, 'comments', cid));
-        await updateDoc(doc(db, 'posts', postId), { commentCount: increment(-1) });
-        loadComments(postId);
-      } catch (e) { alert('삭제에 실패했습니다.'); }
-    }
-
-    // ── 글 삭제 ──
-    $('dDelete').addEventListener('click', async () => {
-      if (!openPostData) return;
-      if (!confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.')) return;
-      try {
-        await deleteDoc(doc(db, 'posts', openPostData.id));
-        show('list'); loadPosts();
-      } catch (e) { alert('삭제에 실패했습니다.'); }
-    });
 
     // ── 글쓰기 진입 ──
     $('fab').addEventListener('click', () => {
