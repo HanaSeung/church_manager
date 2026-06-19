@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// 예닮교회 — Firestore 보안 규칙
+// 핵심: 사용자는 자기 등급(level)을 스스로 못 바꾼다. 승급은 관리자(level 4)만.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    // 내 등급 읽기 (문서가 있을 때만 호출)
+    function myLevel() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level;
+    }
+    // 관리자 = 로그인 + 내 문서 존재 + level 4 이상
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myLevel() >= 4;
+    }
+
+    // ===== 사용자 문서 =====
+    match /users/{uid} {
+      // 단일 조회: 본인 또는 관리자
+      allow get: if isOwner(uid) || isAdmin();
+      // 목록(명부) 조회: 관리자만
+      allow list: if isAdmin();
+
+      // 생성: 본인 문서이고, level은 반드시 2(자가 승급 차단)
+      allow create: if isOwner(uid)
+        && request.resource.data.level == 2;
+
+      // 수정:
+      //  - 관리자는 등급 포함 무엇이든 가능(향후 관리자 화면용)
+      //  - 본인은 level을 그대로 둔 채로만 수정 가능(이름 등)
+      allow update: if isAdmin()
+        || (isOwner(uid) && request.resource.data.level == resource.data.level);
+
+      // 삭제: 관리자만
+      allow delete: if isAdmin();
+    }
+
+    // ===== 그 외 모든 문서 =====
+    // 기본 차단. (헌금·성도 등 상위 단계 데이터는 만들 때 단계별 규칙을 여기에 추가)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
