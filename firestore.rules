@@ -29,9 +29,9 @@ service cloud.firestore {
       // 목록(명부) 조회: 관리자만
       allow list: if isAdmin();
 
-      // 생성: 본인 문서이고, level은 반드시 2(자가 승급 차단)
+      // 생성: 본인 문서이고, level은 반드시 1(자가 승급 차단)
       allow create: if isOwner(uid)
-        && request.resource.data.level == 2;
+        && request.resource.data.level == 1;
 
       // 수정:
       //  - 관리자는 등급 포함 무엇이든 가능(향후 관리자 화면용)
