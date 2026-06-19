@@ -497,7 +497,7 @@
     function memberRow(m, meUid) {
       const isMe = (m.uid === meUid);
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:10px; padding:10px 12px;';
+      row.style.cssText = 'display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:10px; padding:10px 12px;';
 
       const av = document.createElement('div');
       av.style.cssText = 'width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; background:var(--green-soft); color:var(--green);';
@@ -506,18 +506,18 @@
       const who = document.createElement('div');
       who.style.cssText = 'flex:1; min-width:0;';
       const nm = document.createElement('div');
-      nm.style.cssText = 'font-size:14px; font-weight:700;';
-      nm.textContent = m.name || '(이름 없음)';
+      nm.style.cssText = 'font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; min-width:0;';
+      const nameText = document.createElement('span');
+      nameText.style.cssText = 'overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+      nameText.textContent = m.name || '(이름 없음)';
+      nm.appendChild(nameText);
       if (isMe) {
         const tag = document.createElement('span');
         tag.textContent = '본인';
-        tag.style.cssText = 'margin-left:6px; font-size:11px; font-weight:400; background:var(--bg); color:var(--muted); border-radius:6px; padding:1px 7px;';
+        tag.style.cssText = 'flex-shrink:0; font-size:11px; font-weight:400; background:var(--bg); color:var(--muted); border-radius:6px; padding:1px 7px;';
         nm.appendChild(tag);
       }
-      const em = document.createElement('div');
-      em.style.cssText = 'font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-      em.textContent = m.email || '';
-      who.appendChild(nm); who.appendChild(em);
+      who.appendChild(nm);
 
       const sel = document.createElement('select');
       sel.style.cssText = 'flex-shrink:0; padding:7px 8px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:var(--card); color:var(--text);';
@@ -532,7 +532,7 @@
         sel.disabled = true; sel.style.opacity = '.6';
         const lock = document.createElement('span');
         lock.textContent = '🔒';
-        lock.style.cssText = 'flex-shrink:0; width:54px; text-align:right; font-size:13px;';
+        lock.style.cssText = 'flex-shrink:0; width:30px; text-align:right; font-size:13px;';
         row.append(av, who, sel, lock);
         return row;
       }
@@ -542,7 +542,7 @@
       btn.disabled = true;
       btn.style.cssText = 'flex-shrink:0; padding:7px 12px; border:none; border-radius:8px; background:var(--green); color:#fff; font-size:13px; cursor:pointer; opacity:.4;';
       const note = document.createElement('span');
-      note.style.cssText = 'flex-shrink:0; width:54px; font-size:12px; text-align:right; color:var(--green);';
+      note.style.cssText = 'flex-shrink:0; width:42px; font-size:11px; text-align:right; color:var(--green);';
 
       sel.addEventListener('change', () => {
         const changed = parseInt(sel.value, 10) !== (m.level || 1);
