@@ -1,6 +1,6 @@
 {
-  "name": "교회 통합 관리",
-  "short_name": "교회관리",
+  "name": "예닮교회",
+  "short_name": "예닮교회",
   "description": "성경·찬송·교독문 뷰어와 소통·관리 기능을 갖춘 교회 통합 웹앱",
   "start_url": "index.html",
   "display": "standalone",
