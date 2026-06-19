@@ -119,6 +119,7 @@
     let me = { uid: null, name: '', level: 1 };
     let currentBoard = 'share';
     let editingId = null;
+    let overlayPushed = false;   // 뒤로가기용: 펼침/글쓰기 단계를 history에 쌓았는지
 
     // ── 유틸 ──
     const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
@@ -164,12 +165,44 @@
       window.scrollTo(0, 0);
     }
 
-    // 상단 ‹ : 목록이 아니면 목록으로, 목록이면 메인으로(링크 기본 동작)
+    // ── 뒤로가기 처리 ──
+    // 펼침/글쓰기로 들어갈 때 history 단계를 하나 쌓고, 뒤로가기(물리 버튼·브라우저)는
+    // popstate로 가로채 "한 칸 닫기"로 처리한다. 목록에서는 기본 동작(메인으로).
+    function pushOverlay() {
+      if (!overlayPushed) { history.pushState({ o: 1 }, ''); overlayPushed = true; }
+    }
+    function closeViaBack() {
+      // 화면 내 버튼으로 닫을 때: 쌓아둔 history 단계를 정리(아무 동작 없는 back)
+      if (overlayPushed) { overlayPushed = false; history.back(); }
+    }
+    function closeAcc() {
+      if (openAcc) { openAcc.classList.remove('open'); openAcc = null; $('fab').style.display = 'flex'; }
+    }
+    function leaveWrite() {
+      editingId = null; $('wSubmit').textContent = '올리기'; show('list'); loadPosts();
+    }
+
+    window.addEventListener('popstate', () => {
+      if (!overlayPushed) return;          // 프로그램이 정리한 back은 무시
+      if (currentView === 'write') {
+        const has = $('wTitle').value.trim() || $('wBody').value.trim();
+        if (has && !confirm('작성 중인 내용이 사라집니다. 나가시겠어요?')) {
+          history.pushState({ o: 1 }, '');  // 머무름: 단계 다시 쌓기
+          return;
+        }
+        overlayPushed = false;
+        leaveWrite();
+        return;
+      }
+      if (openAcc) { overlayPushed = false; closeAcc(); return; }
+      overlayPushed = false;
+    });
+
+    // 상단 ‹ : 글쓰기/펼침이면 한 칸 닫기, 목록이면 메인으로(링크 기본 동작)
     $('backBtn').addEventListener('click', (e) => {
-      if (currentView !== 'list') {
+      if (currentView === 'write' || openAcc) {
         e.preventDefault();
-        show('list');
-        loadPosts();
+        if (overlayPushed) history.back();   // popstate가 닫기 처리(글쓰기면 확인창 포함)
       }
     });
 
@@ -323,15 +356,15 @@
     let openAcc = null;
     function toggleAcc(acc, p) {
       if (acc.classList.contains('open')) {
-        acc.classList.remove('open');
-        openAcc = null;
-        $('fab').style.display = 'flex';   // 접으면 글쓰기 버튼 복원
+        closeAcc();           // 접기
+        closeViaBack();       // 쌓아둔 history 단계 정리
         return;
       }
-      if (openAcc) openAcc.classList.remove('open');
+      if (openAcc) openAcc.classList.remove('open');   // 다른 글 열려 있으면 닫기
       acc.classList.add('open');
       openAcc = acc;
       $('fab').style.display = 'none';     // 펼친 동안 글쓰기 버튼 숨김(겹침 방지)
+      pushOverlay();          // 뒤로가기 한 칸 확보
       if (!acc.dataset.bound) {
         acc.dataset.bound = '1';
         bindAccActions(acc, p);
@@ -359,10 +392,12 @@
           await deleteDoc(doc(db, 'posts', p.id));
           openAcc = null;
           loadPosts();
+          closeViaBack();
         } catch (err) {
           alert('삭제에 실패했습니다.');
           delBtn.disabled = false;
           loadPosts();
+          closeViaBack();
         }
       });
       const input = acc.querySelector('.cinput');
@@ -456,6 +491,7 @@
       $('wSubmit').textContent = '수정 완료';
       show('write');
       $('barTitle').textContent = '글 수정';
+      pushOverlay();          // 펼침 단계가 있으면 그대로 재사용(noop)
       $('wTitle').focus();
     }
 
@@ -470,12 +506,12 @@
       $('wBoardRow').style.display = isAdmin ? 'block' : 'none';
       $('wBoard').value = isAdmin ? currentBoard : 'share';
       show('write');
+      pushOverlay();
       $('wTitle').focus();
     });
     $('wCancel').addEventListener('click', () => {
-      editingId = null;
-      $('wSubmit').textContent = '올리기';
-      show('list');
+      if (overlayPushed) history.back();   // popstate가 확인창·이탈 처리
+      else leaveWrite();
     });
 
     // ── 글 올리기 ──
@@ -494,6 +530,7 @@
           editingId = null;
           $('wSubmit').textContent = '올리기';
           show('list'); loadPosts();
+          closeViaBack();
         } else {
           const board = (me.level >= 4) ? $('wBoard').value : 'share';
           await addDoc(collection(db, 'posts'), {
@@ -506,6 +543,7 @@
           document.querySelectorAll('.tab').forEach((x) =>
             x.classList.toggle('tab-on', x.getAttribute('data-board') === board));
           show('list'); loadPosts();
+          closeViaBack();
         }
       } catch (e) {
         showWMsg('저장에 실패했습니다: ' + (e.code || e.message));
