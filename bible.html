@@ -169,7 +169,9 @@
 
     var BIBLE = null;
     var curBook = 0, curChap = 0;
-    var FS = 20, FS_MIN = 14, FS_MAX = 40;
+    var FS_MIN = 14, FS_MAX = 40;
+    var FS = 20;
+    try { var _sf = parseInt(localStorage.getItem('bibleFontPx'), 10); if (_sf >= FS_MIN && _sf <= FS_MAX) FS = _sf; } catch (e) {}
     var VERSIONS = [];
     var curVersion = '개역개정';
 
@@ -446,9 +448,11 @@
     function setFont(v) {
       FS = Math.max(FS_MIN, Math.min(FS_MAX, v));
       document.documentElement.style.setProperty('--fs', FS + 'px');
+      try { localStorage.setItem('bibleFontPx', FS); } catch (e) {}
     }
     document.getElementById('fsUp').addEventListener('click', function () { setFont(FS + 2); });
     document.getElementById('fsDown').addEventListener('click', function () { setFont(FS - 2); });
+    setFont(FS);
   </script>
 </body>
 </html>

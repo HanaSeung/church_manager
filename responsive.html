@@ -104,6 +104,7 @@
     window.addEventListener('load', adjustHeadSpace);
 
     var ITEMS = [], cur = 0, fontPx = 18;
+    try { var _fp = parseInt(localStorage.getItem('responsiveFontPx'), 10); if (_fp >= 14 && _fp <= 34) fontPx = _fp; } catch (e) {}
     var numInput = document.getElementById('numInput');
     var statusEl = document.getElementById('status');
     var reading = document.getElementById('reading');
@@ -175,9 +176,11 @@
     });
     document.getElementById('fontUp').addEventListener('click', function () {
       fontPx = Math.min(fontPx + 2, 34); reading.style.fontSize = fontPx + 'px';
+      try { localStorage.setItem('responsiveFontPx', fontPx); } catch (e) {}
     });
     document.getElementById('fontDown').addEventListener('click', function () {
       fontPx = Math.max(fontPx - 2, 14); reading.style.fontSize = fontPx + 'px';
+      try { localStorage.setItem('responsiveFontPx', fontPx); } catch (e) {}
     });
   </script>
 </body>
