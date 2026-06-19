@@ -188,9 +188,12 @@
         등급을 바꾸면 해당 회원은 다음 로그인 때 반영됩니다.<br>
         1·예배　2·사랑방　3·헌금　4·전체
       </div>
-      <div id="permList" style="display:flex; flex-direction:column; gap:8px; overflow:auto;">
+      <div id="permList" style="flex:1; display:flex; flex-direction:column; gap:8px; overflow:auto;">
         <div style="font-size:13px; color:var(--muted); text-align:center; padding:20px;">불러오는 중…</div>
       </div>
+      <button id="permSave" disabled style="margin-top:14px; flex-shrink:0; width:100%; padding:12px;
+        border:none; border-radius:8px; background:var(--green); color:#fff; font-size:15px;
+        font-weight:600; cursor:pointer; opacity:.4;">변경사항 저장</button>
     </div>
   </div>
 
@@ -475,6 +478,8 @@
     const TIER_LABEL = { 1: '예배', 2: '사랑방', 3: '헌금', 4: '전체' };
 
     async function loadMembers() {
+      pendingChanges = {};
+      updateSaveBtn();
       const listEl = $('permList');
       listEl.innerHTML = '<div style="font-size:13px; color:var(--muted); text-align:center; padding:20px;">불러오는 중…</div>';
       try {
@@ -492,6 +497,17 @@
       } catch (e) {
         listEl.innerHTML = '<div style="font-size:13px; color:#c0392b; text-align:center; padding:20px;">불러오기 실패: ' + (e.code || e.message) + '</div>';
       }
+    }
+
+    let pendingChanges = {};
+
+    function updateSaveBtn() {
+      const n = Object.keys(pendingChanges).length;
+      const btn = $('permSave');
+      if (!btn) return;
+      btn.disabled = (n === 0);
+      btn.style.opacity = (n === 0) ? '.4' : '1';
+      btn.textContent = (n === 0) ? '변경사항 저장' : (n + '명 변경 저장');
     }
 
     function memberRow(m, meUid) {
@@ -516,11 +532,15 @@
         tag.textContent = '본인';
         tag.style.cssText = 'flex-shrink:0; font-size:11px; font-weight:400; background:var(--bg); color:var(--muted); border-radius:6px; padding:1px 7px;';
         nm.appendChild(tag);
+        const lock = document.createElement('span');
+        lock.textContent = '🔒';
+        lock.style.cssText = 'flex-shrink:0; font-size:13px;';
+        nm.appendChild(lock);
       }
       who.appendChild(nm);
 
       const sel = document.createElement('select');
-      sel.style.cssText = 'flex-shrink:0; padding:7px 8px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:var(--card); color:var(--text);';
+      sel.style.cssText = 'flex-shrink:0; padding:7px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px; background:var(--card); color:var(--text);';
       [1, 2, 3, 4].forEach((v) => {
         const o = document.createElement('option');
         o.value = v; o.textContent = v + '·' + TIER_LABEL[v];
@@ -530,50 +550,57 @@
 
       if (isMe) {
         sel.disabled = true; sel.style.opacity = '.6';
-        const lock = document.createElement('span');
-        lock.textContent = '🔒';
-        lock.style.cssText = 'flex-shrink:0; width:30px; text-align:right; font-size:13px;';
-        row.append(av, who, sel, lock);
+        row.append(av, who, sel);
         return row;
       }
 
-      const btn = document.createElement('button');
-      btn.textContent = '적용';
-      btn.disabled = true;
-      btn.style.cssText = 'flex-shrink:0; padding:7px 12px; border:none; border-radius:8px; background:var(--green); color:#fff; font-size:13px; cursor:pointer; opacity:.4;';
-      const note = document.createElement('span');
-      note.style.cssText = 'flex-shrink:0; width:42px; font-size:11px; text-align:right; color:var(--green);';
-
+      // 등급 변경 시 일괄 저장 대상으로 추적 + 변경된 행 강조
       sel.addEventListener('change', () => {
-        const changed = parseInt(sel.value, 10) !== (m.level || 1);
-        btn.disabled = !changed;
-        btn.style.opacity = changed ? '1' : '.4';
-        note.textContent = '';
-      });
-      btn.addEventListener('click', async () => {
-        const newLevel = parseInt(sel.value, 10);
-        btn.disabled = true; btn.style.opacity = '.4';
-        note.textContent = '저장 중…'; note.style.color = 'var(--muted)';
-        try {
-          await updateDoc(doc(db, 'users', m.uid), { level: newLevel });
-          m.level = newLevel;
-          note.textContent = '✓ 저장됨'; note.style.color = 'var(--green)';
-          setTimeout(() => { note.textContent = ''; }, 2500);
-        } catch (e) {
-          note.textContent = '실패'; note.style.color = '#c0392b';
-          btn.disabled = false; btn.style.opacity = '1';
+        const nv = parseInt(sel.value, 10);
+        if (nv !== (m.level || 1)) {
+          pendingChanges[m.uid] = nv;
+          row.style.borderColor = 'var(--green)';
+          row.style.background = 'var(--green-soft)';
+        } else {
+          delete pendingChanges[m.uid];
+          row.style.borderColor = 'var(--line)';
+          row.style.background = '';
         }
+        updateSaveBtn();
       });
-      row.append(av, who, sel, btn, note);
+
+      row.append(av, who, sel);
       return row;
+    }
+
+    function tryClosePerm() {
+      if (Object.keys(pendingChanges).length > 0 &&
+          !confirm('저장하지 않은 변경이 있습니다. 닫으시겠어요?')) return;
+      pendingChanges = {};
+      updateSaveBtn();
+      $('permModal').style.display = 'none';
     }
 
     $('adminPermCard').addEventListener('click', () => {
       $('permModal').style.display = 'flex';
       loadMembers();
     });
-    $('permClose').addEventListener('click', () => { $('permModal').style.display = 'none'; });
-    $('permModal').addEventListener('click', (e) => { if (e.target === $('permModal')) $('permModal').style.display = 'none'; });
+    $('permClose').addEventListener('click', tryClosePerm);
+    $('permModal').addEventListener('click', (e) => { if (e.target === $('permModal')) tryClosePerm(); });
+    $('permSave').addEventListener('click', async () => {
+      const entries = Object.entries(pendingChanges);
+      if (entries.length === 0) return;
+      const btn = $('permSave');
+      btn.disabled = true; btn.textContent = '저장 중…';
+      try {
+        await Promise.all(entries.map(([uid, lv]) => updateDoc(doc(db, 'users', uid), { level: lv })));
+        pendingChanges = {};
+        $('permModal').style.display = 'none';
+      } catch (e) {
+        alert('일부 저장에 실패했습니다: ' + (e.code || e.message));
+        loadMembers();
+      }
+    });
   </script>
 </body>
 </html>
