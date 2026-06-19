@@ -206,6 +206,20 @@
       });
     });
 
+    // ── 최신 공지 1건 (나눔 탭 핀 고정용) ──
+    async function latestNotice() {
+      try {
+        const q = query(collection(db, 'posts'), where('board', '==', 'notice'));
+        const snap = await getDocs(q);
+        let best = null;
+        snap.forEach((d) => {
+          const p = Object.assign({ id: d.id }, d.data());
+          if (!best || (p.createdAt?.toMillis?.() || 0) > (best.createdAt?.toMillis?.() || 0)) best = p;
+        });
+        return best;
+      } catch (e) { return null; }
+    }
+
     // ── 목록 로드 ──
     async function loadPosts() {
       const el = $('postList');
@@ -216,16 +230,45 @@
         const rows = [];
         snap.forEach((d) => rows.push(Object.assign({ id: d.id }, d.data())));
         rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+
+        el.innerHTML = '';
+
+        // 나눔 탭이면 최신 공지 1건을 맨 위에 핀 고정
+        let pinned = null;
+        if (currentBoard === 'share') {
+          pinned = await latestNotice();
+          if (pinned) el.appendChild(noticePinRow(pinned));
+        }
+
         if (rows.length === 0) {
-          el.innerHTML = '<div class="empty">' +
-            (currentBoard === 'notice' ? '등록된 공지가 없습니다.' : '첫 글을 남겨 보세요.') + '</div>';
+          const m = document.createElement('div');
+          m.className = 'empty';
+          m.textContent = (currentBoard === 'notice') ? '등록된 공지가 없습니다.' : '첫 글을 남겨 보세요.';
+          el.appendChild(m);
           return;
         }
-        el.innerHTML = '';
         rows.forEach((p) => el.appendChild(postRow(p)));
       } catch (e) {
         el.innerHTML = '<div class="empty">불러오기 실패: ' + esc(e.code || e.message) + '</div>';
       }
+    }
+
+    // ── 공지 핀 카드 (나눔 탭 상단) ──
+    function noticePinRow(p) {
+      const row = document.createElement('div');
+      const preview = (p.body || '').replace(/\s+/g, ' ').trim();
+      row.className = 'notice-row';
+      row.style.cssText = 'display:flex; gap:11px; cursor:pointer;';
+      row.innerHTML =
+        '<div style="font-size:18px; flex-shrink:0; line-height:1.4;">📌</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:14px; font-weight:700; color:var(--green-deep); ' +
+            'margin-bottom:2px; word-break:break-word;">' + esc(p.title || '(제목 없음)') + '</div>' +
+          '<div style="font-size:12px; color:var(--green); overflow:hidden; ' +
+            'text-overflow:ellipsis; white-space:nowrap;">' + esc(preview) + '</div>' +
+        '</div>';
+      row.addEventListener('click', () => openPost(p.id));
+      return row;
     }
 
     // ── 목록 행 ──
