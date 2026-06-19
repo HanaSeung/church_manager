@@ -118,6 +118,7 @@
     const $ = (id) => document.getElementById(id);
     let me = { uid: null, name: '', level: 1 };
     let currentBoard = 'share';
+    let editingId = null;
 
     // ── 유틸 ──
     const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
@@ -269,7 +270,7 @@
             'text-overflow:ellipsis; white-space:nowrap;">' + esc(preview) + '</div>' +
           '<div style="font-size:12px; color:#9aa09a; display:flex; align-items:center; gap:8px;">' +
             '<span>' + esc(p.authorName || '') + '</span><span>·</span>' +
-            '<span>' + timeAgo(p.createdAt) + '</span>' +
+            '<span>' + timeAgo(p.createdAt) + (p.editedAt ? ' (수정됨)' : '') + '</span>' +
             '<span class="cc">💬 ' + (p.commentCount || 0) + '</span>' +
           '</div>' +
         '</div>' +
@@ -288,15 +289,19 @@
       inner.className = 'acc-inner';
       const pad = document.createElement('div');
       pad.style.cssText = 'padding:2px 12px 18px 56px;';
-      const delBtn = (p.authorUid === me.uid || me.level >= 4)
-        ? '<div style="text-align:right; margin:0 0 16px;"><button class="del-post" ' +
-          'style="border:1px solid var(--line); background:var(--card); color:var(--danger); ' +
-          'font-size:13px; padding:5px 14px; border-radius:7px; cursor:pointer;">삭제</button></div>'
+      const actions = (p.authorUid === me.uid || me.level >= 4)
+        ? '<div style="text-align:right; margin:0 0 16px;">' +
+          '<button class="edit-post" style="border:1px solid var(--line); background:var(--card); ' +
+          'color:var(--text); font-size:13px; padding:5px 14px; border-radius:7px; cursor:pointer; ' +
+          'margin-right:6px;">수정</button>' +
+          '<button class="del-post" style="border:1px solid var(--line); background:var(--card); ' +
+          'color:var(--danger); font-size:13px; padding:5px 14px; border-radius:7px; cursor:pointer;">삭제</button>' +
+          '</div>'
         : '';
       pad.innerHTML =
         '<div style="font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; margin:4px 0 14px;">' +
           esc(p.body || '') + '</div>' +
-        delBtn +
+        actions +
         '<div style="font-size:13px; font-weight:700; color:var(--muted); margin-bottom:10px;">' +
           '댓글 <span class="ccount">0</span></div>' +
         '<div class="clist" style="display:flex; flex-direction:column; gap:12px; margin-bottom:14px;"></div>' +
@@ -332,12 +337,29 @@
 
     // ── 펼친 영역의 동작 바인딩 (최초 1회) ──
     function bindAccActions(acc, p) {
+      const editBtn = acc.querySelector('.edit-post');
+      if (editBtn) editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startEdit(p);
+      });
       const delBtn = acc.querySelector('.del-post');
       if (delBtn) delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm('이 글을 삭제할까요? 되돌릴 수 없습니다.')) return;
-        try { await deleteDoc(doc(db, 'posts', p.id)); openAcc = null; loadPosts(); }
-        catch (err) { alert('삭제에 실패했습니다.'); }
+        if (!confirm('이 글을 삭제할까요? 달린 댓글도 함께 삭제되며 되돌릴 수 없습니다.')) return;
+        delBtn.disabled = true;
+        try {
+          // 딸린 댓글을 먼저 모두 삭제한 뒤 글을 삭제 (고아 댓글 방지)
+          const csnap = await getDocs(collection(db, 'posts', p.id, 'comments'));
+          await Promise.all(csnap.docs.map((d) =>
+            deleteDoc(doc(db, 'posts', p.id, 'comments', d.id))));
+          await deleteDoc(doc(db, 'posts', p.id));
+          openAcc = null;
+          loadPosts();
+        } catch (err) {
+          alert('삭제에 실패했습니다.');
+          delBtn.disabled = false;
+          loadPosts();
+        }
       });
       const input = acc.querySelector('.cinput');
       const send = acc.querySelector('.csend');
@@ -420,8 +442,23 @@
       return wrap;
     }
 
+    // ── 글 수정 진입 (글쓰기 화면 재활용) ──
+    function startEdit(p) {
+      editingId = p.id;
+      $('wTitle').value = p.title || '';
+      $('wBody').value = p.body || '';
+      $('wMsg').style.display = 'none';
+      $('wBoardRow').style.display = 'none';   // 수정 시 게시판은 고정
+      $('wSubmit').textContent = '수정 완료';
+      show('write');
+      $('barTitle').textContent = '글 수정';
+      $('wTitle').focus();
+    }
+
     // ── 글쓰기 진입 ──
     $('fab').addEventListener('click', () => {
+      editingId = null;
+      $('wSubmit').textContent = '올리기';
       $('wTitle').value = ''; $('wBody').value = '';
       $('wMsg').style.display = 'none';
       const isAdmin = me.level >= 4;
@@ -431,29 +468,43 @@
       show('write');
       $('wTitle').focus();
     });
-    $('wCancel').addEventListener('click', () => show('list'));
+    $('wCancel').addEventListener('click', () => {
+      editingId = null;
+      $('wSubmit').textContent = '올리기';
+      show('list');
+    });
 
     // ── 글 올리기 ──
     $('wSubmit').addEventListener('click', async () => {
       const title = $('wTitle').value.trim();
       const body = $('wBody').value.trim();
-      const board = (me.level >= 4) ? $('wBoard').value : 'share';
       if (!title) { showWMsg('제목을 입력하세요.'); return; }
       if (!body) { showWMsg('내용을 입력하세요.'); return; }
       $('wSubmit').disabled = true;
       try {
-        await addDoc(collection(db, 'posts'), {
-          board, title, body,
-          authorUid: me.uid, authorName: me.name,
-          commentCount: 0, createdAt: serverTimestamp()
-        });
-        // 작성한 게시판 탭으로 전환
-        currentBoard = board;
-        document.querySelectorAll('.tab').forEach((x) =>
-          x.classList.toggle('tab-on', x.getAttribute('data-board') === board));
-        show('list'); loadPosts();
+        if (editingId) {
+          // 수정: 제목·내용만 갱신, 게시판은 그대로. (수정됨) 표시용 editedAt 기록
+          await updateDoc(doc(db, 'posts', editingId), {
+            title, body, editedAt: serverTimestamp()
+          });
+          editingId = null;
+          $('wSubmit').textContent = '올리기';
+          show('list'); loadPosts();
+        } else {
+          const board = (me.level >= 4) ? $('wBoard').value : 'share';
+          await addDoc(collection(db, 'posts'), {
+            board, title, body,
+            authorUid: me.uid, authorName: me.name,
+            commentCount: 0, createdAt: serverTimestamp()
+          });
+          // 작성한 게시판 탭으로 전환
+          currentBoard = board;
+          document.querySelectorAll('.tab').forEach((x) =>
+            x.classList.toggle('tab-on', x.getAttribute('data-board') === board));
+          show('list'); loadPosts();
+        }
       } catch (e) {
-        showWMsg('등록에 실패했습니다: ' + (e.code || e.message));
+        showWMsg('저장에 실패했습니다: ' + (e.code || e.message));
       } finally {
         $('wSubmit').disabled = false;
       }
