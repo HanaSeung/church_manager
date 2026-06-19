@@ -289,21 +289,23 @@
       const pad = document.createElement('div');
       pad.style.cssText = 'padding:2px 12px 18px 56px;';
       const delBtn = (p.authorUid === me.uid || me.level >= 4)
-        ? '<button class="del-post" style="float:right; border:1px solid var(--line); background:var(--card); ' +
-          'color:var(--danger); font-size:12px; padding:4px 10px; border-radius:7px; cursor:pointer;">삭제</button>'
+        ? '<div style="text-align:right; margin:0 0 16px;"><button class="del-post" ' +
+          'style="border:1px solid var(--line); background:var(--card); color:var(--danger); ' +
+          'font-size:13px; padding:5px 14px; border-radius:7px; cursor:pointer;">삭제</button></div>'
         : '';
       pad.innerHTML =
-        delBtn +
-        '<div style="font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; margin:4px 0 16px;">' +
+        '<div style="font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; margin:4px 0 14px;">' +
           esc(p.body || '') + '</div>' +
+        delBtn +
         '<div style="font-size:13px; font-weight:700; color:var(--muted); margin-bottom:10px;">' +
           '댓글 <span class="ccount">0</span></div>' +
         '<div class="clist" style="display:flex; flex-direction:column; gap:12px; margin-bottom:14px;"></div>' +
         '<div style="display:flex; gap:8px;">' +
           '<input class="cinput" type="text" placeholder="따뜻한 댓글을 남겨 주세요" ' +
-            'style="flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px;">' +
+            'style="flex:1; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px;">' +
           '<button class="csend" style="border:none; background:var(--green); color:#fff; ' +
-            'padding:0 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">등록</button>' +
+            'padding:0 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; ' +
+            'white-space:nowrap; flex-shrink:0;">등록</button>' +
         '</div>';
       inner.appendChild(pad);
       wrap.appendChild(inner);
