@@ -83,6 +83,39 @@ service cloud.firestore {
       }
     }
 
+    // ===== 채팅 (전체방) =====
+    match /rooms/{roomId} {
+      // 읽기: 회원(2단계 이상)
+      allow read: if isMember();
+      // 생성: 회원(최초 방 1회 생성).
+      allow create: if isMember();
+      // 수정: 관리자는 전체(memberCount 기록 등) 가능, 일반 회원은 마지막 메시지 정보만.
+      allow update: if isAdmin()
+        || (isMember()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['lastMessageAt', 'lastMessageText', 'lastMessageBy']));
+      allow delete: if isAdmin();
+
+      // ----- 메시지 -----
+      match /messages/{msgId} {
+        allow read: if isMember();
+        allow create: if isMember()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000;
+        // 편집 미지원(수정 차단). 삭제는 작성자 본인 또는 관리자.
+        allow delete: if isSignedIn()
+          && (resource.data.authorUid == request.auth.uid || isAdmin());
+      }
+
+      // ----- 읽은 지점 (회원별 1문서, 본인 것만 기록/갱신) -----
+      match /reads/{uid} {
+        allow read: if isMember();
+        allow create, update: if isOwner(uid) && isMember();
+        allow delete: if isAdmin();
+      }
+    }
+
     // ===== 그 외 모든 문서 =====
     // 기본 차단. (헌금·성도 등 상위 단계 데이터는 만들 때 단계별 규칙을 여기에 추가)
     match /{document=**} {
