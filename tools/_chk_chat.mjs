@@ -4,14 +4,21 @@
     import {
       collection, doc, getDoc, getDocs, setDoc, addDoc, deleteDoc,
       query, where, orderBy, limit, startAfter, onSnapshot,
-      serverTimestamp, Timestamp
+      serverTimestamp, Timestamp, arrayUnion
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
     const $ = (id) => document.getElementById(id);
-    const ROOM = 'all';
+    // 방 id: URL ?room=… (없으면 전체방 'all'). 'all' 외에는 members 배열로 접근 판단.
+    const ROOM = new URLSearchParams(location.search).get('room') || 'all';
+    const IS_PRIVATE = ROOM !== 'all';   // dm/group 방
     const PAGE = 50;
 
     let me = { uid: null, name: '', level: 1 };
+    let roomType = IS_PRIVATE ? 'dm' : 'all';
+    let roomMembers = [];     // 이 방 멤버 uid 배열 (private 방)
+    let roomName = '';        // 사용자가 정한 방 이름(있으면)
+    let joinedMap = {};       // uid -> 합류 시각 ts
+    let myJoinMs = 0;         // 내 합류 시각(ms). 이 이전 메시지는 화면에서 가림
     const byId = new Map();        // 메시지 id -> data (older + live 통합 저장소)
     const reads = new Map();       // 회원 uid -> { ms, name }  (각자 읽은 지점)
     let oldestTs = null;           // 더 불러오기 커서(가장 오래된 메시지 시각)
@@ -45,11 +52,20 @@
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
         const lv = snap.exists() ? (snap.data().level || 1) : 1;
-        if (lv < 2) { alert('전체방은 회원(2단계 이상)만 이용할 수 있습니다.'); location.replace('index.html'); return; }
+        if (lv < 2) { alert('채팅은 회원(2단계 이상)만 이용할 수 있습니다.'); location.replace('index.html'); return; }
         me = { uid: user.uid, name: (snap.data().name || user.displayName || '성도'), level: lv };
+        if (IS_PRIVATE) {   // dm/group: 방 문서의 members에 내가 있어야 입장
+          const rs = await getDoc(doc(db, 'rooms', ROOM));
+          if (!rs.exists()) { alert('대화방이 없습니다.'); location.replace('chatlist.html'); return; }
+          const data = rs.data();
+          if (!(data.members || []).includes(me.uid)) {
+            alert('이 대화방에 들어갈 수 없습니다.'); location.replace('chatlist.html'); return;
+          }
+          myJoinMs = data.joined && data.joined[me.uid] ? ms(data.joined[me.uid]) : 0;
+        }
         await ensureRoom();
         subscribeRoom();
-        if (me.level >= 4) refreshMemberCount();   // 관리자가 들어올 때 전체 회원 수 갱신
+        if (ROOM === 'all' && me.level >= 4) refreshMemberCount();   // 전체방에서만 관리자 명단 갱신
         subscribeReads();
         await initialLoad();
       } catch (e) {
@@ -60,6 +76,7 @@
 
     // 방 문서가 없으면 최초 1회 생성 (고정 id 'all')
     async function ensureRoom() {
+      if (IS_PRIVATE) return;   // dm/group 방은 명단/추가에서 미리 생성됨
       const ref = doc(db, 'rooms', ROOM);
       const s = await getDoc(ref);
       if (!s.exists()) {
@@ -67,15 +84,44 @@
       }
     }
 
-    // ── 방 문서 구독: 전체 회원 수 + 명단(roster) 반영 ──
+    // ── 방 문서 구독: 종류·멤버·이름·합류시각·회원수 반영 ──
     function subscribeRoom() {
       unsubRoom = onSnapshot(doc(db, 'rooms', ROOM), (s) => {
         const v = s.data() || {};
         memberCount = v.memberCount || 0;
         rosterArr = Array.isArray(v.roster) ? v.roster : [];
-        $('memberInfo').textContent = memberCount ? (memberCount + '명') : '';
+        roomType = v.type || (IS_PRIVATE ? 'dm' : 'all');
+        roomMembers = Array.isArray(v.members) ? v.members : [];
+        roomName = v.name || '';
+        joinedMap = v.joined || {};
+        if (joinedMap[me.uid]) myJoinMs = ms(joinedMap[me.uid]);
+        updateHeader();
         render();   // 명단 갱신 시 안 읽은 수 재계산
       });
+    }
+
+    // 헤더 제목·인원수·버튼 갱신
+    function updateHeader() {
+      if (!IS_PRIVATE) {   // 전체방
+        $('roomTitle').textContent = roomName || '전체방';
+        $('memberInfo').textContent = memberCount ? (memberCount + '명') : '';
+        $('editNameBtn').style.display = 'none';
+        $('addPplBtn').style.display = 'none';
+        return;
+      }
+      const cnt = memberCount || roomMembers.length;
+      const others = rosterArr.filter((m) => m.uid !== me.uid);
+      if (cnt <= 2) {   // 1:1
+        $('roomTitle').textContent = roomName || (others[0] ? others[0].name : '대화');
+        $('memberInfo').textContent = '';
+        $('editNameBtn').style.display = 'none';
+      } else {          // 그룹
+        const base = roomName || ((others[0] ? others[0].name : '대화') + ' 외 ' + (cnt - 1) + '명');
+        $('roomTitle').textContent = base;
+        $('memberInfo').textContent = cnt + '명';
+        $('editNameBtn').style.display = '';
+      }
+      $('addPplBtn').style.display = '';   // private 방이면 사람 추가 버튼 표시
     }
     // 관리자만: 2단계 이상 명단·수를 세어 방에 기록(권한관리 창 외 보조 갱신 경로)
     async function refreshMemberCount() {
@@ -193,10 +239,15 @@
       let html = '', prevDate = null, prevUid = null, prevMin = null;
       arr.forEach((m) => {
         const t = ms(m.createdAt);
+        if (myJoinMs && t && t < myJoinMs) return;   // 합류 이전 메시지는 화면에서 가림
         const d = t ? new Date(t) : new Date();
         if (!prevDate || !sameDay(prevDate, d)) {
           html += '<div class="day"><span>' + dayLabel(d) + '</span></div>';
           prevUid = null;
+        }
+        if (m.system) {   // 입장/시스템 안내
+          html += '<div class="sys"><span>' + esc(m.text) + '</span></div>';
+          prevDate = d; prevUid = null; prevMin = null; return;
         }
         const mine = (m.authorUid === me.uid);
         const minute = Math.floor(t / 60000);
@@ -299,6 +350,83 @@
       });
     });
     $('msgArea').addEventListener('scroll', () => { if ($('msgArea').scrollTop < 40) loadOlder(); });
+
+    // ── 방 이름 수정 (그룹) ──
+    $('editNameBtn').addEventListener('click', async () => {
+      const cur = roomName || $('roomTitle').textContent;
+      const v = prompt('방 이름', cur);
+      if (v === null) return;
+      const name = v.trim();
+      try {
+        await setDoc(doc(db, 'rooms', ROOM), { name: name }, { merge: true });
+      } catch (e) { alert('이름을 바꾸지 못했습니다.'); }
+    });
+
+    // ── 사람 추가 (명단에서 선택 → 이 방에 합류) ──
+    const addSel = new Set();
+    $('addPplBtn').addEventListener('click', openAddModal);
+    $('addModal').addEventListener('click', (e) => { if (e.target.id === 'addModal') closeAddModal(); });
+    $('addDone').addEventListener('click', applyAdd);
+
+    async function openAddModal() {
+      addSel.clear();
+      $('addList').innerHTML = '<div class="empty">불러오는 중…</div>';
+      $('addModal').classList.add('on');
+      let all = [];
+      try {
+        const s = await getDoc(doc(db, 'rooms', 'all'));
+        all = (s.exists() && Array.isArray(s.data().roster)) ? s.data().roster : [];
+      } catch (e) {}
+      const cand = all.filter((m) => m.uid && !roomMembers.includes(m.uid));
+      cand.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+      if (!cand.length) { $('addList').innerHTML = '<div class="empty">추가할 수 있는 사람이 없습니다.</div>'; return; }
+      $('addList').innerHTML = cand.map((m) => (
+        '<div class="prow" data-uid="' + esc(m.uid) + '" data-name="' + esc(m.name || '성도') + '">' +
+        '<span class="ck">✓</span>' +
+        '<span class="pav">' + esc((m.name || '성').slice(0, 1)) + '</span>' +
+        '<span style="font-size:14px;">' + esc(m.name || '성도') + '</span></div>'
+      )).join('');
+      $('addList').querySelectorAll('.prow').forEach((el) => {
+        el.addEventListener('click', () => {
+          const uid = el.getAttribute('data-uid');
+          if (addSel.has(uid)) { addSel.delete(uid); el.classList.remove('sel'); }
+          else { addSel.add(uid); el.classList.add('sel'); }
+        });
+      });
+    }
+    function closeAddModal() { $('addModal').classList.remove('on'); }
+
+    async function applyAdd() {
+      if (!addSel.size) { closeAddModal(); return; }
+      const chosen = [];
+      $('addList').querySelectorAll('.prow').forEach((el) => {
+        const uid = el.getAttribute('data-uid');
+        if (addSel.has(uid)) chosen.push({ uid: uid, name: el.getAttribute('data-name') });
+      });
+      try {
+        const ref = doc(db, 'rooms', ROOM);
+        const newMembers = roomMembers.slice();
+        const newRoster = rosterArr.slice();
+        const joined = Object.assign({}, joinedMap);
+        const now = Timestamp.now();
+        chosen.forEach((c) => {
+          if (!newMembers.includes(c.uid)) newMembers.push(c.uid);
+          if (!newRoster.some((r) => r.uid === c.uid)) newRoster.push({ uid: c.uid, name: c.name });
+          joined[c.uid] = now;   // 합류 시각 → 이전 메시지는 그 사람 화면에서 가려짐
+        });
+        await setDoc(ref, {
+          type: newMembers.length > 2 ? 'group' : 'dm',
+          members: newMembers, roster: newRoster, memberCount: newMembers.length, joined: joined
+        }, { merge: true });
+        // 입장 안내 메시지
+        const names = chosen.map((c) => c.name).join(', ');
+        await addDoc(collection(db, 'rooms', ROOM, 'messages'),
+          { system: true, text: names + '님이 들어왔습니다', authorUid: me.uid, authorName: me.name, createdAt: serverTimestamp() });
+        await setDoc(ref, { lastMessageAt: serverTimestamp(), lastMessageText: names + '님이 들어왔습니다', lastMessageBy: me.name }, { merge: true });
+      } catch (e) { alert('추가하지 못했습니다.'); }
+      closeAddModal();
+    }
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') markReadSoon();
     });
