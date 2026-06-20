@@ -65,7 +65,7 @@
       </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;">
         <a href="board.html" class="card-on"><div class="ic">💬</div><div class="tt">게시판</div><div class="sb">공지 · 나눔 · 댓글</div></a>
-        <div class="card-off" data-need="member"><div class="ic">🗨️</div><div class="tt">채팅</div><div class="sb">실시간 대화</div></div>
+        <a href="chat.html" class="card-on"><div class="ic">🗨️</div><div class="tt">채팅</div><div class="sb">실시간 대화</div></a>
         <div class="card-off" data-need="member"><div class="ic">🔔</div><div class="tt">알림</div><div class="sb">공지 발송</div></div>
       </div>
     </section>
@@ -488,6 +488,8 @@
         const rows = [];
         snap.forEach((d) => rows.push(Object.assign({ uid: d.id }, d.data())));
         rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+        lastRows = rows;
+        saveRoster(rows);   // 창 열 때 명단/인원수 저장
         listEl.innerHTML = '';
         if (rows.length === 0) {
           listEl.innerHTML = '<div style="font-size:13px; color:var(--muted); text-align:center; padding:20px;">등록된 회원이 없습니다.</div>';
@@ -500,6 +502,19 @@
     }
 
     let pendingChanges = {};
+    let lastRows = [];
+
+    // 2단계 이상 명단(이름만)과 수를 회원이 읽을 수 있는 곳(rooms/all)에 저장.
+    // 채팅창이 헤더 인원수·(향후)명단·메시지별 안 읽은 수(전원 기준)에 사용.
+    async function saveRoster(rows) {
+      try {
+        const members = rows
+          .filter((m) => (m.level || 1) >= 2)
+          .map((m) => ({ uid: m.uid, name: m.name || '성도' }));
+        await setDoc(doc(db, 'rooms', 'all'),
+          { memberCount: members.length, roster: members }, { merge: true });
+      } catch (e) {}
+    }
 
     function updateSaveBtn() {
       const n = Object.keys(pendingChanges).length;
@@ -594,6 +609,9 @@
       btn.disabled = true; btn.textContent = '저장 중…';
       try {
         await Promise.all(entries.map(([uid, lv]) => updateDoc(doc(db, 'users', uid), { level: lv })));
+        // 변경분을 명단에 반영해 다시 저장 (채팅 인원수·안 읽은 수 최신화)
+        entries.forEach(([uid, lv]) => { const r = lastRows.find((x) => x.uid === uid); if (r) r.level = lv; });
+        await saveRoster(lastRows);
         pendingChanges = {};
         $('permModal').style.display = 'none';
       } catch (e) {
