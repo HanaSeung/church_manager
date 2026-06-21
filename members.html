@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2f6f4f">
+  <link rel="manifest" href="manifest.json">
+  <title>성도 관리 · 예닮교회</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #2f6f4f; --green-soft: #e7f1ec; --green-deep: #245540;
+      --bg: #f5f6f4; --card: #ffffff;
+      --text: #1f2421; --muted: #6b726d; --line: #e2e5e1;
+      --danger: #c0392b; --amber-soft: #fbeed9; --amber-text: #946400;
+    }
+    body { font-family: 'Malgun Gothic', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 0 0 90px; min-height: 100vh; }
+    .empty { text-align:center; color:var(--muted); font-size:14px; padding:48px 16px; }
+    .ftab { border:1px solid var(--line); background:var(--card); padding:6px 16px;
+      font-size:13px; color:var(--muted); cursor:pointer; border-radius:99px; font-family:inherit; }
+    .ftab-on { background:var(--green); color:#fff; border-color:var(--green); }
+    .mrow { display:flex; align-items:center; gap:12px; padding:11px 4px;
+      border-top:1px solid var(--line); cursor:pointer; }
+    .mrow:first-child { border-top:none; }
+    .mrow:active { background:var(--green-soft); }
+    .avatar { width:42px; height:42px; border-radius:50%; flex-shrink:0; display:flex;
+      align-items:center; justify-content:center; font-weight:700; font-size:16px;
+      background:var(--green-soft); color:var(--green); }
+    .badge { font-size:11px; padding:1px 8px; border-radius:99px;
+      background:var(--green-soft); color:var(--green-deep); flex-shrink:0; }
+    .badge-new { background:var(--amber-soft); color:var(--amber-text); }
+  </style>
+  <style>
+    .field { margin-bottom:12px; }
+    .field > label { display:block; font-size:13px; color:var(--muted); margin-bottom:5px; }
+    .req { color:var(--danger); }
+    .field input, .field select, .field textarea, .frow input, .frow select {
+      width:100%; height:42px; padding:0 12px; border:1px solid var(--line); border-radius:8px;
+      font-size:14px; background:var(--card); color:var(--text); font-family:inherit; }
+    .field textarea { height:auto; padding:11px 12px; resize:vertical; line-height:1.6; }
+    .frow { display:flex; gap:10px; margin-bottom:12px; }
+    .frow > .field { flex:1; margin-bottom:0; }
+    .btn-line { height:42px; padding:0 12px; border:1px solid var(--green); background:transparent;
+      color:var(--green); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;
+      white-space:nowrap; font-family:inherit; flex-shrink:0; }
+    .hint { font-size:11.5px; color:var(--muted); margin-top:6px; }
+    .hint.ok { color:var(--green); }
+    .hint.warn { color:var(--danger); }
+    .family { background:var(--green-soft); border-radius:9px; padding:11px 12px; margin-bottom:12px; }
+    .family > .lbl { font-size:13px; color:var(--muted); margin-bottom:7px; }
+    .agebox { width:62px; flex-shrink:0; height:42px; background:var(--bg); border-radius:8px;
+      display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; }
+    .acc { border:1px solid var(--line); border-radius:10px; margin-bottom:10px; overflow:hidden; }
+    .acc-head { display:flex; align-items:center; justify-content:space-between;
+      background:var(--bg); padding:13px 14px; cursor:pointer; user-select:none; }
+    .acc-head .h-t { font-size:14.5px; font-weight:700; color:var(--green-deep); }
+    .acc-head .h-s { font-size:12px; color:var(--muted); }
+    .acc-body { padding:14px 13px; display:none; }
+    .acc.open .acc-body { display:block; }
+    .acc.open .chev { transform:rotate(90deg); }
+    .acc.open .acc-head { border-bottom:1px solid var(--line); }
+    .chev { display:inline-block; transition:transform .2s; font-size:12px; }
+    .save { width:100%; height:48px; margin-top:14px; background:var(--green); color:#fff;
+      border:none; border-radius:9px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .drow { display:flex; padding:10px 0; border-top:1px solid var(--line); font-size:14.5px; }
+    .drow .dk { color:var(--muted); width:84px; flex-shrink:0; }
+    .drow .dv { flex:1; }
+    .dsec { font-size:12px; font-weight:700; color:var(--green); margin:18px 0 2px; }
+    .pickbk { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:1000;
+      display:none; align-items:flex-end; justify-content:center; }
+    .pickbk.on { display:flex; }
+    .pick { background:var(--card); width:100%; max-width:720px; border-radius:14px 14px 0 0;
+      max-height:70vh; display:flex; flex-direction:column; }
+    .pickrow { padding:13px 16px; border-top:1px solid var(--line); cursor:pointer; font-size:15px; }
+    .pickrow:active { background:var(--green-soft); }
+    ::placeholder { color:#b3b8b3; }
+    input:focus, select:focus, textarea:focus { outline:none; border-color:var(--green); }
+    @media (max-width:760px) { #fab { right:16px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header style="position:sticky; top:0; z-index:10; background:var(--card);
+      display:flex; align-items:center; gap:12px; padding:14px 16px;
+      border-bottom:1px solid var(--line);">
+      <span id="backBtn" style="color:var(--muted); font-size:22px; line-height:1;
+        display:flex; align-items:center; cursor:pointer;" aria-label="뒤로">‹</span>
+      <div id="barTitle" style="font-size:18px; font-weight:700; flex:1;">성도 관리</div>
+      <button id="editBtn" style="display:none; border:none; background:none; color:var(--green);
+        font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;">편집</button>
+    </header>
+
+    <!-- ===== 목록 ===== -->
+    <div id="listView">
+      <div style="padding:12px 14px 0;">
+        <div style="display:flex; align-items:center; gap:8px; background:var(--bg);
+          border:1px solid var(--line); border-radius:10px; padding:9px 12px;">
+          <span style="color:var(--muted); font-size:15px;">🔍</span>
+          <input id="searchInput" type="text" placeholder="이름·연락처 검색"
+            style="flex:1; border:none; background:none; font-size:14px; color:var(--text); font-family:inherit;">
+        </div>
+      </div>
+      <div style="display:flex; gap:6px; padding:12px 14px 4px;">
+        <button class="ftab ftab-on" data-filter="all">전체</button>
+        <button class="ftab" data-filter="new">새가족</button>
+      </div>
+      <div id="memberList" style="padding:4px 14px;">
+        <div class="empty">불러오는 중…</div>
+      </div>
+    </div>
+
+    <!-- ===== 상세 ===== -->
+    <div id="detailView" style="display:none; padding:18px 16px;"></div>
+
+    <!-- ===== 추가/편집 ===== -->
+    <div id="editView" style="display:none; padding:12px 13px;">
+
+      <!-- 1. 기본정보 -->
+      <div class="acc open" id="acc1">
+        <div class="acc-head" data-acc="acc1"><span class="h-t">1. 기본정보</span><span class="h-s">접기 <span class="chev">›</span></span></div>
+        <div class="acc-body">
+          <div class="field">
+            <label>이름 <span class="req">*</span></label>
+            <div style="display:flex; gap:8px;">
+              <input id="fName" type="text" placeholder="홍길동" style="flex:1;">
+              <button class="btn-line" id="dupBtn">동명이인 확인</button>
+              <select id="fGender" style="width:66px; flex-shrink:0; padding:0 8px;">
+                <option value="">성별</option><option>남</option><option>여</option>
+              </select>
+            </div>
+            <div class="hint" id="dupHint">명부에 같은 이름이 있으면 알려드립니다.</div>
+          </div>
+          <div class="field">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+              <span style="font-size:13px; color:var(--muted);">생일</span>
+              <span style="font-size:13px; color:var(--muted);">나이 <span style="font-size:11px;">(자동)</span></span>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="fBirth" type="text" placeholder="1988-03-12 또는 03-12" style="flex:1.4;">
+              <select id="fBirthCal" style="width:80px; flex-shrink:0;">
+                <option value="solar">양력</option><option value="lunar">음력</option>
+              </select>
+              <div class="agebox" id="ageBox">–</div>
+            </div>
+            <div class="hint">생년월일을 넣으면 만 나이가 자동 계산됩니다. 연도를 모르면 월·일만 넣어도 됩니다.</div>
+          </div>
+          <div class="frow">
+            <div class="field"><label>연락처</label><input id="fPhone" type="tel" placeholder="010-0000-0000" inputmode="numeric"></div>
+            <div class="field"><label>이메일</label><input id="fEmail" type="email" placeholder="name@example.com"></div>
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>주소</label><input id="fAddress" type="text" placeholder="창원시 ○○구 ○○로 12"></div>
+        </div>
+      </div>
+
+      <!-- 2. 등록정보 -->
+      <div class="acc" id="acc2">
+        <div class="acc-head" data-acc="acc2"><span class="h-t">2. 등록정보</span><span class="h-s">펼치기 <span class="chev">›</span></span></div>
+        <div class="acc-body">
+          <div class="frow">
+            <div class="field"><label>등록일</label><input id="fRegDate" type="date"></div>
+            <div class="field"><label>등록배경</label>
+              <select id="fRegType"><option value="">선택</option><option>전도</option><option>스스로</option><option>기관사역을 통해</option></select>
+            </div>
+          </div>
+          <div class="frow">
+            <div class="field"><label>인도자</label><input id="fGuide" type="text" placeholder="전도한 분"></div>
+            <div class="field"><label>이전 교회</label><input id="fPrev" type="text" placeholder="○○교회"></div>
+          </div>
+          <div class="frow">
+            <div class="field"><label>신급</label>
+              <select id="fGrade"><option value="">선택</option><option>원입</option><option>학습</option><option>세례</option><option>입교</option><option>유아세례</option></select>
+            </div>
+            <div class="field"><label>신급일</label><input id="fGradeDate" type="month"></div>
+          </div>
+          <div class="frow" style="margin-bottom:0;">
+            <div class="field"><label>신급교회</label><input id="fGradeChurch" type="text" placeholder="신급 받은 교회"></div>
+            <div class="field"><label>집례자</label><input id="fOfficiant" type="text" placeholder="집례 목사"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 신앙정보 -->
+      <div class="acc" id="acc3">
+        <div class="acc-head" data-acc="acc3"><span class="h-t">3. 신앙정보</span><span class="h-s">펼치기 <span class="chev">›</span></span></div>
+        <div class="acc-body">
+          <div class="field"><label>직분</label><select id="fRole"></select></div>
+          <div class="frow" style="margin-bottom:0;">
+            <div class="field"><label>교인구분</label>
+              <select id="fType"><option selected>교인</option><option>새가족</option><option>타교인</option><option>타종교</option><option>별세</option><option>성도</option></select>
+            </div>
+            <div class="field"><label>현재 상태</label>
+              <select id="fStatus"><option selected>예배출석</option><option>가끔출석</option><option>군입대</option><option>유학</option><option>불출석</option></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 가족관계 -->
+      <div class="acc" id="acc4">
+        <div class="acc-head" data-acc="acc4"><span class="h-t">4. 가족관계</span><span class="h-s">펼치기 <span class="chev">›</span></span></div>
+        <div class="acc-body">
+          <div class="family">
+            <div class="lbl">👪 가족 연결</div>
+            <div style="display:flex; gap:7px;">
+              <input id="fHead" type="text" placeholder="세대주" style="flex:1; min-width:0; background:var(--card);" readonly>
+              <button class="btn-line" id="headBtn" style="padding:0 11px;">검색</button>
+              <select id="fRel" style="width:82px; flex-shrink:0; background:var(--card); padding:0 8px;">
+                <option value="">관계</option><option>본인(세대주)</option><option>배우자</option><option>자녀</option><option>부모</option><option>형제자매</option>
+              </select>
+            </div>
+            <div class="hint">본인이 세대주면 세대주를 비우고 관계를 "본인(세대주)"로 두세요.</div>
+          </div>
+          <div class="frow">
+            <div class="field"><label>결혼관계</label>
+              <select id="fMarriage"><option value="">선택</option><option>미혼</option><option>기혼</option><option>이별</option><option>사별</option><option>재혼</option><option>별거</option></select>
+            </div>
+            <div class="field"><label>결혼일</label><input id="fWed" type="month"></div>
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>배우자</label>
+            <div style="display:flex; gap:8px;">
+              <input id="fSpouse" type="text" placeholder="성도 선택" style="flex:1;" readonly>
+              <button class="btn-line" id="spouseBtn">명부 검색</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. 기타 -->
+      <div class="acc" id="acc5">
+        <div class="acc-head" data-acc="acc5"><span class="h-t">5. 기타</span><span class="h-s">펼치기 <span class="chev">›</span></span></div>
+        <div class="acc-body">
+          <div class="field"><label>개인 사진</label>
+            <input id="fPhoto" type="file" accept="image/*" disabled style="padding:9px 12px;">
+            <div class="hint">저장소(NAS/Firebase) 결정 후 업로드가 연결됩니다. (현재 비활성)</div>
+          </div>
+          <div class="field" style="margin-bottom:0;"><label>메모 · 기도제목</label><textarea id="fMemo" rows="3" placeholder="자유롭게 기록"></textarea></div>
+        </div>
+      </div>
+
+      <div id="editMsg" style="display:none; font-size:13px; color:var(--danger); margin:8px 2px 0;"></div>
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button id="eCancel" class="btn-line" style="flex:1; height:48px; border-color:var(--line); color:var(--text);">취소</button>
+        <button id="eSave" class="save" style="flex:2; margin-top:0;">저장</button>
+      </div>
+    </div>
+
+  </div>
+
+  <button id="fab" style="position:fixed; right:max(16px, calc(50% - 360px + 16px)); bottom:22px;
+    width:54px; height:54px; border-radius:50%; border:none; background:var(--green);
+    color:#fff; font-size:30px; line-height:1; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.22);
+    display:flex; align-items:center; justify-content:center;" aria-label="성도 추가">＋</button>
+
+  <!-- 명부 검색 오버레이 (세대주/배우자) -->
+  <div class="pickbk" id="pickBk">
+    <div class="pick">
+      <div style="padding:14px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center;">
+        <input id="pickInput" type="text" placeholder="이름 검색" style="flex:1; height:40px; padding:0 12px; border:1px solid var(--line); border-radius:8px; font-size:15px; font-family:inherit;">
+        <span id="pickClose" style="font-size:14px; color:var(--muted); cursor:pointer;">닫기</span>
+      </div>
+      <div id="pickList" style="overflow:auto;"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+    import {
+      collection, addDoc, getDoc, getDocs, doc, deleteDoc,
+      updateDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+
+    const $ = (id) => document.getElementById(id);
+    let me = { uid: null, name: '', level: 1 };
+    let allMembers = [];
+    let currentFilter = 'all';
+    let editingId = null;
+    let detailId = null;
+    let overlayPushed = false;
+    // 편집 중 선택된 참조(세대주/배우자)의 문서 id
+    let pickHeadId = null, pickSpouseId = null;
+
+    const ROLES = ['목사', '전도사', '장로', '권사', '안수집사', '서리집사', '성도'];
+
+    const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const initial = (name) => (name || '?').trim().charAt(0) || '?';
+    const dot = (s) => (s || '').replace(/-/g, '.');
+
+    function calcAge(birth) {
+      const m = (birth || '').trim().match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})$/);
+      if (!m) return null;
+      const by = +m[1], bm = +m[2], bd = +m[3];
+      const t = new Date();
+      let age = t.getFullYear() - by;
+      if ((t.getMonth() + 1) < bm || ((t.getMonth() + 1) === bm && t.getDate() < bd)) age--;
+      return (age >= 0 && age < 130) ? age : null;
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { location.replace('index.html'); return; }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        const lv = snap.exists() ? (snap.data().level || 1) : 1;
+        if (lv < 4) { alert('성도 관리는 관리자만 이용할 수 있습니다.'); location.replace('index.html'); return; }
+        me = { uid: user.uid, name: (snap.data().name || user.displayName || '관리자'), level: lv };
+        $('fRole').innerHTML = ROLES.map((r) => `<option${r === '성도' ? ' selected' : ''}>${r}</option>`).join('');
+        loadMembers();
+      } catch (e) {
+        alert('정보를 불러오지 못했습니다. 다시 시도해 주세요.');
+        location.replace('index.html');
+      }
+    });
+
+    async function loadMembers() {
+      try {
+        const qs = await getDocs(collection(db, 'members'));
+        allMembers = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+        allMembers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+        renderList();
+      } catch (e) {
+        $('memberList').innerHTML = `<div class="empty">불러오지 못했습니다.<br>(${esc(e.code || e.message)})</div>`;
+      }
+    }
+
+    function renderList() {
+      const kw = $('searchInput').value.trim().toLowerCase();
+      let rows = allMembers;
+      if (currentFilter === 'new') rows = rows.filter((m) => m.memberType === '새가족');
+      if (kw) rows = rows.filter((m) =>
+        (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
+
+      if (rows.length === 0) {
+        $('memberList').innerHTML = `<div class="empty">${(kw || currentFilter === 'new') ? '해당하는 성도가 없습니다.' : '아직 등록된 성도가 없습니다.<br>＋ 버튼으로 추가하세요.'}</div>`;
+        return;
+      }
+      $('memberList').innerHTML = '';
+      rows.forEach((m) => {
+        const row = document.createElement('div');
+        row.className = 'mrow';
+        const isNew = m.memberType === '새가족';
+        const sub = m.phone || (m.address ? m.address : '연락처 없음');
+        row.innerHTML =
+          `<div class="avatar">${esc(initial(m.name))}</div>
+           <div style="flex:1; min-width:0;">
+             <div style="display:flex; align-items:center; gap:7px;">
+               <span style="font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(m.name || '(이름 없음)')}</span>
+               ${m.role ? `<span class="badge">${esc(m.role)}</span>` : ''}
+               ${isNew ? '<span class="badge badge-new">새가족</span>' : ''}
+             </div>
+             <div style="font-size:13px; color:var(--muted); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(sub)}</div>
+           </div>
+           <span style="color:#c4c9c4; font-size:18px;">›</span>`;
+        row.addEventListener('click', () => openDetail(m.id));
+        $('memberList').appendChild(row);
+      });
+    }
+
+    $('searchInput').addEventListener('input', renderList);
+    document.querySelectorAll('.ftab').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.ftab').forEach((x) => x.classList.remove('ftab-on'));
+        b.classList.add('ftab-on');
+        currentFilter = b.dataset.filter;
+        renderList();
+      });
+    });
+
+    const BADGE_GRADE = (m) => {
+      if (!m.grade) return '';
+      return m.grade + (m.gradeDate ? ' · ' + dot(m.gradeDate) : '');
+    };
+    function drow(k, v) {
+      if (!v) return '';
+      return `<div class="drow"><div class="dk">${k}</div><div class="dv">${v}</div></div>`;
+    }
+    function householdMembers(m) {
+      if (!m.householdId) return [];
+      return allMembers.filter((x) => x.householdId === m.householdId)
+        .sort((a, b) => (a.relation === '본인(세대주)' ? -1 : 0) - (b.relation === '본인(세대주)' ? -1 : 0));
+    }
+
+    function openDetail(id) {
+      const m = allMembers.find((x) => x.id === id);
+      if (!m) return;
+      detailId = id;
+      const age = calcAge(m.birth);
+      const top = [m.gender, (age != null ? age + '세' : null), m.memberType, m.status].filter(Boolean).join(' · ');
+      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : '') + (age != null ? ` · 만 ${age}세` : '')) : '';
+
+      const fam = householdMembers(m);
+      let famHtml = '';
+      if (fam.length > 1 || (m.relation && m.relation !== '')) {
+        const chips = fam.map((x) =>
+          `<span style="font-size:12.5px; padding:4px 10px; border-radius:99px; background:var(--bg);">${esc(x.name)}${x.relation ? ' · ' + esc(x.relation.replace('(세대주)', '')) : ''}</span>`).join(' ');
+        famHtml = `<div style="margin-top:10px;"><div style="font-size:12px; color:var(--muted); margin-bottom:7px;">가정 구성원</div><div style="display:flex; gap:7px; flex-wrap:wrap;">${chips || '—'}</div></div>`;
+      }
+
+      $('detailView').innerHTML =
+        `<div style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:8px;">
+           <div class="avatar" style="width:72px; height:72px; font-size:26px;">${esc(initial(m.name))}</div>
+           <div style="text-align:center;">
+             <div style="font-size:19px; font-weight:700;">${esc(m.name || '(이름 없음)')}
+               ${m.role ? `<span class="badge" style="vertical-align:3px;">${esc(m.role)}</span>` : ''}
+               ${m.memberType === '새가족' ? '<span class="badge badge-new" style="vertical-align:3px;">새가족</span>' : ''}
+             </div>
+             <div style="font-size:13px; color:var(--muted); margin-top:3px;">${esc(top)}</div>
+           </div>
+         </div>
+
+         <div class="dsec">기본</div>
+         ${drow('연락처', m.phone ? `<a href="tel:${esc(m.phone)}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
+         ${drow('생일', birthTxt)}
+         ${drow('이메일', esc(m.email))}
+         ${drow('주소', esc(m.address))}
+
+         <div class="dsec">등록</div>
+         ${drow('등록일', esc(dot(m.regDate)))}
+         ${drow('등록배경', esc(m.regType))}
+         ${drow('인도자', esc(m.guide))}
+         ${drow('이전교회', esc(m.prevChurch))}
+         ${drow('신급', esc(BADGE_GRADE(m)))}
+         ${drow('신급교회', esc(m.gradeChurch))}
+         ${drow('집례자', esc(m.officiant))}
+
+         <div class="dsec">가족</div>
+         ${drow('결혼관계', esc(m.marriage))}
+         ${drow('결혼일', esc(dot(m.wedDate)))}
+         ${drow('배우자', esc(m.spouseName))}
+         ${famHtml}
+
+         ${m.memo ? `<div class="dsec">메모 · 기도제목</div><div style="font-size:14px; color:var(--text); white-space:pre-wrap; padding-top:6px;">${esc(m.memo)}</div>` : ''}
+
+         <button id="dDelete" class="btn-line" style="width:100%; height:46px; margin-top:22px; color:var(--danger); border-color:#e7c9c4;">삭제</button>`;
+      $('dDelete').addEventListener('click', () => removeMember(id));
+      show('detail');
+    }
+
+    function setAcc(open1) {
+      ['acc1', 'acc2', 'acc3', 'acc4', 'acc5'].forEach((a, i) => {
+        const el = $(a);
+        if (i === 0 && open1) el.classList.add('open'); else el.classList.remove('open');
+        const s = el.querySelector('.h-s');
+        s.firstChild.textContent = el.classList.contains('open') ? '접기 ' : '펼치기 ';
+      });
+    }
+
+    function openEdit(id) {
+      editingId = id;
+      const m = id ? allMembers.find((x) => x.id === id) : null;
+      $('fName').value = m?.name || '';
+      $('fGender').value = m?.gender || '';
+      $('fBirth').value = m?.birth || '';
+      $('fBirthCal').value = m?.birthCal || 'solar';
+      $('fPhone').value = m?.phone || '';
+      $('fAddress').value = m?.address || '';
+      $('fEmail').value = m?.email || '';
+      $('fRegDate').value = m?.regDate || new Date().toISOString().slice(0, 10);
+      $('fRegType').value = m?.regType || '';
+      $('fGuide').value = m?.guide || '';
+      $('fPrev').value = m?.prevChurch || '';
+      $('fGrade').value = m?.grade || '';
+      $('fGradeDate').value = m?.gradeDate || '';
+      $('fGradeChurch').value = m?.gradeChurch || '';
+      $('fOfficiant').value = m?.officiant || '';
+      $('fRole').value = m?.role || '성도';
+      $('fType').value = m?.memberType || '교인';
+      $('fStatus').value = m?.status || '예배출석';
+      $('fHead').value = m?.headName || '';
+      $('fRel').value = m?.relation || '';
+      $('fMarriage').value = m?.marriage || '';
+      $('fWed').value = m?.wedDate || '';
+      $('fSpouse').value = m?.spouseName || '';
+      $('fMemo').value = m?.memo || '';
+      pickHeadId = m?.headId || null;
+      pickSpouseId = m?.spouseId || null;
+      $('dupHint').className = 'hint'; $('dupHint').textContent = '명부에 같은 이름이 있으면 알려드립니다.';
+      $('editMsg').style.display = 'none';
+      updateAge();
+      setAcc(true);
+      show('edit');
+    }
+
+    function updateAge() {
+      const a = calcAge($('fBirth').value);
+      $('ageBox').textContent = (a != null) ? (a + '세') : '–';
+    }
+    $('fBirth').addEventListener('input', updateAge);
+
+    $('dupBtn').addEventListener('click', () => {
+      const name = $('fName').value.trim();
+      const h = $('dupHint');
+      if (!name) { h.className = 'hint warn'; h.textContent = '먼저 이름을 입력하세요.'; return; }
+      const hit = allMembers.filter((x) => x.name === name && x.id !== editingId);
+      if (hit.length) { h.className = 'hint warn'; h.textContent = `⚠ 명부에 「${name}」 님이 이미 ${hit.length}명 있습니다. 동명이인인지 확인하세요.`; }
+      else { h.className = 'hint ok'; h.textContent = '✓ 같은 이름이 없습니다.'; }
+    });
+
+    // ── 명부 검색 오버레이 ──
+    let pickTarget = null;
+    function openPicker(target) {
+      pickTarget = target;
+      $('pickInput').value = '';
+      renderPick('');
+      $('pickBk').classList.add('on');
+      $('pickInput').focus();
+    }
+    function renderPick(kw) {
+      const rows = allMembers.filter((x) => x.id !== editingId &&
+        (!kw || (x.name || '').toLowerCase().includes(kw.toLowerCase())));
+      $('pickList').innerHTML = rows.length
+        ? rows.map((x) => `<div class="pickrow" data-id="${x.id}">${esc(x.name)}${x.role ? ` <span style="font-size:12px; color:var(--muted);">${esc(x.role)}</span>` : ''}</div>`).join('')
+        : '<div class="empty">검색 결과가 없습니다.</div>';
+      $('pickList').querySelectorAll('.pickrow').forEach((r) => {
+        r.addEventListener('click', () => choosePick(r.dataset.id));
+      });
+    }
+    function choosePick(id) {
+      const m = allMembers.find((x) => x.id === id);
+      if (!m) return;
+      if (pickTarget === 'head') { $('fHead').value = m.name; pickHeadId = id; }
+      else if (pickTarget === 'spouse') { $('fSpouse').value = m.name; pickSpouseId = id; }
+      $('pickBk').classList.remove('on');
+    }
+    $('headBtn').addEventListener('click', () => openPicker('head'));
+    $('spouseBtn').addEventListener('click', () => openPicker('spouse'));
+    $('pickInput').addEventListener('input', (e) => renderPick(e.target.value));
+    $('pickClose').addEventListener('click', () => $('pickBk').classList.remove('on'));
+    $('pickBk').addEventListener('click', (e) => { if (e.target === $('pickBk')) $('pickBk').classList.remove('on'); });
+
+    async function resolveHousehold(selfId) {
+      const relation = $('fRel').value;
+      if (pickHeadId) {
+        const head = allMembers.find((x) => x.id === pickHeadId);
+        let hh = head?.householdId;
+        if (!hh && head) {
+          hh = head.id;
+          await updateDoc(doc(db, 'members', head.id), {
+            householdId: hh, headId: hh, headName: head.name,
+            relation: head.relation || '본인(세대주)'
+          });
+        }
+        return { householdId: hh || selfId, headId: pickHeadId, headName: $('fHead').value, relation: relation || '' };
+      }
+      return { householdId: selfId, headId: selfId, headName: '', relation: relation || '본인(세대주)' };
+    }
+
+    async function saveMember() {
+      const name = $('fName').value.trim();
+      if (!name) {
+        $('editMsg').textContent = '이름을 입력해 주세요.'; $('editMsg').style.display = 'block';
+        $('acc1').classList.add('open');
+        return;
+      }
+      const base = {
+        name,
+        gender: $('fGender').value,
+        birth: $('fBirth').value.trim(),
+        birthCal: $('fBirthCal').value,
+        phone: $('fPhone').value.trim(),
+        address: $('fAddress').value.trim(),
+        email: $('fEmail').value.trim(),
+        regDate: $('fRegDate').value,
+        regType: $('fRegType').value,
+        guide: $('fGuide').value.trim(),
+        prevChurch: $('fPrev').value.trim(),
+        grade: $('fGrade').value,
+        gradeDate: $('fGradeDate').value,
+        gradeChurch: $('fGradeChurch').value.trim(),
+        officiant: $('fOfficiant').value.trim(),
+        role: $('fRole').value,
+        memberType: $('fType').value,
+        status: $('fStatus').value,
+        marriage: $('fMarriage').value,
+        wedDate: $('fWed').value,
+        spouseId: pickSpouseId || null,
+        spouseName: $('fSpouse').value.trim(),
+        memo: $('fMemo').value.trim(),
+        updatedAt: serverTimestamp(),
+      };
+      const btn = $('eSave');
+      btn.disabled = true; btn.textContent = '저장 중…';
+      try {
+        if (editingId) {
+          const hh = await resolveHousehold(editingId);
+          await updateDoc(doc(db, 'members', editingId), { ...base, ...hh });
+        } else {
+          base.createdAt = serverTimestamp();
+          base.createdBy = me.uid;
+          const ref = await addDoc(collection(db, 'members'),
+            { ...base, householdId: null, headId: null, headName: '', relation: $('fRel').value || '' });
+          editingId = ref.id;
+          const hh = await resolveHousehold(ref.id);
+          await updateDoc(ref, hh);
+        }
+        await loadMembers();
+        openDetail(editingId);
+      } catch (e) {
+        $('editMsg').textContent = '저장 실패: ' + (e.code || e.message);
+        $('editMsg').style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = '저장';
+      }
+    }
+
+    async function removeMember(id) {
+      const m = allMembers.find((x) => x.id === id);
+      if (!confirm(`'${m?.name || '이 성도'}' 님을 명부에서 삭제할까요?`)) return;
+      try {
+        await deleteDoc(doc(db, 'members', id));
+        await loadMembers();
+        closeViaBack();
+      } catch (e) {
+        alert('삭제 실패: ' + (e.code || e.message));
+      }
+    }
+
+    // 접이식 토글
+    document.querySelectorAll('.acc-head').forEach((h) => {
+      h.addEventListener('click', () => {
+        const acc = $(h.dataset.acc);
+        acc.classList.toggle('open');
+        const s = h.querySelector('.h-s');
+        s.firstChild.textContent = acc.classList.contains('open') ? '접기 ' : '펼치기 ';
+      });
+    });
+
+    // ── 화면 전환 (list=기본, detail/edit=오버레이) ──
+    function applyView(view) {
+      $('listView').style.display = (view === 'list') ? '' : 'none';
+      $('detailView').style.display = (view === 'detail') ? '' : 'none';
+      $('editView').style.display = (view === 'edit') ? '' : 'none';
+      $('fab').style.display = (view === 'list') ? 'flex' : 'none';
+      $('editBtn').style.display = (view === 'detail') ? 'block' : 'none';
+      $('barTitle').textContent =
+        (view === 'list') ? '성도 관리' :
+        (view === 'detail') ? '성도 정보' :
+        (editingId ? '성도 편집' : '성도 추가');
+      window.scrollTo(0, 0);
+    }
+    function pushOverlay() { if (!overlayPushed) { history.pushState({ o: 1 }, ''); overlayPushed = true; } }
+    function closeViaBack() { if (overlayPushed) { overlayPushed = false; history.back(); } }
+    function leaveToList() { editingId = null; detailId = null; applyView('list'); }
+    function show(view) {
+      if (view === 'list') { leaveToList(); return; }
+      pushOverlay(); applyView(view);
+    }
+    window.addEventListener('popstate', () => {
+      if ($('pickBk').classList.contains('on')) { $('pickBk').classList.remove('on'); history.pushState({ o: 1 }, ''); return; }
+      if (!overlayPushed) return;
+      overlayPushed = false;
+      leaveToList();
+    });
+
+    // ── 버튼 핸들러 ──
+    $('fab').addEventListener('click', () => openEdit(null));
+    $('editBtn').addEventListener('click', () => { if (detailId) openEdit(detailId); });
+    $('eSave').addEventListener('click', saveMember);
+    $('eCancel').addEventListener('click', () => {
+      if (editingId && detailId === editingId) { applyView('detail'); }
+      else { leaveToList(); closeViaBack(); }
+    });
+    $('backBtn').addEventListener('click', () => {
+      if (overlayPushed) { leaveToList(); closeViaBack(); }
+      else { location.href = 'index.html'; }
+    });
+  </script>
+</body>
+</html>

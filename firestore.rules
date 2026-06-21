@@ -145,6 +145,12 @@ service cloud.firestore {
       }
     }
 
+    // ===== 성도 명부 =====
+    // 연락처·주소 등 개인정보를 담으므로 관리자(4단계)만 읽기·쓰기 가능.
+    match /members/{memberId} {
+      allow read, write: if isAdmin();
+    }
+
     // ===== 그 외 모든 문서 =====
     // 기본 차단. (헌금·성도 등 상위 단계 데이터는 만들 때 단계별 규칙을 여기에 추가)
     match /{document=**} {
