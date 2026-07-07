@@ -27,6 +27,12 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && myLevel() >= 2;
     }
+    // 재정담당 = 로그인 + 내 문서 존재 + level 3 이상 (헌금/지출 이용 가능)
+    function isFinance() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myLevel() >= 3;
+    }
     // 방 접근 가능 = 회원이고, (members 없는 공개방(전체방)이거나 / 그 방 members에 포함)
     function canAccessRoom(roomId) {
       return isMember() && (
@@ -146,10 +152,19 @@ service cloud.firestore {
     }
 
     // ===== 성도 명부 =====
-    // 연락처·주소 등 개인정보를 담으므로 관리자(4단계)만 읽기·쓰기 가능.
+    // 개인정보 포함. 관리자(4단계)는 전체 권한.
+    // 재정담당(3단계)은 헌금 이름 검색(read)과 간편등록(create)만 허용, 수정·삭제는 관리자만.
     match /members/{memberId} {
-      allow read, write: if isAdmin();
+      allow read:           if isFinance();
+      allow create:         if isFinance();
+      allow update, delete: if isAdmin();
     }
+
+    // ===== 재정: 수입(헌금) / 지출 / 항목설정 =====
+    // 재정담당(3단계) 이상만 읽기·쓰기.
+    match /offerings/{id} { allow read, write: if isFinance(); }
+    match /expenses/{id}  { allow read, write: if isFinance(); }
+    match /finConfig/{id} { allow read, write: if isFinance(); }
 
     // ===== 그 외 모든 문서 =====
     // 기본 차단. (헌금·성도 등 상위 단계 데이터는 만들 때 단계별 규칙을 여기에 추가)

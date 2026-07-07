@@ -48,6 +48,43 @@
       }
     });
 
+    // 회원번호: 현재 최댓값 + 1 (없으면 1부터)
+    function nextMemberNo() {
+      let mx = 0;
+      allMembers.forEach((m) => {
+        const n = Number(m.memberNo);
+        if (Number.isFinite(n) && n > mx) mx = n;
+      });
+      return mx + 1;
+    }
+
+    // 회원번호가 없는 성도에게 등록순(createdAt)으로 번호 일괄 부여
+    async function assignAllMemberNos() {
+      const has = (m) => Number.isFinite(Number(m.memberNo)) && Number(m.memberNo) > 0;
+      const missing = allMembers.filter((m) => !has(m));
+      if (missing.length === 0) { alert('모든 성도에게 이미 회원번호가 있습니다.'); return; }
+      if (!confirm(`회원번호가 없는 성도 ${missing.length}명에게 등록순으로 번호를 부여할까요?`)) return;
+      const ts = (m) => (m.createdAt && m.createdAt.seconds) ? m.createdAt.seconds : Number.MAX_SAFE_INTEGER;
+      missing.sort((a, b) => ts(a) - ts(b));
+      let start = 0;
+      allMembers.forEach((m) => { const n = Number(m.memberNo); if (Number.isFinite(n) && n > start) start = n; });
+      const btn = $('assignNoBtn');
+      btn.disabled = true; btn.textContent = '부여 중…';
+      try {
+        let no = start;
+        for (const m of missing) {
+          no += 1;
+          await updateDoc(doc(db, 'members', m.id), { memberNo: no });
+        }
+        await loadMembers();
+        alert(`${missing.length}명에게 회원번호를 부여했습니다. (${start + 1}~${no}번)`);
+      } catch (e) {
+        alert('번호 부여 실패: ' + (e.code || e.message));
+      } finally {
+        btn.disabled = false; btn.textContent = '번호 일괄 부여';
+      }
+    }
+
     async function loadMembers() {
       try {
         const qs = await getDocs(collection(db, 'members'));
@@ -80,6 +117,7 @@
           `<div class="avatar">${esc(initial(m.name))}</div>
            <div style="flex:1; min-width:0;">
              <div style="display:flex; align-items:center; gap:7px;">
+               ${Number.isFinite(Number(m.memberNo)) && Number(m.memberNo) > 0 ? `<span style="font-size:12px; color:var(--muted); flex-shrink:0;">#${Number(m.memberNo)}</span>` : ''}
                <span style="font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(m.name || '(이름 없음)')}</span>
                ${m.role ? `<span class="badge">${esc(m.role)}</span>` : ''}
                ${isNew ? '<span class="badge badge-new">새가족</span>' : ''}
@@ -101,6 +139,8 @@
         renderList();
       });
     });
+
+    $('assignNoBtn').addEventListener('click', assignAllMemberNos);
 
     const BADGE_GRADE = (m) => {
       if (!m.grade) return '';
@@ -323,6 +363,7 @@
         } else {
           base.createdAt = serverTimestamp();
           base.createdBy = me.uid;
+          base.memberNo = nextMemberNo();
           const ref = await addDoc(collection(db, 'members'),
             { ...base, householdId: null, headId: null, headName: '', relation: $('fRel').value || '' });
           editingId = ref.id;
