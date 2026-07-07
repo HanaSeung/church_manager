@@ -14,10 +14,16 @@
     }
     body { font-family:'Malgun Gothic',system-ui,sans-serif; background:var(--bg);
       color:var(--text); line-height:1.6; }
-    .topbar { background:var(--green); color:#fff; padding:12px 16px;
-      display:flex; align-items:center; gap:12px; }
-    .topbar a { color:#fff; text-decoration:none; font-size:14px; opacity:.9; }
-    .topbar h1 { font-size:17px; font-weight:700; }
+    .topbar { background:var(--green); color:#fff; padding:0 10px; height:52px;
+      display:grid; grid-template-columns:40px 1fr 40px; align-items:center; }
+    .topbar .tb-back { justify-self:start; width:34px; height:34px; border-radius:50%;
+      background:rgba(255,255,255,.16); display:flex; align-items:center;
+      justify-content:center; color:#fff; text-decoration:none; }
+    .topbar .tb-back svg { width:20px; height:20px; }
+    .topbar .tb-icon { justify-self:end; display:flex; align-items:center;
+      color:rgba(255,255,255,.9); }
+    .topbar .tb-icon svg { width:20px; height:20px; }
+    .topbar h1 { font-size:17px; font-weight:500; text-align:center; }
     #fixedHead { position:fixed; top:0; left:0; right:0; z-index:20;
       background:var(--bg); box-shadow:0 2px 6px rgba(0,0,0,.08); }
     #fixedHead .controls { margin:0; border-radius:0; border-left:none; border-right:none; }
@@ -27,8 +33,13 @@
 <body>
   <div id="fixedHead">
   <div class="topbar">
-    <a href="index.html">← 홈</a>
+    <a href="index.html" class="tb-back" aria-label="홈으로">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
     <h1>성경 뷰어</h1>
+    <span class="tb-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h11a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M8 4v16"/></svg>
+    </span>
   </div>
 
     <div class="controls" id="controls">
@@ -91,17 +102,17 @@
     .grp.btns { flex:0 0 auto; justify-content:flex-end; gap:0; }
     .sel { padding:10px 2px; font-size:14px; border:1px solid var(--line);
       border-radius:7px; background:#fff; color:var(--text); min-width:0; }
-    .locbox { flex:0 0 auto; padding:8px 2px; font-size:17px; font-weight:800;
-      border:none; background:none;
+    .locbox { flex:0 0 auto; padding:5px 10px; font-size:13px; font-weight:500;
+      border:1px solid var(--line); background:#fff; border-radius:8px;
       cursor:pointer; text-align:left; white-space:nowrap;
-      display:flex; align-items:baseline; gap:5px; }
-    .locbox:hover .loc-book, .locbox:hover .loc-cv { opacity:.7; }
+      display:flex; align-items:baseline; gap:4px; }
+    .locbox:hover { background:var(--green-soft); }
     .loc-book { color:var(--green); }
     .loc-cv { color:var(--text); }
-    .verbtn { flex:0 0 auto; padding:8px 2px; font-size:17px; font-weight:800;
-      border:none; background:none; color:#d6442f;
+    .verbtn { flex:0 0 auto; padding:5px 10px; font-size:13px; font-weight:500;
+      border:1px solid var(--line); background:#fff; border-radius:8px; color:var(--muted);
       cursor:pointer; white-space:nowrap; }
-    .verbtn:hover { opacity:.7; }
+    .verbtn:hover { background:var(--green-soft); }
     .pk-title { font-size:16px; font-weight:700; color:var(--text); }
     .navb { padding:8px 4px; font-size:14px; border:none; border-radius:0;
       background:none; color:var(--text); cursor:pointer; white-space:nowrap; }
