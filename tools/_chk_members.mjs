@@ -189,7 +189,7 @@
          ${drow('집전화', m.phoneHome ? `<a href="tel:${esc(m.phoneHome)}" style="color:var(--green); text-decoration:none;">${esc(m.phoneHome)}</a>` : '')}
          ${drow('생일', birthTxt)}
          ${drow('이메일', esc(m.email))}
-         ${drow('주소', esc(m.address))}
+         ${drow('주소', esc([m.zipcode ? '(' + m.zipcode + ')' : '', m.address, m.addressDetail].filter(Boolean).join(' ')))}
 
          <div class="dsec">등록</div>
          ${drow('등록일', esc(dot(m.regDate)))}
@@ -206,7 +206,8 @@
          ${drow('배우자', esc(m.spouseName))}
          ${famHtml}
 
-         ${m.memo ? `<div class="dsec">메모 · 기도제목</div><div style="font-size:14px; color:var(--text); white-space:pre-wrap; padding-top:6px;">${esc(m.memo)}</div>` : ''}
+         ${m.memo ? `<div class="dsec">메모</div><div style="font-size:14px; color:var(--text); white-space:pre-wrap; padding-top:6px;">${esc(m.memo)}</div>` : ''}
+         ${(Array.isArray(m.prayers) && m.prayers.length) ? `<div class="dsec">기도제목</div>${[...m.prayers].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((p) => `<div style="padding:7px 0; border-top:1px solid var(--line);"><span style="font-size:12px; color:var(--muted); margin-right:8px;">${esc(p.date || '')}</span><span style="font-size:14px; color:var(--text); white-space:pre-wrap;">${esc(p.text || '')}</span></div>`).join('')}` : ''}
 
          <button id="dDelete" class="btn-line" style="width:100%; height:46px; margin-top:22px; color:var(--danger); border-color:#e7c9c4;">삭제</button>`;
       $('dDelete').addEventListener('click', () => removeMember(id));
@@ -233,7 +234,9 @@
       $('fPhone').classList.remove('invalid'); $('ePhoneErr').classList.remove('show');
       $('fPhoneHome').value = fmtPhone(m?.phoneHome || '');
       $('fPhoneHome').classList.remove('invalid'); $('ePhoneHomeErr').classList.remove('show');
+      $('fZip').value = m?.zipcode || '';
       $('fAddress').value = m?.address || '';
+      $('fAddressDetail').value = m?.addressDetail || '';
       setEmailFields(m?.email || '');
       $('fRegDate').value = m?.regDate || new Date().toISOString().slice(0, 10);
       $('fRegType').value = m?.regType || '';
@@ -252,20 +255,117 @@
       $('fWed').value = m?.wedDate || '';
       $('fSpouse').value = m?.spouseName || '';
       $('fMemo').value = m?.memo || '';
+      loadPrayers(m?.prayers);
       pickHeadId = m?.headId || null;
       pickSpouseId = m?.spouseId || null;
-      $('dupHint').className = 'hint'; $('dupHint').textContent = '명부에 같은 이름이 있으면 알려드립니다.';
+      const _headM = m?.headId ? allMembers.find((x) => x.id === m.headId) : null;
+      setHeadBadge(_headM ? _headM.memberNo : null);
+      $('dupHint').className = 'hint'; $('dupHint').textContent = '';
       $('editMsg').style.display = 'none';
       updateAge();
       setAcc(true);
       show('edit');
     }
 
+    // 생일 자동 하이픈: 8자리→YYYY-MM-DD, 4자리→MM-DD(연도 모름)
+    function fmtBirth(v) {
+      const d = (v || '').replace(/\D/g, '').slice(0, 8);
+      if (d.length <= 4) return d;
+      if (d.length <= 6) return d.slice(0, 4) + '-' + d.slice(4);
+      return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8);
+    }
+    function fmtBirthBlur(v) {
+      const d = (v || '').replace(/\D/g, '');
+      if (d.length === 4) return d.slice(0, 2) + '-' + d.slice(2);
+      return fmtBirth(v);
+    }
     function updateAge() {
       const a = calcAge($('fBirth').value);
       $('ageBox').textContent = (a != null) ? (a + '세') : '–';
     }
-    $('fBirth').addEventListener('input', updateAge);
+    $('fBirth').addEventListener('input', (e) => { e.target.value = fmtBirth(e.target.value); updateAge(); });
+    $('fBirth').addEventListener('blur', (e) => { e.target.value = fmtBirthBlur(e.target.value); updateAge(); });
+
+    // ── 기도제목 (날짜별) ──
+    let prayers = [];          // [{date, text}]
+    let prayShow = 3;          // 표시 개수
+    let prayEdit = -1;         // 인라인 수정 중 원본 인덱스
+    let prayOpen = new Set();  // 펼쳐진 원본 인덱스
+    function prayToday() { return new Date().toISOString().slice(0, 10); }
+    function sortedPrayers() {
+      return prayers.map((p, i) => ({ p, i })).sort((a, b) => (b.p.date || '').localeCompare(a.p.date || ''));
+    }
+    function renderPrayers() {
+      const list = $('prayList'); const arr = sortedPrayers();
+      if (arr.length === 0) {
+        list.innerHTML = '<div class="hint" style="margin-top:0;">등록된 기도제목이 없습니다.</div>';
+        $('prayMoreWrap').style.display = 'none'; return;
+      }
+      const shown = arr.slice(0, prayShow);
+      list.innerHTML = shown.map(({ p, i }) => {
+        if (prayEdit === i) {
+          return `<div class="pray-row"><div style="display:flex; gap:6px; align-items:center; padding:7px 9px;">
+            <input type="date" id="prayEditDate" value="${esc(p.date || '')}" style="width:148px; flex-shrink:0; height:38px;">
+            <input type="text" id="prayEditText" value="${esc(p.text || '')}" style="flex:1; min-width:0; height:38px;">
+            <button class="btn-line" data-act="savep" data-i="${i}" style="padding:0 10px; height:38px;">확인</button>
+            <button class="btn-line" data-act="cancelp" style="padding:0 10px; height:38px;">취소</button>
+          </div></div>`;
+        }
+        const open = prayOpen.has(i);
+        const first = esc((p.text || '').split('\n')[0]);
+        return `<div class="pray-row"><div style="display:flex; align-items:center; gap:8px; padding:9px 10px;">
+          <span class="pray-tog" data-i="${i}" style="cursor:pointer; color:var(--muted); width:14px; flex-shrink:0; text-align:center;">${open ? '▾' : '▸'}</span>
+          <span style="font-size:12px; color:var(--muted); width:74px; flex-shrink:0;">${esc(p.date || '')}</span>
+          <span class="pray-tog" data-i="${i}" style="flex:1; min-width:0; font-size:13px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${first}</span>
+          <button class="btn-line" data-act="editp" data-i="${i}" style="padding:2px 8px; font-size:12px;">수정</button>
+          <button class="btn-line" data-act="delp" data-i="${i}" style="padding:2px 8px; font-size:12px;">삭제</button>
+        </div>${open ? `<div class="pray-full">${esc(p.text || '')}</div>` : ''}</div>`;
+      }).join('');
+      if (arr.length > 3) {
+        $('prayMoreWrap').style.display = 'block';
+        $('prayMoreBtn').textContent = (prayShow >= arr.length) ? '접기' : '더 보기';
+      } else { $('prayMoreWrap').style.display = 'none'; }
+    }
+    function loadPrayers(src) {
+      prayers = Array.isArray(src) ? src.map((p) => ({ date: p.date || '', text: p.text || '' })) : [];
+      prayShow = 3; prayEdit = -1; prayOpen = new Set();
+      $('fPrayDate').value = prayToday(); $('fPrayText').value = '';
+      renderPrayers();
+    }
+    $('prayAddBtn').addEventListener('click', () => {
+      const t = $('fPrayText').value.trim();
+      if (!t) { alert('기도제목 내용을 입력하세요.'); return; }
+      prayers.push({ date: $('fPrayDate').value || prayToday(), text: t });
+      $('fPrayText').value = ''; $('fPrayDate').value = prayToday();
+      renderPrayers();
+    });
+    $('prayMoreBtn').addEventListener('click', () => {
+      const total = prayers.length;
+      if (prayShow >= total) prayShow = 3;
+      else if (prayShow < 5) prayShow = 5;
+      else if (prayShow < 10) prayShow = 10;
+      else prayShow = total;
+      renderPrayers();
+    });
+    $('prayList').addEventListener('click', (e) => {
+      const tog = e.target.closest('.pray-tog');
+      if (tog) { const i = +tog.dataset.i; prayOpen.has(i) ? prayOpen.delete(i) : prayOpen.add(i); renderPrayers(); return; }
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const act = btn.dataset.act;
+      const i = btn.dataset.i != null ? +btn.dataset.i : -1;
+      if (act === 'editp') { prayEdit = i; renderPrayers(); }
+      else if (act === 'cancelp') { prayEdit = -1; renderPrayers(); }
+      else if (act === 'savep') {
+        const t = $('prayEditText').value.trim();
+        if (!t) { alert('기도제목 내용을 입력하세요.'); return; }
+        prayers[i] = { date: $('prayEditDate').value || prayToday(), text: t };
+        prayEdit = -1; renderPrayers();
+      } else if (act === 'delp') {
+        if (!confirm('이 기도제목을 삭제할까요?')) return;
+        prayers.splice(i, 1); prayEdit = -1; prayOpen = new Set(); renderPrayers();
+      }
+    });
 
     $('dupBtn').addEventListener('click', () => {
       const name = $('fName').value.trim();
@@ -278,10 +378,10 @@
 
     // ── 명부 검색 오버레이 ──
     let pickTarget = null;
-    function openPicker(target) {
+    function openPicker(target, kw) {
       pickTarget = target;
-      $('pickInput').value = '';
-      renderPick('');
+      $('pickInput').value = kw || '';
+      renderPick(kw || '');
       $('pickBk').classList.add('on');
       $('pickInput').focus();
     }
@@ -298,12 +398,41 @@
     function choosePick(id) {
       const m = allMembers.find((x) => x.id === id);
       if (!m) return;
-      if (pickTarget === 'head') { $('fHead').value = m.name; pickHeadId = id; }
+      if (pickTarget === 'head') { connectHead(m); }
       else if (pickTarget === 'spouse') { $('fSpouse').value = m.name; pickSpouseId = id; }
       $('pickBk').classList.remove('on');
     }
-    $('headBtn').addEventListener('click', () => openPicker('head'));
+    // 세대주 연결 + 회원번호 배지
+    function connectHead(m) {
+      pickHeadId = m.id;
+      $('fHead').value = m.name;
+      setHeadBadge(m.memberNo);
+    }
+    function setHeadBadge(no) {
+      const b = $('headNoBadge');
+      if (no !== null && no !== undefined && no !== '') {
+        b.textContent = '#' + no; b.style.display = 'flex';
+      } else { b.textContent = ''; b.style.display = 'none'; }
+    }
+    // [검색] 클릭: 본인 이름 비교 → 명부 조회 → 연결/팝업/안내
+    function handleHeadSearch() {
+      const typed = $('fHead').value.trim();
+      const selfName = $('fName').value.trim();
+      if (!typed) { openPicker('head'); return; }
+      if (selfName && typed === selfName) {
+        pickHeadId = null; setHeadBadge(null);
+        $('fRel').value = '본인'; $('fHead').value = '';
+        return;
+      }
+      const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
+      if (matches.length === 0) { setHeadBadge(null); pickHeadId = null; alert('명부에 없는 이름입니다.'); return; }
+      if (matches.length === 1) { connectHead(matches[0]); return; }
+      openPicker('head', typed);
+    }
+    $('headBtn').addEventListener('click', handleHeadSearch);
+    $('fHead').addEventListener('input', () => { pickHeadId = null; setHeadBadge(null); });
     $('spouseBtn').addEventListener('click', () => openPicker('spouse'));
+    $('fSpouse').addEventListener('input', () => { pickSpouseId = null; });
     $('pickInput').addEventListener('input', (e) => renderPick(e.target.value));
     $('pickClose').addEventListener('click', () => $('pickBk').classList.remove('on'));
     $('pickBk').addEventListener('click', (e) => { if (e.target === $('pickBk')) $('pickBk').classList.remove('on'); });
@@ -317,12 +446,12 @@
           hh = head.id;
           await updateDoc(doc(db, 'members', head.id), {
             householdId: hh, headId: hh, headName: head.name,
-            relation: head.relation || '본인(세대주)'
+            relation: head.relation || '본인'
           });
         }
         return { householdId: hh || selfId, headId: pickHeadId, headName: $('fHead').value, relation: relation || '' };
       }
-      return { householdId: selfId, headId: selfId, headName: '', relation: relation || '본인(세대주)' };
+      return { householdId: selfId, headId: selfId, headName: '', relation: relation || '본인' };
     }
 
     // ── 연락처·이메일 유틸 ──
@@ -429,7 +558,9 @@
         birthCal: $('fBirthCal').value,
         phone: phoneVal,
         phoneHome: phoneHomeVal,
+        zipcode: $('fZip').value.trim(),
         address: $('fAddress').value.trim(),
+        addressDetail: $('fAddressDetail').value.trim(),
         email: emailVal,
         regDate: $('fRegDate').value,
         regType: $('fRegType').value,
@@ -447,6 +578,7 @@
         spouseId: pickSpouseId || null,
         spouseName: $('fSpouse').value.trim(),
         memo: $('fMemo').value.trim(),
+        prayers: prayers.map((p) => ({ date: p.date || '', text: p.text || '' })),
         updatedAt: serverTimestamp(),
       };
       const btn = $('eSave');
@@ -488,8 +620,25 @@
     }
 
     // 연락처 실시간 하이픈 + 이메일 도메인 선택 전환
+    // 카카오 우편번호 검색
+    function openPostcode() {
+      if (typeof daum === 'undefined' || !daum.Postcode) {
+        alert('우편번호 서비스를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
+        return;
+      }
+      new daum.Postcode({
+        oncomplete: function (data) {
+          $('fZip').value = data.zonecode;
+          $('fAddress').value = data.roadAddress || data.jibunAddress;
+          $('fAddressDetail').value = '';
+          $('fAddressDetail').focus();
+        }
+      }).open();
+    }
+
     $('fPhone').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
     $('fPhoneHome').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
+    $('fZipBtn').addEventListener('click', openPostcode);
     $('fEmailDomain').addEventListener('change', onEmailDomainChange);
     $('fEmailCustom').addEventListener('blur', revertEmailDomainIfEmpty);
 
