@@ -346,6 +346,16 @@
     </div>
   </div>
 
+  <div id="postBk" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1100; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--card); width:100%; max-width:400px; max-height:80vh; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.35);">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--line);">
+        <span style="font-size:14px; font-weight:700; color:var(--green-deep);">우편번호 검색</span>
+        <span id="postClose" style="font-size:22px; color:var(--muted); cursor:pointer; line-height:1;">×</span>
+      </div>
+      <div id="postEmbed" style="height:420px; overflow:hidden;"></div>
+    </div>
+  </div>
+
   <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script type="module">
     import { auth, db } from "./firebase-config.js";
@@ -969,25 +979,37 @@
     }
 
     // 연락처 실시간 하이픈 + 이메일 도메인 선택 전환
-    // 카카오 우편번호 검색
+    // 카카오 우편번호 검색 (임베드: 설치형 PWA에서도 동작)
     function openPostcode() {
       if (typeof daum === 'undefined' || !daum.Postcode) {
         alert('우편번호 서비스를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
         return;
       }
+      const wrap = $('postEmbed');
+      wrap.innerHTML = '';
+      $('postBk').style.display = 'flex';
       new daum.Postcode({
         oncomplete: function (data) {
           $('fZip').value = data.zonecode;
           $('fAddress').value = data.roadAddress || data.jibunAddress;
           $('fAddressDetail').value = '';
+          closePostcode();
           $('fAddressDetail').focus();
-        }
-      }).open();
+        },
+        width: '100%',
+        height: '100%'
+      }).embed(wrap);
+    }
+    function closePostcode() {
+      $('postBk').style.display = 'none';
+      $('postEmbed').innerHTML = '';
     }
 
     $('fPhone').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
     $('fPhoneHome').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
     $('fZipBtn').addEventListener('click', openPostcode);
+    $('postClose').addEventListener('click', closePostcode);
+    $('postBk').addEventListener('click', (e) => { if (e.target === $('postBk')) closePostcode(); });
     $('fEmailDomain').addEventListener('change', onEmailDomainChange);
     $('fEmailCustom').addEventListener('blur', revertEmailDomainIfEmpty);
 

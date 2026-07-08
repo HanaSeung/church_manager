@@ -620,25 +620,37 @@
     }
 
     // 연락처 실시간 하이픈 + 이메일 도메인 선택 전환
-    // 카카오 우편번호 검색
+    // 카카오 우편번호 검색 (임베드: 설치형 PWA에서도 동작)
     function openPostcode() {
       if (typeof daum === 'undefined' || !daum.Postcode) {
         alert('우편번호 서비스를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
         return;
       }
+      const wrap = $('postEmbed');
+      wrap.innerHTML = '';
+      $('postBk').style.display = 'flex';
       new daum.Postcode({
         oncomplete: function (data) {
           $('fZip').value = data.zonecode;
           $('fAddress').value = data.roadAddress || data.jibunAddress;
           $('fAddressDetail').value = '';
+          closePostcode();
           $('fAddressDetail').focus();
-        }
-      }).open();
+        },
+        width: '100%',
+        height: '100%'
+      }).embed(wrap);
+    }
+    function closePostcode() {
+      $('postBk').style.display = 'none';
+      $('postEmbed').innerHTML = '';
     }
 
     $('fPhone').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
     $('fPhoneHome').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
     $('fZipBtn').addEventListener('click', openPostcode);
+    $('postClose').addEventListener('click', closePostcode);
+    $('postBk').addEventListener('click', (e) => { if (e.target === $('postBk')) closePostcode(); });
     $('fEmailDomain').addEventListener('change', onEmailDomainChange);
     $('fEmailCustom').addEventListener('blur', revertEmailDomainIfEmpty);
 
