@@ -185,7 +185,8 @@
          </div>
 
          <div class="dsec">기본</div>
-         ${drow('연락처', m.phone ? `<a href="tel:${esc(m.phone)}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
+         ${drow('휴대폰', m.phone ? `<a href="tel:${esc(m.phone)}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
+         ${drow('집전화', m.phoneHome ? `<a href="tel:${esc(m.phoneHome)}" style="color:var(--green); text-decoration:none;">${esc(m.phoneHome)}</a>` : '')}
          ${drow('생일', birthTxt)}
          ${drow('이메일', esc(m.email))}
          ${drow('주소', esc(m.address))}
@@ -228,9 +229,12 @@
       $('fGender').value = m?.gender || '';
       $('fBirth').value = m?.birth || '';
       $('fBirthCal').value = m?.birthCal || 'solar';
-      $('fPhone').value = m?.phone || '';
+      $('fPhone').value = fmtPhone(m?.phone || '');
+      $('fPhone').classList.remove('invalid'); $('ePhoneErr').classList.remove('show');
+      $('fPhoneHome').value = fmtPhone(m?.phoneHome || '');
+      $('fPhoneHome').classList.remove('invalid'); $('ePhoneHomeErr').classList.remove('show');
       $('fAddress').value = m?.address || '';
-      $('fEmail').value = m?.email || '';
+      setEmailFields(m?.email || '');
       $('fRegDate').value = m?.regDate || new Date().toISOString().slice(0, 10);
       $('fRegType').value = m?.regType || '';
       $('fGuide').value = m?.guide || '';
@@ -321,6 +325,71 @@
       return { householdId: selfId, headId: selfId, headName: '', relation: relation || '본인(세대주)' };
     }
 
+    // ── 연락처·이메일 유틸 ──
+    function fmtPhone(v) {
+      const d = (v || '').replace(/\D/g, '').slice(0, 11);
+      if (!d) return '';
+      if (d.startsWith('02')) {
+        if (d.length < 3) return d;
+        if (d.length < 6) return d.slice(0, 2) + '-' + d.slice(2);
+        if (d.length < 10) return d.slice(0, 2) + '-' + d.slice(2, 5) + '-' + d.slice(5);
+        return d.slice(0, 2) + '-' + d.slice(2, 6) + '-' + d.slice(6, 10);
+      }
+      if (d.length < 4) return d;
+      if (d.length < 7) return d.slice(0, 3) + '-' + d.slice(3);
+      if (d.length < 11) return d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6);
+      return d.slice(0, 3) + '-' + d.slice(3, 7) + '-' + d.slice(7, 11);
+    }
+    function phoneOk(v) { const d = (v || '').replace(/\D/g, ''); return d.length >= 9 && d.length <= 11; }
+    function emailOk(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+    const EMAIL_DOMAINS = ['naver.com', 'gmail.com', 'daum.net', 'hanmail.net', 'nate.com'];
+    function onEmailDomainChange() {
+      if ($('fEmailDomain').value === '__custom') {
+        $('fEmailDomain').style.display = 'none';
+        $('fEmailCustom').style.display = '';
+        $('fEmailCustom').value = '';
+        $('fEmailCustom').focus();
+      }
+    }
+    // 직접입력 칸을 비우면 드롭다운으로 복귀
+    function revertEmailDomainIfEmpty() {
+      if (!$('fEmailCustom').value.trim()) {
+        $('fEmailCustom').style.display = 'none';
+        $('fEmailCustom').classList.remove('invalid');
+        $('fEmailDomain').value = 'naver.com';
+        $('fEmailDomain').style.display = '';
+      }
+    }
+    // 저장된 email 문자열 → 아이디/도메인 칸으로 분리 로딩
+    function setEmailFields(email) {
+      $('fEmailId').classList.remove('invalid'); $('fEmailCustom').classList.remove('invalid');
+      $('eEmailErr').classList.remove('show');
+      const at = (email || '').lastIndexOf('@');
+      if (at < 0) {
+        $('fEmailId').value = email || ''; $('fEmailDomain').value = 'naver.com';
+        $('fEmailDomain').style.display = ''; $('fEmailCustom').style.display = 'none'; $('fEmailCustom').value = ''; return;
+      }
+      $('fEmailId').value = email.slice(0, at);
+      const dom = email.slice(at + 1);
+      if (EMAIL_DOMAINS.includes(dom)) {
+        $('fEmailDomain').value = dom; $('fEmailDomain').style.display = '';
+        $('fEmailCustom').style.display = 'none'; $('fEmailCustom').value = '';
+      } else {
+        $('fEmailDomain').value = '__custom'; $('fEmailDomain').style.display = 'none';
+        $('fEmailCustom').style.display = ''; $('fEmailCustom').value = dom;
+      }
+    }
+    // 현재 입력 칸 → email 문자열 (아이디·도메인 모두 비면 '')
+    function getEmailValue() {
+      const id = $('fEmailId').value.trim();
+      const dom = ($('fEmailDomain').value === '__custom' ? $('fEmailCustom').value.trim() : $('fEmailDomain').value);
+      if (!id && ($('fEmailDomain').value === '__custom' && !dom)) return '';
+      if (!id && !dom) return '';
+      if (!id) return '';
+      return id + '@' + dom;
+    }
+
     async function saveMember() {
       const name = $('fName').value.trim();
       if (!name) {
@@ -328,14 +397,40 @@
         $('acc1').classList.add('open');
         return;
       }
+      // 연락처·이메일 검증 (비어 있으면 통과, 값이 있으면 형식 확인)
+      $('fPhone').classList.remove('invalid'); $('ePhoneErr').classList.remove('show');
+      $('fPhoneHome').classList.remove('invalid'); $('ePhoneHomeErr').classList.remove('show');
+      $('fEmailId').classList.remove('invalid'); $('fEmailCustom').classList.remove('invalid'); $('eEmailErr').classList.remove('show');
+      const phoneVal = $('fPhone').value.trim();
+      if (phoneVal && !phoneOk(phoneVal)) {
+        $('fPhone').classList.add('invalid'); $('ePhoneErr').classList.add('show');
+        $('acc1').classList.add('open'); $('fPhone').focus();
+        return;
+      }
+      const phoneHomeVal = $('fPhoneHome').value.trim();
+      if (phoneHomeVal && !phoneOk(phoneHomeVal)) {
+        $('fPhoneHome').classList.add('invalid'); $('ePhoneHomeErr').classList.add('show');
+        $('acc1').classList.add('open'); $('fPhoneHome').focus();
+        return;
+      }
+      const emailVal = getEmailValue();
+      if (emailVal && !emailOk(emailVal)) {
+        $('fEmailId').classList.add('invalid');
+        if ($('fEmailDomain').value === '__custom') $('fEmailCustom').classList.add('invalid');
+        $('eEmailErr').classList.add('show');
+        $('acc1').classList.add('open');
+        ($('fEmailDomain').value === '__custom' && !$('fEmailCustom').value.trim() ? $('fEmailCustom') : $('fEmailId')).focus();
+        return;
+      }
       const base = {
         name,
         gender: $('fGender').value,
         birth: $('fBirth').value.trim(),
         birthCal: $('fBirthCal').value,
-        phone: $('fPhone').value.trim(),
+        phone: phoneVal,
+        phoneHome: phoneHomeVal,
         address: $('fAddress').value.trim(),
-        email: $('fEmail').value.trim(),
+        email: emailVal,
         regDate: $('fRegDate').value,
         regType: $('fRegType').value,
         guide: $('fGuide').value.trim(),
@@ -391,6 +486,12 @@
         alert('삭제 실패: ' + (e.code || e.message));
       }
     }
+
+    // 연락처 실시간 하이픈 + 이메일 도메인 선택 전환
+    $('fPhone').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
+    $('fPhoneHome').addEventListener('input', (e) => { e.target.value = fmtPhone(e.target.value); });
+    $('fEmailDomain').addEventListener('change', onEmailDomainChange);
+    $('fEmailCustom').addEventListener('blur', revertEmailDomainIfEmpty);
 
     // 접이식 토글
     document.querySelectorAll('.acc-head').forEach((h) => {
