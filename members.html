@@ -865,7 +865,7 @@
     }
     function dFields(m) {
       const age = calcAge(m.birth);
-      const birthTxt = m.birth ? (m.birth + (m.birthCal === 'lunar' ? ' (음)' : '') + (age != null ? ` · 만 ${age}세` : '')) : '';
+      const birthTxt = m.birth ? (m.birth + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · 만 ${age}세` : '')) : '';
       const addr = [m.zipcode ? '(' + m.zipcode + ')' : '', m.address, m.addressDetail].filter(Boolean).join(' ');
       const reg = [dot(m.regDate), m.regType].filter(Boolean).join(' · ');
       const wed = [m.marriage, dot(m.wedDate)].filter(Boolean).join(' · ');
@@ -927,7 +927,7 @@
     }
     function dColsBody(m) {
       const age = calcAge(m.birth);
-      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : '') + (age != null ? ` · 만 ${age}세` : '')) : '';
+      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · 만 ${age}세` : '')) : '';
       return `<div class="dsec">기본</div>
          ${drow('휴대폰', m.phone ? `<a href="tel:${esc(telClean(m.phone))}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
          ${drow('집전화', m.phoneHome ? `<a href="tel:${esc(telClean(m.phoneHome))}" style="color:var(--green); text-decoration:none;">${esc(m.phoneHome)}</a>` : '')}
