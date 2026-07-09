@@ -31,6 +31,7 @@
       '사모': ['사모'],
     };
     const ROLE_CATS = Object.keys(ROLE_GROUPS);
+    const OFFICER_CATS = ['목사', '장로', '안수집사', '권사'];
     function roleCatOf(sub) { return ROLE_CATS.find((c) => ROLE_GROUPS[c].includes(sub)) || ''; }
     function fillRoleCat(sel) { sel.innerHTML = ROLE_CATS.map((c) => `<option${c === '성도' ? ' selected' : ''}>${c}</option>`).join(''); }
     function fillRoleSub(sel, cat, pick) { sel.innerHTML = (ROLE_GROUPS[cat] || []).map((s) => `<option${s === pick ? ' selected' : ''}>${s}</option>`).join(''); }
@@ -209,12 +210,22 @@
         currentFilter = 'all';
         document.querySelectorAll('.ftab').forEach((x) => x.classList.toggle('ftab-on', x.dataset.filter === 'all'));
       }
+      const live = allMembers.filter((m) => !m.archived);
+      const catOf = (m) => m.roleCat || roleCatOf(m.role) || '성도';
+      $('cntAll').textContent = live.length;
+      $('cntNew').textContent = live.filter((m) => m.memberType === '새가족').length;
+      $('cntOfficer').textContent = live.filter((m) => OFFICER_CATS.includes(catOf(m))).length;
+      $('cntBaptized').textContent = live.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교')).length;
+      $('cntMember').textContent = live.filter((m) => m.memberType === '교인').length;
       const kw = $('searchInput').value.trim().toLowerCase();
       let rows;
       if (currentFilter === 'archived') rows = allMembers.filter((m) => m.archived);
       else {
         rows = allMembers.filter((m) => !m.archived);
         if (currentFilter === 'new') rows = rows.filter((m) => m.memberType === '새가족');
+        else if (currentFilter === 'officer') rows = rows.filter((m) => OFFICER_CATS.includes(m.roleCat || roleCatOf(m.role) || '성도'));
+        else if (currentFilter === 'baptized') rows = rows.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교'));
+        else if (currentFilter === 'member') rows = rows.filter((m) => m.memberType === '교인');
       }
       if (kw) rows = rows.filter((m) =>
         (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
@@ -387,7 +398,7 @@
       ];
       const extra = [
         ['phone', '집전화', m.phoneHome], ['mail', '이메일', m.email],
-        ['church', '이전교회', m.prevChurch], ['guide', '인도자', m.guide],
+        ['church', '이전교회', m.prevChurch], ['church', '옮긴교회', m.movedChurch], ['guide', '인도자', m.guide],
         ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
         ['calendar', '임명일', dot(m.roleDate)], ['church', '임직교회', m.roleChurch],
       ];
@@ -451,6 +462,7 @@
          ${drow('등록배경', esc(m.regType))}
          ${drow('인도자', esc(m.guide))}
          ${drow('이전교회', esc(m.prevChurch))}
+         ${drow('옮긴교회', esc(m.movedChurch))}
          ${drow('신급', esc(BADGE_GRADE(m)))}
          ${drow('신급교회', esc(m.gradeChurch))}
          ${drow('집례자', esc(m.officiant))}
@@ -541,6 +553,7 @@
       $('fRegType').value = m?.regType || '';
       $('fGuide').value = m?.guide || '';
       $('fPrev').value = m?.prevChurch || '';
+      $('fMoved').value = m?.movedChurch || '';
       $('fGrade').value = m?.grade || '';
       $('fGradeDate').value = m?.gradeDate || '';
       $('fGradeChurch').value = m?.gradeChurch || '';
@@ -554,6 +567,9 @@
       $('fStatus').value = m?.status || '예배출석';
       $('fHead').value = m?.headName || '';
       $('fRel').value = m?.relation || '';
+      if (m && !$('fHead').value && ((m.headId && m.headId === m.id) || m.relation === '본인')) {
+        $('fHead').value = m.name || '';
+      }
       $('fMarriage').value = m?.marriage || '';
       $('fWed').value = m?.wedDate || '';
       $('fSpouse').value = m?.spouseName || '';
@@ -812,8 +828,10 @@
       const selfName = $('fName').value.trim();
       if (!typed) { openPicker('head'); return; }
       if (selfName && typed === selfName) {
-        pickHeadId = null; setHeadBadge(null);
-        $('fRel').value = '본인'; $('fHead').value = '';
+        pickHeadId = editingId || null;
+        const _selfM = editingId ? allMembers.find((x) => x.id === editingId) : null;
+        setHeadBadge(_selfM ? _selfM.memberNo : null);
+        $('fRel').value = '본인';
         return;
       }
       const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
@@ -861,7 +879,10 @@
         }
         return { householdId: hh || selfId, headId: pickHeadId, headName: $('fHead').value, relation: relation || '' };
       }
-      return { householdId: selfId, headId: selfId, headName: '', relation: relation || '본인' };
+      const _selfName = $('fName').value.trim();
+      const _typedHead = $('fHead').value.trim();
+      const _isSelf = _typedHead && _typedHead === _selfName;
+      return { householdId: selfId, headId: selfId, headName: _isSelf ? _selfName : '', relation: relation || '본인' };
     }
 
     // ── 연락처·이메일 유틸 ──
@@ -981,6 +1002,7 @@
         guide: $('fGuide').value.trim(),
         guideId: pickGuideId || null,
         prevChurch: $('fPrev').value.trim(),
+        movedChurch: $('fMoved').value.trim(),
         grade: $('fGrade').value,
         gradeDate: $('fGradeDate').value,
         gradeChurch: $('fGradeChurch').value.trim(),

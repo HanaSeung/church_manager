@@ -14,13 +14,16 @@
       --text: #1f2421; --muted: #6b726d; --line: #e2e5e1;
       --danger: #c0392b; --amber-soft: #fbeed9; --amber-text: #946400;
     }
+    html { scrollbar-gutter: stable; }
     body { font-family: 'Malgun Gothic', system-ui, sans-serif;
       background: var(--bg); color: var(--text); line-height: 1.6; }
     .wrap { max-width: 720px; margin: 0 auto; padding: 0 0 90px; min-height: 100vh; }
     .empty { text-align:center; color:var(--muted); font-size:14px; padding:48px 16px; }
-    .ftab { border:1px solid var(--line); background:var(--card); padding:6px 16px;
-      font-size:13px; color:var(--muted); cursor:pointer; border-radius:99px; font-family:inherit; }
+    .ftab { display:flex; align-items:center; justify-content:center; gap:5px; border:1px solid var(--line); background:var(--card); padding:6px 8px;
+      font-size:13px; color:var(--muted); cursor:pointer; border-radius:99px; font-family:inherit; flex-shrink:0; white-space:nowrap; }
     .ftab-on { background:var(--green); color:#fff; border-color:var(--green); }
+    .fcnt { min-width:17px; padding:0 5px; border-radius:99px; background:var(--green-soft); color:var(--green-deep); font-size:11px; text-align:center; }
+    .ftab-on .fcnt { background:rgba(255,255,255,.24); color:#fff; }
     .mrow { display:flex; align-items:center; gap:12px; padding:11px 4px;
       border-top:1px solid var(--line); cursor:pointer; }
     .mrow:first-child { border-top:none; }
@@ -129,12 +132,17 @@
           <option value="created">등록순</option>
         </select>
       </div>
-      <div style="display:flex; gap:6px; padding:12px 14px 4px; align-items:center;">
-        <button class="ftab ftab-on" data-filter="all">전체</button>
-        <button class="ftab" data-filter="new">새가족</button>
+      <div style="display:flex; gap:6px; padding:12px 14px 4px; align-items:center; overflow-x:auto; flex-wrap:nowrap;">
+        <div style="flex-shrink:0; display:grid; grid-template-columns:repeat(5,76px); gap:6px;">
+          <button class="ftab ftab-on" data-filter="all"><span>전체</span><span class="fcnt" id="cntAll">0</span></button>
+          <button class="ftab" data-filter="new"><span>새가족</span><span class="fcnt" id="cntNew">0</span></button>
+          <button class="ftab" data-filter="officer" title="직분자"><span>직분</span><span class="fcnt" id="cntOfficer">0</span></button>
+          <button class="ftab" data-filter="baptized" title="세례교인"><span>세례</span><span class="fcnt" id="cntBaptized">0</span></button>
+          <button class="ftab" data-filter="member" title="교인"><span>교인</span><span class="fcnt" id="cntMember">0</span></button>
+        </div>
         <button class="ftab" data-filter="archived" id="ftabArchived" style="display:none;">보관됨</button>
-        <button id="importBtn" class="btn-line" style="margin-left:auto; font-size:12px; padding:5px 10px;">가져오기</button>
-        <button id="assignNoBtn" class="btn-line" style="font-size:12px; padding:5px 10px;">번호 일괄 부여</button>
+        <button id="importBtn" class="btn-line" style="margin-left:auto; flex-shrink:0; font-size:12px; padding:5px 10px;">가져오기</button>
+        <button id="assignNoBtn" class="btn-line" style="flex-shrink:0; font-size:12px; padding:5px 10px;">번호 일괄 부여</button>
       </div>
       <div id="importPanel" style="display:none; margin:6px 14px 0; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px;">
         <div style="font-size:13px; font-weight:700; margin-bottom:6px;">일괄 가져오기
@@ -280,7 +288,10 @@
               <button class="btn-line" id="guideBtn">검색</button>
             </div>
           </div>
-          <div class="field"><label>이전 교회</label><input id="fPrev" type="text" placeholder="○○교회"></div>
+          <div class="frow">
+            <div class="field"><label>이전 교회</label><input id="fPrev" type="text" placeholder="○○교회"></div>
+            <div class="field"><label>옮긴 교회</label><input id="fMoved" type="text" placeholder="○○교회"></div>
+          </div>
           <div class="frow">
             <div class="field"><label>신급</label>
               <select id="fGrade"><option value="">선택</option><option>원입</option><option>학습</option><option>세례</option><option>입교</option><option>유아세례</option></select>
@@ -467,6 +478,7 @@
       '사모': ['사모'],
     };
     const ROLE_CATS = Object.keys(ROLE_GROUPS);
+    const OFFICER_CATS = ['목사', '장로', '안수집사', '권사'];
     function roleCatOf(sub) { return ROLE_CATS.find((c) => ROLE_GROUPS[c].includes(sub)) || ''; }
     function fillRoleCat(sel) { sel.innerHTML = ROLE_CATS.map((c) => `<option${c === '성도' ? ' selected' : ''}>${c}</option>`).join(''); }
     function fillRoleSub(sel, cat, pick) { sel.innerHTML = (ROLE_GROUPS[cat] || []).map((s) => `<option${s === pick ? ' selected' : ''}>${s}</option>`).join(''); }
@@ -645,12 +657,22 @@
         currentFilter = 'all';
         document.querySelectorAll('.ftab').forEach((x) => x.classList.toggle('ftab-on', x.dataset.filter === 'all'));
       }
+      const live = allMembers.filter((m) => !m.archived);
+      const catOf = (m) => m.roleCat || roleCatOf(m.role) || '성도';
+      $('cntAll').textContent = live.length;
+      $('cntNew').textContent = live.filter((m) => m.memberType === '새가족').length;
+      $('cntOfficer').textContent = live.filter((m) => OFFICER_CATS.includes(catOf(m))).length;
+      $('cntBaptized').textContent = live.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교')).length;
+      $('cntMember').textContent = live.filter((m) => m.memberType === '교인').length;
       const kw = $('searchInput').value.trim().toLowerCase();
       let rows;
       if (currentFilter === 'archived') rows = allMembers.filter((m) => m.archived);
       else {
         rows = allMembers.filter((m) => !m.archived);
         if (currentFilter === 'new') rows = rows.filter((m) => m.memberType === '새가족');
+        else if (currentFilter === 'officer') rows = rows.filter((m) => OFFICER_CATS.includes(m.roleCat || roleCatOf(m.role) || '성도'));
+        else if (currentFilter === 'baptized') rows = rows.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교'));
+        else if (currentFilter === 'member') rows = rows.filter((m) => m.memberType === '교인');
       }
       if (kw) rows = rows.filter((m) =>
         (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
@@ -823,7 +845,7 @@
       ];
       const extra = [
         ['phone', '집전화', m.phoneHome], ['mail', '이메일', m.email],
-        ['church', '이전교회', m.prevChurch], ['guide', '인도자', m.guide],
+        ['church', '이전교회', m.prevChurch], ['church', '옮긴교회', m.movedChurch], ['guide', '인도자', m.guide],
         ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
         ['calendar', '임명일', dot(m.roleDate)], ['church', '임직교회', m.roleChurch],
       ];
@@ -887,6 +909,7 @@
          ${drow('등록배경', esc(m.regType))}
          ${drow('인도자', esc(m.guide))}
          ${drow('이전교회', esc(m.prevChurch))}
+         ${drow('옮긴교회', esc(m.movedChurch))}
          ${drow('신급', esc(BADGE_GRADE(m)))}
          ${drow('신급교회', esc(m.gradeChurch))}
          ${drow('집례자', esc(m.officiant))}
@@ -977,6 +1000,7 @@
       $('fRegType').value = m?.regType || '';
       $('fGuide').value = m?.guide || '';
       $('fPrev').value = m?.prevChurch || '';
+      $('fMoved').value = m?.movedChurch || '';
       $('fGrade').value = m?.grade || '';
       $('fGradeDate').value = m?.gradeDate || '';
       $('fGradeChurch').value = m?.gradeChurch || '';
@@ -1425,6 +1449,7 @@
         guide: $('fGuide').value.trim(),
         guideId: pickGuideId || null,
         prevChurch: $('fPrev').value.trim(),
+        movedChurch: $('fMoved').value.trim(),
         grade: $('fGrade').value,
         gradeDate: $('fGradeDate').value,
         gradeChurch: $('fGradeChurch').value.trim(),
