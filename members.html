@@ -24,8 +24,10 @@
     .ftab-on { background:var(--green); color:#fff; border-color:var(--green); }
     .fcnt { min-width:17px; padding:0 5px; border-radius:99px; background:var(--green-soft); color:var(--green-deep); font-size:11px; text-align:center; }
     .ftab-on .fcnt { background:rgba(255,255,255,.24); color:#fff; }
-    #searchRow { transition:max-height .22s ease, opacity .2s ease, padding .22s ease; max-height:66px; overflow:hidden; }
+    #searchRow { padding:12px 14px 0; transition:max-height .22s ease, opacity .2s ease, padding .22s ease; max-height:66px; overflow:hidden; }
     #listView.tbc #searchRow { max-height:0; opacity:0; padding-top:0; padding-bottom:0; }
+    #tabRow { padding:12px 14px 4px; transition:padding-top .22s ease; }
+    #listView.tbc #tabRow { padding-top:3px; }
     .mrow { display:flex; align-items:center; gap:12px; padding:11px 4px;
       border-top:1px solid var(--line); cursor:pointer; }
     .mrow:first-child { border-top:none; }
@@ -116,12 +118,18 @@
       <span id="layoutBtn" style="display:none; color:var(--green); cursor:pointer; margin-right:14px;" aria-label="디자인"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
       <button id="editBtn" style="display:none; border:none; background:none; color:var(--green);
         font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;">편집</button>
+      <div id="detailPager" style="display:none; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+        align-items:center; border:1px solid #cfe0d7; border-radius:99px; overflow:hidden; background:var(--card); z-index:1;">
+        <span id="pgPrev" style="padding:4px 12px; font-size:16px; line-height:1; color:var(--green); cursor:pointer; user-select:none;">‹</span>
+        <span id="pgPos" style="padding:4px 8px; font-size:12px; color:var(--muted); border-left:1px solid var(--line); border-right:1px solid var(--line);">– / –</span>
+        <span id="pgNext" style="padding:4px 12px; font-size:16px; line-height:1; color:var(--green); cursor:pointer; user-select:none;">›</span>
+      </div>
     </header>
 
     <!-- ===== 목록 ===== -->
     <div id="listView">
       <div id="listToolbar" style="position:sticky; top:53px; z-index:9; background:var(--bg); border-bottom:1px solid var(--line);">
-      <div id="searchRow" style="padding:12px 14px 0; display:flex; gap:8px; align-items:center;">
+      <div id="searchRow" style="display:flex; gap:8px; align-items:center;">
         <div style="flex:1; min-width:0; display:flex; align-items:center; gap:8px; background:var(--bg);
           border:1px solid var(--line); border-radius:10px; padding:9px 12px;">
           <span style="color:var(--muted); font-size:15px;">🔍</span>
@@ -135,7 +143,7 @@
           <option value="created">등록순</option>
         </select>
       </div>
-      <div style="display:flex; gap:6px; padding:12px 14px 4px; align-items:center; overflow-x:auto; flex-wrap:nowrap;">
+      <div id="tabRow" style="display:flex; gap:6px; align-items:center; overflow-x:auto; flex-wrap:nowrap;">
         <div style="flex-shrink:0; display:grid; grid-template-columns:repeat(5,76px); gap:6px;">
           <button class="ftab ftab-on" data-filter="all"><span>전체</span><span class="fcnt" id="cntAll">0</span></button>
           <button class="ftab" data-filter="new"><span>새가족</span><span class="fcnt" id="cntNew">0</span></button>
@@ -468,6 +476,7 @@
     let overlayPushed = false;
     // 편집 중 선택된 참조(세대주/배우자)의 문서 id
     let pickHeadId = null, pickSpouseId = null, pickGuideId = null;
+    let detailOrder = [];
 
     const ROLE_GROUPS = {
       '목사': ['담임목사', '부목사', '소속목사', '원로목사'],
@@ -681,6 +690,7 @@
       if (kw) rows = rows.filter((m) =>
         (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
       rows = sortRows(rows);
+      detailOrder = rows.map((x) => x.id);
 
       if (rows.length === 0) {
         $('memberList').innerHTML = `<div class="empty">${(kw || currentFilter !== 'all') ? '해당하는 성도가 없습니다.' : '아직 등록된 성도가 없습니다.<br>＋ 버튼으로 추가하세요.'}</div>`;
@@ -988,6 +998,19 @@
           $('extraToggleArrow').textContent = nowOpen ? '▴' : '▾';
           extraOpen = nowOpen;
         });
+      }
+      const _pi = detailOrder.indexOf(id);
+      const _pg = $('detailPager');
+      if (_pi < 0) { _pg.style.display = 'none'; }
+      else {
+        _pg.style.display = 'flex';
+        $('pgPos').textContent = `${_pi + 1} / ${detailOrder.length}`;
+        const hasPrev = _pi > 0, hasNext = _pi < detailOrder.length - 1;
+        const pv = $('pgPrev'), nx = $('pgNext');
+        pv.onclick = hasPrev ? () => openDetail(detailOrder[_pi - 1]) : null;
+        nx.onclick = hasNext ? () => openDetail(detailOrder[_pi + 1]) : null;
+        pv.style.opacity = hasPrev ? '1' : '.25'; pv.style.cursor = hasPrev ? 'pointer' : 'default';
+        nx.style.opacity = hasNext ? '1' : '.25'; nx.style.cursor = hasNext ? 'pointer' : 'default';
       }
       show('detail');
     }
@@ -1605,6 +1628,7 @@
       $('fab').style.display = (view === 'list') ? 'flex' : 'none';
       $('editBtn').style.display = (view === 'detail') ? 'block' : 'none';
       $('layoutBtn').style.display = (view === 'detail') ? 'block' : 'none';
+      if (view !== 'detail') $('detailPager').style.display = 'none';
       $('barTitle').textContent =
         (view === 'list') ? '성도 관리' :
         (view === 'detail') ? '성도 정보' :

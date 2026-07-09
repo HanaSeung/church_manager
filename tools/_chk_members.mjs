@@ -17,6 +17,7 @@
     let overlayPushed = false;
     // 편집 중 선택된 참조(세대주/배우자)의 문서 id
     let pickHeadId = null, pickSpouseId = null, pickGuideId = null;
+    let detailOrder = [];
 
     const ROLE_GROUPS = {
       '목사': ['담임목사', '부목사', '소속목사', '원로목사'],
@@ -230,6 +231,7 @@
       if (kw) rows = rows.filter((m) =>
         (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
       rows = sortRows(rows);
+      detailOrder = rows.map((x) => x.id);
 
       if (rows.length === 0) {
         $('memberList').innerHTML = `<div class="empty">${(kw || currentFilter !== 'all') ? '해당하는 성도가 없습니다.' : '아직 등록된 성도가 없습니다.<br>＋ 버튼으로 추가하세요.'}</div>`;
@@ -537,6 +539,19 @@
           $('extraToggleArrow').textContent = nowOpen ? '▴' : '▾';
           extraOpen = nowOpen;
         });
+      }
+      const _pi = detailOrder.indexOf(id);
+      const _pg = $('detailPager');
+      if (_pi < 0) { _pg.style.display = 'none'; }
+      else {
+        _pg.style.display = 'flex';
+        $('pgPos').textContent = `${_pi + 1} / ${detailOrder.length}`;
+        const hasPrev = _pi > 0, hasNext = _pi < detailOrder.length - 1;
+        const pv = $('pgPrev'), nx = $('pgNext');
+        pv.onclick = hasPrev ? () => openDetail(detailOrder[_pi - 1]) : null;
+        nx.onclick = hasNext ? () => openDetail(detailOrder[_pi + 1]) : null;
+        pv.style.opacity = hasPrev ? '1' : '.25'; pv.style.cursor = hasPrev ? 'pointer' : 'default';
+        nx.style.opacity = hasNext ? '1' : '.25'; nx.style.cursor = hasNext ? 'pointer' : 'default';
       }
       show('detail');
     }
@@ -1154,6 +1169,7 @@
       $('fab').style.display = (view === 'list') ? 'flex' : 'none';
       $('editBtn').style.display = (view === 'detail') ? 'block' : 'none';
       $('layoutBtn').style.display = (view === 'detail') ? 'block' : 'none';
+      if (view !== 'detail') $('detailPager').style.display = 'none';
       $('barTitle').textContent =
         (view === 'list') ? '성도 관리' :
         (view === 'detail') ? '성도 정보' :
