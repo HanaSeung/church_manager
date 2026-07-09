@@ -47,6 +47,12 @@
     background-repeat:no-repeat; background-position:right 10px center; padding-right:32px;}
   .row{display:flex; align-items:center; gap:8px;}
   .row .grow{flex:1; min-width:0;}
+  .selwrap{position:relative; min-width:0;}
+  .selface{height:38px; line-height:38px; border:1px solid var(--line); border-radius:8px; background:#fff;
+    padding:0 32px 0 12px; font-size:14px; color:var(--text); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat; background-position:right 10px center;}
+  .selreal{position:absolute; inset:0; width:100%; height:100%; opacity:0; margin:0;}
   .codebox{min-width:78px; height:38px; border:1px solid var(--line); border-radius:8px; background:#f9fafb;
     display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--muted); letter-spacing:.5px;}
   .weekbadge{background:#e6f0fb; color:#1d4ed8; font-size:13px; font-weight:600; border-radius:8px; padding:0 12px; height:38px; display:flex; align-items:center; white-space:nowrap;}
@@ -114,7 +120,10 @@
       <div class="field">
         <div class="flabel"><span>헌금 항목</span><span class="sub">목록에서 선택</span></div>
         <div class="row">
-          <select id="incCat" class="grow"></select>
+          <div class="selwrap grow">
+            <div class="selface" id="incCatFace"><span id="incCatText">–</span></div>
+            <select id="incCat" class="selreal"></select>
+          </div>
           <div class="codebox" id="incCode">–</div>
         </div>
         <div class="phint">목록 관리: 설치 › 수입항목설정</div>
@@ -181,6 +190,10 @@
       <div><div class="srt">지출 항목 설정</div><div class="srd">지출 항목 추가·수정·삭제</div></div>
       <span style="color:var(--hint);">›</span>
     </div>
+    <div class="setrow" id="setCloseBtn">
+      <div><div class="srt">결산 월 설정</div><div class="srd">회계연도 결산(마감) 월 지정</div></div>
+      <span style="color:var(--hint);">›</span>
+    </div>
     <div id="itemEditor" class="hide" style="margin-top:6px;"></div>
   </div>
 
@@ -195,6 +208,21 @@
       <div style="display:flex; gap:8px; margin-top:6px;">
         <button id="qaCancel" style="flex:1; height:44px; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:8px; font-size:15px; cursor:pointer;">취소</button>
         <button id="qaSubmit" style="flex:1; height:44px; border:none; background:var(--green); color:#fff; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;">등록</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="closeMonthModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--card); border-radius:14px; padding:20px; width:100%; max-width:320px;">
+      <div style="font-size:16px; font-weight:600; margin-bottom:4px;">결산 월 설정</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:16px;">회계연도가 마감(결산)되는 달을 고르세요.</div>
+      <div class="field"><div class="flabel">결산 월</div>
+        <select id="closeMonthSel"></select>
+      </div>
+      <div id="closeMonthHint" style="font-size:12px; color:var(--text); background:#e7f1ec; border-radius:8px; padding:10px 12px; margin-bottom:14px; line-height:1.5;"></div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button id="cmCancel" style="flex:1; height:44px; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:8px; font-size:15px; cursor:pointer;">취소</button>
+        <button id="cmSave" style="flex:1; height:44px; border:none; background:var(--green); color:#fff; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;">수정</button>
       </div>
     </div>
   </div>
@@ -261,6 +289,7 @@
   // ----- 상태 -----
   let me = { uid: null, level: 1 };
   let config = null;
+  let incomeNodes = [];   // 수입 항목 노드(전 연도). 날짜의 회계연도로 걸러 드롭다운 구성.
   let members = [];
   let membersOk = true;
   let curTab = 'inc';
@@ -284,17 +313,117 @@
   });
 
   async function loadConfig() {
+    // 지출 항목: 기존 단일 문서(finConfig/items). 지출은 아직 노드화 전.
     try {
       const s = await getDoc(doc(db, 'finConfig', 'items'));
-      config = s.exists() ? s.data() : JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-      if (!Array.isArray(config.income)) config.income = [];
-      if (!Array.isArray(config.expense)) config.expense = [];
+      const d = s.exists() ? s.data() : DEFAULT_CONFIG;
+      config = { income: [], expense: Array.isArray(d.expense) ? d.expense : [] };
     } catch (e) {
-      config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+      config = { income: [], expense: JSON.parse(JSON.stringify(DEFAULT_CONFIG.expense)) };
     }
+    // 결산월 + 수입 노드(전 연도) 로드. 실제 config.income은 입력 날짜의 회계연도로 refreshIncomeCats()에서 구성.
+    try {
+      const st = await getDoc(doc(db, 'finConfig', 'settings'));
+      if (st.exists() && st.data().closeMonth) closeMonth = Number(st.data().closeMonth);
+    } catch (e) { /* 기본 12 */ }
+    try {
+      const qs = await getDocs(collection(db, 'finConfig'));
+      incomeNodes = qs.docs.map((x) => ({ id: x.id, ...x.data() })).filter((n) => n.kind === 'income');
+    } catch (e) { incomeNodes = []; }
+  }
+  // 노드 → 활성 말단 경로 배열 {c1,c2,c3,code} (income.html이 만든 트리를 헌금 드롭다운용으로 평탄화)
+  function leavesFromNodes(nodes) {
+    const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
+    const hasChild = {}; nodes.forEach((n) => { if (n.parentId) hasChild[n.parentId] = true; });
+    const codeNum = (c) => Number(String(c).replace(/[^0-9]/g, '')) || 0;
+    const activeChain = (n) => { let cur = n, g = 0; while (cur && g++ < 10) { if (cur.active === false) return false; cur = cur.parentId ? byId[cur.parentId] : null; } return true; };
+    const nameChain = (n) => { const a = []; let cur = n, g = 0; while (cur && g++ < 10) { a.unshift(cur.name || ''); cur = cur.parentId ? byId[cur.parentId] : null; } return a; };
+    return nodes
+      .filter((n) => !hasChild[n.id] && activeChain(n))
+      .map((n) => { const ch = nameChain(n); return { c1: ch[0] || '', c2: ch[1] || '', c3: ch[2] || '', code: n.code || '' }; })
+      .sort((a, b) => codeNum(a.code) - codeNum(b.code));
+  }
+
+  // ----- 회계연도(결산월 기준) -----
+  function currentFY() { const d = new Date(); return (d.getMonth() + 1) <= closeMonth ? d.getFullYear() : d.getFullYear() + 1; }
+  function fiscalYearOf(ymd) {
+    const [y, m] = (ymd || '').split('-').map(Number);
+    if (!y || !m) return currentFY();
+    return m <= closeMonth ? y : y + 1;
+  }
+  // 노드(현재 연도) → 들여쓰기 옵션 + 말단 목록. 부모(자식 있음)는 선택 불가 제목 줄.
+  function buildIncomeTreeOptions(nodes) {
+    const codeNum = (c) => Number(String(c).replace(/[^0-9]/g, '')) || 0;
+    const childrenOf = (pid) => nodes
+      .filter((n) => (n.parentId || null) === (pid || null))
+      .sort((a, b) => codeNum(a.code) - codeNum(b.code));
+    const hasChild = {}; nodes.forEach((n) => { if (n.parentId) hasChild[n.parentId] = true; });
+    const IND = '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';
+    const leaves = [], opts = [];
+    const walk = (pid, level, anc) => {
+      childrenOf(pid).forEach((n) => {
+        const chain = anc.concat(n.name || '');
+        const indent = IND.repeat(level - 1);
+        if (hasChild[n.id]) {
+          opts.push(`<option disabled style="color:var(--hint);">${indent}${esc(n.name || '')}</option>`);
+          walk(n.id, level + 1, chain);
+        } else {
+          const idx = leaves.length;
+          leaves.push({ c1: chain[0] || '', c2: chain[1] || '', c3: chain[2] || '', code: n.code || '' });
+          opts.push(`<option value="${idx}">${indent}·\u00A0${esc(n.name || '')}</option>`);
+        }
+      });
+    };
+    walk(null, 1, []);
+    return { opts, leaves };
+  }
+  // 입력 날짜가 속한 회계연도의 세트로 수입 드롭다운 구성 (B안: 들여쓰기, 부모는 선택 불가)
+  function refreshIncomeCats() {
+    const fy = fiscalYearOf($('inDate') ? $('inDate').value : '');
+    const { opts, leaves } = buildIncomeTreeOptions(incomeNodes.filter((n) => Number(n.fy) === fy));
+    config.income = leaves;
+    if (leaves.length) {
+      $('incCat').innerHTML = opts.join('');
+      $('incCat').value = '0';   // 첫 말단 항목 기본 선택(부모 줄은 선택 불가)
+    } else {
+      $('incCat').innerHTML = `<option value="">(${fy}년도 항목 없음)</option>`;
+    }
+    if (curTab === 'inc') updateCode();
+    updateIncFace();
   }
   async function saveConfig() {
-    await setDoc(doc(db, 'finConfig', 'items'), config);
+    // 지출 항목만 저장 (수입은 income.html 노드에서 관리)
+    await setDoc(doc(db, 'finConfig', 'items'), { expense: config.expense });
+  }
+
+  // ----- 결산 월 설정 (finConfig/settings.closeMonth, 기본 12) -----
+  let closeMonth = 12;
+  async function openCloseMonth() {
+    try {
+      const s = await getDoc(doc(db, 'finConfig', 'settings'));
+      closeMonth = (s.exists() && s.data().closeMonth) ? Number(s.data().closeMonth) : 12;
+    } catch (e) { closeMonth = 12; }
+    $('closeMonthSel').innerHTML = Array.from({ length: 12 }, (_, i) =>
+      `<option value="${i + 1}"${(i + 1) === closeMonth ? ' selected' : ''}>${i + 1}월</option>`).join('');
+    updateCloseHint();
+    $('closeMonthModal').style.display = 'flex';
+  }
+  function updateCloseHint() {
+    const m = Number($('closeMonthSel').value);
+    const nextStart = m === 12 ? '내년 1월 1일' : `${m + 1}월 1일`;
+    $('closeMonthHint').textContent = `${m}월 말일에 결산하고, ${nextStart}부터 새 회계연도가 시작됩니다.`;
+  }
+  function closeCloseMonth() { $('closeMonthModal').style.display = 'none'; }
+  async function saveCloseMonth() {
+    const m = Number($('closeMonthSel').value);
+    const btn = $('cmSave'); btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      await setDoc(doc(db, 'finConfig', 'settings'), { closeMonth: m }, { merge: true });
+      closeMonth = m;
+      closeCloseMonth();
+      showMsg(`결산 월을 ${m}월로 저장했습니다.`);
+    } catch (e) { alert('저장에 실패했습니다: ' + (e.code || e.message)); }
+    finally { btn.disabled = false; btn.textContent = '수정'; }
   }
 
   async function loadMembers() {
@@ -314,13 +443,19 @@
 
   // ----- 항목 셀렉트 -----
   function populateSelects() {
-    $('incCat').innerHTML = config.income.map((it, i) => `<option value="${i}">${esc(pathOf(it))}</option>`).join('') || '<option value="">(항목 없음)</option>';
     $('expCat').innerHTML = config.expense.map((it, i) => `<option value="${i}">${esc(pathOf(it))}</option>`).join('') || '<option value="">(항목 없음)</option>';
+    refreshIncomeCats();
     updateCode();
   }
   function updateCode() {
     if (curTab === 'inc') { const it = config.income[+$('incCat').value]; $('incCode').textContent = it ? it.code : '–'; }
     else if (curTab === 'exp') { const it = config.expense[+$('expCat').value]; $('expCode').textContent = it ? it.code : '–'; }
+  }
+  // 닫힌 칸에는 선택한 항목의 '이름만' 표시(들여쓰기·표식 없이)
+  function updateIncFace() {
+    const it = config.income[+$('incCat').value];
+    $('incCatText').textContent = it ? (it.c3 || it.c2 || it.c1 || '–')
+      : ($('incCat').options[0] ? $('incCat').options[0].textContent : '–');
   }
 
   // ----- 이름 검색 / 연동 / 간편등록 -----
@@ -536,6 +671,7 @@
     $('memoLabel').textContent = t === 'inc' ? '비고' : '적요';
     $('memoSub').textContent = t === 'inc' ? '(선택)' : '(내용)';
     resetForm();
+    if (t === 'inc') refreshIncomeCats();
     updateCode();
     loadList();
   }
@@ -552,8 +688,8 @@
     document.querySelectorAll('.tab').forEach((el) => { el.onclick = () => setTab(el.dataset.tab); });
     $('backBtn').onclick = () => { location.href = 'index.html'; };
     $('rightBtn').onclick = () => alert('통계 화면은 이후 단계에서 추가됩니다.');
-    $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; });
-    $('incCat').addEventListener('change', updateCode);
+    $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); });
+    $('incCat').addEventListener('change', () => { updateCode(); updateIncFace(); });
     $('expCat').addEventListener('change', updateCode);
     $('incName').addEventListener('input', onNameEdit);
     $('incName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doNameSearch(); } });
@@ -564,8 +700,13 @@
     $('saveBtn').onclick = save;
     $('searchBtn').onclick = loadList;
     $('thisWeekBtn').onclick = () => { const [a, b] = weekRange($('inDate').value || today); $('fromDate').value = a; $('toDate').value = b; loadList(); };
-    $('setIncBtn').onclick = () => openEditor('income');
+    $('setIncBtn').onclick = () => { location.href = 'income.html'; };
     $('setExpBtn').onclick = () => openEditor('expense');
+    $('setCloseBtn').onclick = openCloseMonth;
+    $('cmCancel').onclick = closeCloseMonth;
+    $('cmSave').onclick = saveCloseMonth;
+    $('closeMonthSel').addEventListener('change', updateCloseHint);
+    $('closeMonthModal').addEventListener('click', (e) => { if (e.target === $('closeMonthModal')) closeCloseMonth(); });
 
     setTab('inc');
   }
