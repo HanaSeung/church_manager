@@ -259,6 +259,22 @@
     }
 
     $('searchInput').addEventListener('input', renderList);
+    (function setupStickyToolbar() {
+      const header = document.querySelector('header');
+      const bar = $('listToolbar'); const lv = $('listView');
+      function setTop() { if (header && bar) bar.style.top = header.offsetHeight + 'px'; }
+      setTop(); window.addEventListener('resize', setTop);
+      let ticking = false;
+      window.addEventListener('scroll', () => {
+        if (ticking) return; ticking = true;
+        requestAnimationFrame(() => {
+          const y = window.scrollY || document.documentElement.scrollTop || 0;
+          if (y > 40) lv.classList.add('tbc');
+          else if (y < 12) lv.classList.remove('tbc');
+          ticking = false;
+        });
+      }, { passive: true });
+    })();
     $('sortSel').value = currentSort;
     $('sortSel').addEventListener('change', (e) => {
       currentSort = e.target.value;

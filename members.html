@@ -24,6 +24,8 @@
     .ftab-on { background:var(--green); color:#fff; border-color:var(--green); }
     .fcnt { min-width:17px; padding:0 5px; border-radius:99px; background:var(--green-soft); color:var(--green-deep); font-size:11px; text-align:center; }
     .ftab-on .fcnt { background:rgba(255,255,255,.24); color:#fff; }
+    #searchRow { transition:max-height .22s ease, opacity .2s ease, padding .22s ease; max-height:66px; overflow:hidden; }
+    #listView.tbc #searchRow { max-height:0; opacity:0; padding-top:0; padding-bottom:0; }
     .mrow { display:flex; align-items:center; gap:12px; padding:11px 4px;
       border-top:1px solid var(--line); cursor:pointer; }
     .mrow:first-child { border-top:none; }
@@ -118,7 +120,8 @@
 
     <!-- ===== 목록 ===== -->
     <div id="listView">
-      <div style="padding:12px 14px 0; display:flex; gap:8px; align-items:center;">
+      <div id="listToolbar" style="position:sticky; top:53px; z-index:9; background:var(--bg); border-bottom:1px solid var(--line);">
+      <div id="searchRow" style="padding:12px 14px 0; display:flex; gap:8px; align-items:center;">
         <div style="flex:1; min-width:0; display:flex; align-items:center; gap:8px; background:var(--bg);
           border:1px solid var(--line); border-radius:10px; padding:9px 12px;">
           <span style="color:var(--muted); font-size:15px;">🔍</span>
@@ -143,6 +146,7 @@
         <button class="ftab" data-filter="archived" id="ftabArchived" style="display:none;">보관됨</button>
         <button id="importBtn" class="btn-line" style="margin-left:auto; flex-shrink:0; font-size:12px; padding:5px 10px;">가져오기</button>
         <button id="assignNoBtn" class="btn-line" style="flex-shrink:0; font-size:12px; padding:5px 10px;">번호 일괄 부여</button>
+      </div>
       </div>
       <div id="importPanel" style="display:none; margin:6px 14px 0; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px;">
         <div style="font-size:13px; font-weight:700; margin-bottom:6px;">일괄 가져오기
@@ -706,6 +710,22 @@
     }
 
     $('searchInput').addEventListener('input', renderList);
+    (function setupStickyToolbar() {
+      const header = document.querySelector('header');
+      const bar = $('listToolbar'); const lv = $('listView');
+      function setTop() { if (header && bar) bar.style.top = header.offsetHeight + 'px'; }
+      setTop(); window.addEventListener('resize', setTop);
+      let ticking = false;
+      window.addEventListener('scroll', () => {
+        if (ticking) return; ticking = true;
+        requestAnimationFrame(() => {
+          const y = window.scrollY || document.documentElement.scrollTop || 0;
+          if (y > 40) lv.classList.add('tbc');
+          else if (y < 12) lv.classList.remove('tbc');
+          ticking = false;
+        });
+      }, { passive: true });
+    })();
     $('sortSel').value = currentSort;
     $('sortSel').addEventListener('change', (e) => {
       currentSort = e.target.value;
