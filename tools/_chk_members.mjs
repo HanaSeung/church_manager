@@ -277,6 +277,23 @@
         });
       }, { passive: true });
     })();
+    (function setupDetailSwipe() {
+      const dv = $('detailView');
+      if (!dv) return;
+      let sx = 0, sy = 0;
+      dv.addEventListener('touchstart', (e) => {
+        const t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY;
+      }, { passive: true });
+      dv.addEventListener('touchend', (e) => {
+        const t = e.changedTouches[0];
+        const dx = t.clientX - sx, dy = t.clientY - sy;
+        if (Math.abs(dx) < 60 || Math.abs(dx) <= Math.abs(dy)) return; // 세로 스크롤·탭은 무시
+        const i = detailOrder.indexOf(detailId);
+        if (i < 0) return;
+        if (dx < 0 && i < detailOrder.length - 1) openDetail(detailOrder[i + 1]); // 왼쪽 밀기=다음
+        else if (dx > 0 && i > 0) openDetail(detailOrder[i - 1]);                 // 오른쪽 밀기=이전
+      }, { passive: true });
+    })();
     $('sortSel').value = currentSort;
     $('sortSel').addEventListener('change', (e) => {
       currentSort = e.target.value;
