@@ -10,13 +10,47 @@
     let me = { uid: null, name: '', level: 1 };
     let allMembers = [];
     let currentFilter = 'all';
+    let currentSort = localStorage.getItem('cm_members_sort') || 'name';
+    let extraOpen = false, extraOpenHH = null;
     let editingId = null;
     let detailId = null;
     let overlayPushed = false;
     // 편집 중 선택된 참조(세대주/배우자)의 문서 id
     let pickHeadId = null, pickSpouseId = null;
 
-    const ROLES = ['목사', '전도사', '장로', '권사', '안수집사', '서리집사', '성도'];
+    const ROLE_GROUPS = {
+      '목사': ['담임목사', '부목사', '소속목사', '원로목사'],
+      '강도사': ['강도사'],
+      '전도사': ['교육전도사', '교육사', '심방전도사', '전도사'],
+      '장로': ['시무장로', '원로장로', '은퇴장로', '협동장로', '장로'],
+      '안수집사': ['안수집사', '피택안수집사', '은퇴안수집사', '협동안수집사'],
+      '권사': ['권사', '원로권사', '명예권사', '시무권사', '은퇴권사', '무임권사'],
+      '집사': ['집사', '원로집사', '서리집사', '명예집사', '은퇴집사'],
+      '성도': ['성도'],
+      '선교사': ['선교사'],
+      '사모': ['사모'],
+    };
+    const ROLE_CATS = Object.keys(ROLE_GROUPS);
+    function roleCatOf(sub) { return ROLE_CATS.find((c) => ROLE_GROUPS[c].includes(sub)) || ''; }
+    function fillRoleCat(sel) { sel.innerHTML = ROLE_CATS.map((c) => `<option${c === '성도' ? ' selected' : ''}>${c}</option>`).join(''); }
+    function fillRoleSub(sel, cat, pick) { sel.innerHTML = (ROLE_GROUPS[cat] || []).map((s) => `<option${s === pick ? ' selected' : ''}>${s}</option>`).join(''); }
+    const padNo = (n) => (Number.isFinite(Number(n)) && Number(n) > 0) ? '#' + String(Number(n)).padStart(3, '0') : '';
+    function roleRank(m) {
+      const c = m.roleCat || roleCatOf(m.role) || '성도';
+      const ci = ROLE_CATS.indexOf(c); const si = (ROLE_GROUPS[c] || []).indexOf(m.role);
+      return [ci < 0 ? 99 : ci, si < 0 ? 99 : si];
+    }
+    function sortRows(rows) {
+      const arr = rows.slice();
+      if (currentSort === 'no') arr.sort((a, b) => (Number(a.memberNo) || 1e9) - (Number(b.memberNo) || 1e9));
+      else if (currentSort === 'created') arr.sort((a, b) => ((b.createdAt && b.createdAt.seconds) || 0) - ((a.createdAt && a.createdAt.seconds) || 0));
+      else if (currentSort === 'role') arr.sort((a, b) => {
+        const ra = roleRank(a), rb = roleRank(b);
+        return (ra[0] - rb[0]) || (ra[1] - rb[1]) || (a.name || '').localeCompare(b.name || '', 'ko');
+      });
+      else arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+      return arr;
+    }
 
     const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,7 +74,9 @@
         const lv = snap.exists() ? (snap.data().level || 1) : 1;
         if (lv < 4) { alert('성도 관리는 관리자만 이용할 수 있습니다.'); location.replace('index.html'); return; }
         me = { uid: user.uid, name: (snap.data().name || user.displayName || '관리자'), level: lv };
-        $('fRole').innerHTML = ROLES.map((r) => `<option${r === '성도' ? ' selected' : ''}>${r}</option>`).join('');
+        fillRoleCat($('fRoleCat'));
+        fillRoleSub($('fRole'), $('fRoleCat').value, '성도');
+        $('fRoleCat').addEventListener('change', () => fillRoleSub($('fRole'), $('fRoleCat').value));
         loadMembers();
       } catch (e) {
         alert('정보를 불러오지 못했습니다. 다시 시도해 주세요.');
@@ -85,6 +121,74 @@
       }
     }
 
+    // ── 일괄 가져오기 (일회용, 관리자) ──
+    let importParsed = null;
+    const IMPORT_FIELDS = ['name', 'gender', 'birth', 'birthCal', 'phone', 'phoneHome', 'zipcode', 'address', 'addressDetail', 'email', 'regDate', 'regType', 'guide', 'prevChurch', 'grade', 'gradeDate', 'gradeChurch', 'officiant', 'roleCat', 'role', 'memberType', 'status', 'marriage', 'wedDate', 'spouseName', 'memo'];
+    function importLog(msg, color) {
+      $('importLog').innerHTML += `<div${color ? ` style="color:var(--${color});"` : ''}>${esc(msg)}</div>`;
+    }
+    $('importBtn').addEventListener('click', () => {
+      const p = $('importPanel');
+      p.style.display = (p.style.display === 'none') ? 'block' : 'none';
+    });
+    $('importPreviewBtn').addEventListener('click', () => {
+      $('importLog').innerHTML = ''; importParsed = null; $('importRunBtn').disabled = true;
+      let arr;
+      try { arr = JSON.parse($('importText').value); }
+      catch (e) { importLog('JSON 파싱 실패: ' + e.message, 'danger'); return; }
+      if (!Array.isArray(arr) || !arr.length) { importLog('배열이 비어 있습니다.', 'danger'); return; }
+      importParsed = arr;
+      const heads = arr.filter((r) => r.headName).length;
+      const spouses = arr.filter((r) => r.spouseName).length;
+      importLog(`총 ${arr.length}명 · 세대주 연결 ${heads}건 · 배우자 연결 ${spouses}건`);
+      importLog('“가져오기”를 누르면 등록을 시작합니다.');
+      $('importRunBtn').disabled = false;
+    });
+    $('importRunBtn').addEventListener('click', async () => {
+      if (!importParsed) return;
+      if (!confirm(`${importParsed.length}명을 등록합니다. 계속할까요?`)) return;
+      const btn = $('importRunBtn'); btn.disabled = true; $('importPreviewBtn').disabled = true;
+      try {
+        let no = nextMemberNo() - 1;
+        const created = [];
+        for (const r of importParsed) {
+          no += 1;
+          const base = {}; IMPORT_FIELDS.forEach((f) => { base[f] = (r[f] !== undefined && r[f] !== null) ? r[f] : ''; });
+          base.prayers = Array.isArray(r.prayers) ? r.prayers : [];
+          base.createdAt = serverTimestamp(); base.createdBy = me.uid; base.memberNo = no; base.updatedAt = serverTimestamp();
+          const ref = await addDoc(collection(db, 'members'),
+            { ...base, householdId: null, headId: null, headName: '', relation: r.relation || '' });
+          created.push({ id: ref.id, name: r.name, relation: r.relation || '', headName: r.headName || '', spouseName: r.spouseName || '' });
+        }
+        importLog(`✓ 1단계 등록 완료 — ${created.length}명`, 'green');
+        const nameToId = {};
+        allMembers.forEach((m) => { if (m.name) nameToId[m.name] = m.id; });
+        created.forEach((c) => { nameToId[c.name] = c.id; });
+        let hc = 0, sc = 0;
+        for (const c of created) {
+          const patch = {};
+          if (c.relation && c.relation !== '본인' && c.headName) {
+            const hid = nameToId[c.headName];
+            if (hid) { patch.headId = hid; patch.householdId = hid; patch.headName = c.headName; hc++; }
+            else importLog(`⚠ 세대주 미발견: ${c.name} → ${c.headName}`, 'danger');
+          } else {
+            patch.householdId = c.id; patch.headId = c.id; patch.headName = ''; if (!c.relation) patch.relation = '본인';
+          }
+          if (c.spouseName) { const sid = nameToId[c.spouseName]; if (sid) { patch.spouseId = sid; sc++; } }
+          if (Object.keys(patch).length) await updateDoc(doc(db, 'members', c.id), patch);
+        }
+        importLog(`✓ 2단계 세대주 연결 — ${hc}건`, 'green');
+        importLog(`✓ 2단계 배우자 연결 — ${sc}건`, 'green');
+        await loadMembers();
+        importLog('완료. 목록을 새로고침했습니다.', 'green');
+        $('importText').value = ''; importParsed = null;
+      } catch (e) {
+        importLog('실패: ' + (e.code || e.message), 'danger');
+      } finally {
+        btn.disabled = false; $('importPreviewBtn').disabled = false;
+      }
+    });
+
     async function loadMembers() {
       try {
         const qs = await getDocs(collection(db, 'members'));
@@ -97,14 +201,27 @@
     }
 
     function renderList() {
+      const na = allMembers.filter((m) => m.archived).length;
+      const ta = $('ftabArchived');
+      ta.style.display = na ? '' : 'none';
+      ta.textContent = '보관됨 ' + na;
+      if (currentFilter === 'archived' && na === 0) {
+        currentFilter = 'all';
+        document.querySelectorAll('.ftab').forEach((x) => x.classList.toggle('ftab-on', x.dataset.filter === 'all'));
+      }
       const kw = $('searchInput').value.trim().toLowerCase();
-      let rows = allMembers;
-      if (currentFilter === 'new') rows = rows.filter((m) => m.memberType === '새가족');
+      let rows;
+      if (currentFilter === 'archived') rows = allMembers.filter((m) => m.archived);
+      else {
+        rows = allMembers.filter((m) => !m.archived);
+        if (currentFilter === 'new') rows = rows.filter((m) => m.memberType === '새가족');
+      }
       if (kw) rows = rows.filter((m) =>
         (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
+      rows = sortRows(rows);
 
       if (rows.length === 0) {
-        $('memberList').innerHTML = `<div class="empty">${(kw || currentFilter === 'new') ? '해당하는 성도가 없습니다.' : '아직 등록된 성도가 없습니다.<br>＋ 버튼으로 추가하세요.'}</div>`;
+        $('memberList').innerHTML = `<div class="empty">${(kw || currentFilter !== 'all') ? '해당하는 성도가 없습니다.' : '아직 등록된 성도가 없습니다.<br>＋ 버튼으로 추가하세요.'}</div>`;
         return;
       }
       $('memberList').innerHTML = '';
@@ -117,7 +234,7 @@
           `<div class="avatar">${esc(initial(m.name))}</div>
            <div style="flex:1; min-width:0;">
              <div style="display:flex; align-items:center; gap:7px;">
-               ${Number.isFinite(Number(m.memberNo)) && Number(m.memberNo) > 0 ? `<span style="font-size:12px; color:var(--muted); flex-shrink:0;">#${Number(m.memberNo)}</span>` : ''}
+               ${padNo(m.memberNo) ? `<span style="font-size:12px; color:var(--muted); flex-shrink:0; font-family:monospace;">${padNo(m.memberNo)}</span>` : ''}
                <span style="font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(m.name || '(이름 없음)')}</span>
                ${m.role ? `<span class="badge">${esc(m.role)}</span>` : ''}
                ${isNew ? '<span class="badge badge-new">새가족</span>' : ''}
@@ -131,6 +248,12 @@
     }
 
     $('searchInput').addEventListener('input', renderList);
+    $('sortSel').value = currentSort;
+    $('sortSel').addEventListener('change', (e) => {
+      currentSort = e.target.value;
+      localStorage.setItem('cm_members_sort', currentSort);
+      renderList();
+    });
     document.querySelectorAll('.ftab').forEach((b) => {
       b.addEventListener('click', () => {
         document.querySelectorAll('.ftab').forEach((x) => x.classList.remove('ftab-on'));
@@ -142,6 +265,38 @@
 
     $('assignNoBtn').addEventListener('click', assignAllMemberNos);
 
+    function openLayoutSheet() {
+      const cur = getLayout();
+      const ln = (w) => `<div style="height:4px; border-radius:2px; background:var(--line); width:${w};"></div>`;
+      const dt = (c) => `<div style="width:14px; height:14px; border-radius:50%; background:${c || '#cfe0d7'};"></div>`;
+      const bt = (f) => `<div style="flex:1; height:12px; border-radius:3px; background:${f ? 'var(--green)' : 'var(--line)'};"></div>`;
+      const thumbs = {
+        '1': `<div style="display:flex; flex-direction:column; align-items:center; gap:5px;">${dt()}${ln('50%')}<div style="display:flex; gap:4px; width:100%;">${bt()}${bt()}${bt()}${bt()}</div><div style="width:100%; display:flex; flex-direction:column; gap:4px; margin-top:2px;">${ln('90%')}${ln('80%')}${ln('85%')}</div></div>`,
+        '2': `<div style="display:flex; flex-direction:column; gap:5px;"><div style="height:20px; border-radius:5px; background:var(--green); display:flex; align-items:center; padding:0 5px; gap:4px;"><div style="width:11px; height:11px; border-radius:50%; background:rgba(255,255,255,.33);"></div><div style="height:4px; width:40%; background:rgba(255,255,255,.47); border-radius:2px;"></div></div><div style="display:flex; gap:4px;"><div style="flex:1; height:20px; background:var(--bg); border-radius:4px;"></div><div style="flex:1; height:20px; background:var(--bg); border-radius:4px;"></div><div style="flex:1; height:20px; background:var(--bg); border-radius:4px;"></div></div><div style="border:1px solid var(--line); border-radius:5px; padding:5px; display:flex; flex-direction:column; gap:4px;">${ln('80%')}${ln('70%')}</div></div>`,
+        '3': `<div style="display:flex; flex-direction:column; align-items:center; gap:5px;">${dt()}${ln('45%')}<div style="width:100%; border:1px solid var(--line); border-radius:5px; padding:5px; display:flex; flex-direction:column; gap:6px; margin-top:2px;"><div style="display:flex; gap:6px; align-items:center;">${dt('var(--green-soft)')}${ln('70%')}</div><div style="display:flex; gap:6px; align-items:center;">${dt('var(--green-soft)')}${ln('60%')}</div><div style="display:flex; gap:6px; align-items:center;">${dt('var(--green-soft)')}${ln('75%')}</div></div></div>`,
+        '4': `<div style="display:flex; flex-direction:column; align-items:center; gap:5px;">${dt()}<div style="display:flex; gap:4px; width:100%;">${bt(1)}${bt()}${bt()}${bt()}</div><div style="width:100%; border:1px solid var(--line); border-radius:5px; padding:5px; display:flex; flex-direction:column; gap:6px;"><div style="display:flex; gap:6px; align-items:center;">${dt('var(--green-soft)')}${ln('70%')}</div><div style="display:flex; gap:6px; align-items:center;">${dt('var(--green-soft)')}${ln('65%')}</div></div></div>`,
+      };
+      $('layoutList').innerHTML = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:14px;">${Object.entries(DETAIL_LAYOUTS).map(([n, t]) => {
+        const on = n === cur;
+        return `<div data-lay="${n}" style="border:${on ? '2px solid var(--green)' : '1px solid var(--line)'}; border-radius:10px; overflow:hidden; background:var(--card); cursor:pointer;">
+          <div style="height:96px; background:var(--bg); padding:9px; overflow:hidden;">${thumbs[n]}</div>
+          <div style="display:flex; align-items:center; gap:5px; padding:7px 9px; border-top:1px solid var(--line); ${on ? 'background:var(--green-soft);' : ''}">
+            <span style="width:17px; height:17px; border-radius:50%; background:${on ? 'var(--green)' : '#eceeea'}; color:${on ? '#fff' : 'var(--muted)'}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${n}</span>
+            <span style="flex:1; font-size:12px; color:var(--text); ${on ? 'font-weight:700;' : ''}">${t.replace(' (액션+리스트)', '')}${n === '1' ? ' · 기본' : ''}</span>
+            ${on ? '<span style="color:var(--green); font-size:14px;">✓</span>' : ''}</div></div>`;
+      }).join('')}</div>`;
+      $('layoutBk').style.display = 'flex';
+    }
+    $('layoutBtn').addEventListener('click', openLayoutSheet);
+    $('layoutList').addEventListener('click', (e) => {
+      const r = e.target.closest('[data-lay]'); if (!r) return;
+      localStorage.setItem('cm_detail_layout', r.dataset.lay);
+      $('layoutBk').style.display = 'none';
+      if (detailId) openDetail(detailId);
+    });
+    $('layoutClose').addEventListener('click', () => { $('layoutBk').style.display = 'none'; });
+    $('layoutBk').addEventListener('click', (e) => { if (e.target === $('layoutBk')) $('layoutBk').style.display = 'none'; });
+
     const BADGE_GRADE = (m) => {
       if (!m.grade) return '';
       return m.grade + (m.gradeDate ? ' · ' + dot(m.gradeDate) : '');
@@ -150,47 +305,146 @@
       if (!v) return '';
       return `<div class="drow"><div class="dk">${k}</div><div class="dv">${v}</div></div>`;
     }
+    let _relRank = null;
+    function relRank(rel) {
+      if (!_relRank) {
+        _relRank = {};
+        document.querySelectorAll('#fRel option').forEach((o, i) => { _relRank[o.value] = i; });
+      }
+      const k = (rel || '').replace('(세대주)', '');
+      return (k in _relRank) ? _relRank[k] : 999;
+    }
+    function relLabel(rel) { const k = (rel || '').replace('(세대주)', ''); return k === '본인' ? '세대주' : k; }
     function householdMembers(m) {
       if (!m.householdId) return [];
       return allMembers.filter((x) => x.householdId === m.householdId)
-        .sort((a, b) => (a.relation === '본인(세대주)' ? -1 : 0) - (b.relation === '본인(세대주)' ? -1 : 0));
+        .sort((a, b) => relRank(a.relation) - relRank(b.relation) || (a.name || '').localeCompare(b.name || '', 'ko'));
     }
 
-    function openDetail(id) {
-      const m = allMembers.find((x) => x.id === id);
-      if (!m) return;
-      detailId = id;
+    // ── 상세화면 디자인(레이아웃) ──
+    const DETAIL_LAYOUTS = { '1': '액션 우선형', '2': '요약 카드형', '3': '아이콘 리스트형', '4': '추천안 (액션+리스트)' };
+    function getLayout() { const v = localStorage.getItem('cm_detail_layout') || '1'; return DETAIL_LAYOUTS[v] ? v : '1'; }
+    const telClean = (v) => (v || '').replace(/[^0-9+]/g, '');
+    function mapUrl(m) { const a = [m.address, m.addressDetail].filter(Boolean).join(' '); return a ? 'https://map.kakao.com/link/search/' + encodeURIComponent(a) : ''; }
+    const ICONS = {
+      phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+      message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+      mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+      map: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+      mobile: '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+      cake: '<path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3"/><path d="M7 4h.01M12 4h.01M17 4h.01"/>',
+      calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+      award: '<circle cx="12" cy="8" r="6"/><path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"/>',
+      church: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+      guide: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
+      user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+      heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/>',
+    };
+    function svg(name, size) {
+      const s = size || 20;
+      return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+    }
+
+    function dIdentity(m) {
       const age = calcAge(m.birth);
       const top = [m.gender, (age != null ? age + '세' : null), m.memberType, m.status].filter(Boolean).join(' · ');
-      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : '') + (age != null ? ` · 만 ${age}세` : '')) : '';
-
+      return `<div style="text-align:center; margin-bottom:14px;">
+        <div class="avatar" style="width:66px; height:66px; font-size:26px; margin:0 auto 8px;">${esc(initial(m.name))}</div>
+        <div style="font-size:19px; font-weight:700;">${esc(m.name || '(이름 없음)')}${m.role ? ` <span class="badge" style="vertical-align:3px;">${esc(m.role)}</span>` : ''}${m.memberType === '새가족' ? ' <span class="badge badge-new" style="vertical-align:3px;">새가족</span>' : ''}</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:3px;">${esc(top)}</div></div>`;
+    }
+    function dIdentityGreen(m) {
+      const age = calcAge(m.birth);
+      const meta = [m.role, m.gender, (age != null ? age + '세' : null), m.status].filter(Boolean).join(' · ');
+      return `<div style="background:var(--green); border-radius:14px; padding:16px; color:#fff; display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+        <div style="width:54px; height:54px; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; font-size:22px; font-weight:700; display:flex; align-items:center; justify-content:center;">${esc(initial(m.name))}</div>
+        <div><div style="font-size:19px; font-weight:700;">${esc(m.name || '(이름 없음)')}</div><div style="font-size:12px; color:#d7e7df; margin-top:2px;">${esc(meta)}</div></div></div>`;
+    }
+    function dActions(m, primaryPhone) {
+      const tel = m.phone || m.phoneHome; const map = mapUrl(m);
+      const cell = (href, icon, label, primary) => {
+        const on = !!href;
+        const box = (primary && on) ? 'background:var(--green); color:#fff;' : 'background:var(--card); border:1px solid var(--line); color:var(--green);';
+        return `<a ${on ? `href="${href}"` : ''} style="flex:1; text-decoration:none; ${on ? '' : 'opacity:.35; pointer-events:none;'}">
+          <div style="height:44px; ${box} border-radius:11px; display:flex; align-items:center; justify-content:center;">${svg(icon)}</div>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px; text-align:center;">${label}</div></a>`;
+      };
+      return `<div style="display:flex; gap:8px; margin:2px 0 14px;">
+        ${cell(tel ? 'tel:' + telClean(tel) : '', 'phone', '전화', primaryPhone)}
+        ${cell(tel ? 'sms:' + telClean(tel) : '', 'message', '문자', false)}
+        ${cell(m.email ? 'mailto:' + m.email : '', 'mail', '메일', false)}
+        ${cell(map, 'map', '지도', false)}</div>`;
+    }
+    function dFields(m) {
+      const age = calcAge(m.birth);
+      const birthTxt = m.birth ? (m.birth + (m.birthCal === 'lunar' ? ' (음)' : '') + (age != null ? ` · 만 ${age}세` : '')) : '';
+      const addr = [m.zipcode ? '(' + m.zipcode + ')' : '', m.address, m.addressDetail].filter(Boolean).join(' ');
+      const reg = [dot(m.regDate), m.regType].filter(Boolean).join(' · ');
+      const wed = [m.marriage, dot(m.wedDate)].filter(Boolean).join(' · ');
+      const core = [
+        ['mobile', '휴대폰', m.phone || ''], ['cake', '생일', birthTxt], ['map', '주소', addr],
+        ['calendar', '등록', reg], ['award', '신급', BADGE_GRADE(m)], ['heart', '결혼', wed],
+      ];
+      const extra = [
+        ['phone', '집전화', m.phoneHome], ['mail', '이메일', m.email],
+        ['church', '이전교회', m.prevChurch], ['guide', '인도자', m.guide],
+        ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
+      ];
+      return { core, extra };
+    }
+    function dIconCard(m) {
+      const { core, extra } = dFields(m);
+      const row = (r, top, muted) => `<div style="display:flex; align-items:center; gap:11px; padding:11px 14px; ${top ? 'border-top:1px solid var(--line);' : ''}">
+          <span style="width:20px; color:var(--green); display:flex; align-items:center; justify-content:center; flex-shrink:0;">${svg(r[0], 18)}</span>
+          <span style="font-size:12px; color:var(--muted); width:52px; flex-shrink:0;">${r[1]}</span>
+          <span style="flex:1; font-size:14px; color:${muted ? 'var(--muted)' : 'var(--text)'};">${esc(r[2] || '—')}</span></div>`;
+      const coreHtml = core.map((r, i) => row(r, i > 0, !r[2])).join('');
+      const extraHtml = extra.map((r) => row(r, true, !r[2])).join('');
+      return `<div style="background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;">
+        ${coreHtml}
+        <div id="extraFields" style="display:none;">${extraHtml}</div>
+        <div id="extraToggle" style="display:flex; align-items:center; justify-content:center; gap:5px; padding:9px; border-top:1px solid var(--line); color:var(--green); font-size:13px; cursor:pointer;"><span id="extraToggleLabel">전체 보기</span><span id="extraToggleArrow" style="font-size:11px;">▾</span></div>
+      </div>`;
+    }
+    function dSummaryTiles(m) {
+      const yr = (m.regDate || '').slice(0, 4);
+      const tiles = [['신급', m.grade || '—'], ['등록', yr || '—'], ['상태', m.status || '—']];
+      return `<div style="display:flex; gap:8px; margin-bottom:10px;">${tiles.map((t) =>
+        `<div style="flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; text-align:center;"><div style="font-size:11px; color:var(--muted);">${t[0]}</div><div style="font-size:14px; font-weight:700; color:var(--text); margin-top:2px;">${esc(t[1])}</div></div>`).join('')}</div>`;
+    }
+    function dFamilyChips(m) {
       const fam = householdMembers(m);
-      let famHtml = '';
-      if (fam.length > 1 || (m.relation && m.relation !== '')) {
-        const chips = fam.map((x) =>
-          `<span style="font-size:12.5px; padding:4px 10px; border-radius:99px; background:var(--bg);">${esc(x.name)}${x.relation ? ' · ' + esc(x.relation.replace('(세대주)', '')) : ''}</span>`).join(' ');
-        famHtml = `<div style="margin-top:10px;"><div style="font-size:12px; color:var(--muted); margin-bottom:7px;">가정 구성원</div><div style="display:flex; gap:7px; flex-wrap:wrap;">${chips || '—'}</div></div>`;
-      }
-
-      $('detailView').innerHTML =
-        `<div style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:8px;">
-           <div class="avatar" style="width:72px; height:72px; font-size:26px;">${esc(initial(m.name))}</div>
-           <div style="text-align:center;">
-             <div style="font-size:19px; font-weight:700;">${esc(m.name || '(이름 없음)')}
-               ${m.role ? `<span class="badge" style="vertical-align:3px;">${esc(m.role)}</span>` : ''}
-               ${m.memberType === '새가족' ? '<span class="badge badge-new" style="vertical-align:3px;">새가족</span>' : ''}
-             </div>
-             <div style="font-size:13px; color:var(--muted); margin-top:3px;">${esc(top)}</div>
-           </div>
-         </div>
-
-         <div class="dsec">기본</div>
-         ${drow('휴대폰', m.phone ? `<a href="tel:${esc(m.phone)}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
-         ${drow('집전화', m.phoneHome ? `<a href="tel:${esc(m.phoneHome)}" style="color:var(--green); text-decoration:none;">${esc(m.phoneHome)}</a>` : '')}
+      if (!(fam.length > 1 || (m.relation && m.relation !== ''))) return '';
+      const chips = fam.map((x) => {
+        const self = x.id === m.id;
+        const style = self ? 'background:var(--green); color:#fff; font-weight:700;' : 'background:var(--bg); opacity:.55; cursor:pointer;';
+        return `<span ${self ? '' : `data-openid="${x.id}"`} style="font-size:12.5px; padding:4px 10px; border-radius:99px; ${style}">${esc(x.name)}${relLabel(x.relation) ? ' · ' + esc(relLabel(x.relation)) : ''}</span>`;
+      }).join(' ');
+      return `<div style="margin-top:10px;"><div style="font-size:12px; color:var(--muted); margin-bottom:7px;">가정 구성원</div><div style="display:flex; gap:7px; flex-wrap:wrap;">${chips || '—'}</div></div>`;
+    }
+    function dFamilyCard(m) {
+      const fam = householdMembers(m);
+      if (!(fam.length > 1 || (m.relation && m.relation !== ''))) return '';
+      return `<div style="font-size:12px; color:var(--muted); margin:14px 4px 6px;">가정 구성원</div>
+        <div style="background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;">${fam.map((x, i) => {
+          const self = x.id === m.id; const relD = relLabel(x.relation);
+          const kage = calcAge(x.birth); const relTxt = relD + ((kage != null && /아들|딸|손자|손녀/.test(relD)) ? ` · ${kage}세` : '');
+          const av = self ? 'background:var(--green); color:#fff;' : 'background:var(--green-soft); color:var(--green);';
+          return `<div ${self ? '' : `data-openid="${x.id}"`} style="display:flex; align-items:center; gap:11px; padding:11px 14px; ${i ? 'border-top:1px solid var(--line);' : ''} ${self ? 'background:var(--green-soft);' : 'opacity:.55; cursor:pointer;'}">
+            <span style="width:30px; height:30px; border-radius:50%; ${av} font-size:12px; display:flex; align-items:center; justify-content:center;">${esc(initial(x.name))}</span>
+            <span style="flex:1; font-size:14px; color:var(--text); ${self ? 'font-weight:700;' : ''}">${esc(x.name)}</span>
+            <span style="font-size:12px; color:var(--muted);">${esc(relTxt)}</span></div>`;
+        }).join('')}</div>`;
+    }
+    function dColsBody(m) {
+      const age = calcAge(m.birth);
+      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : '') + (age != null ? ` · 만 ${age}세` : '')) : '';
+      return `<div class="dsec">기본</div>
+         ${drow('휴대폰', m.phone ? `<a href="tel:${esc(telClean(m.phone))}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
+         ${drow('집전화', m.phoneHome ? `<a href="tel:${esc(telClean(m.phoneHome))}" style="color:var(--green); text-decoration:none;">${esc(m.phoneHome)}</a>` : '')}
          ${drow('생일', birthTxt)}
          ${drow('이메일', esc(m.email))}
          ${drow('주소', esc([m.zipcode ? '(' + m.zipcode + ')' : '', m.address, m.addressDetail].filter(Boolean).join(' ')))}
-
          <div class="dsec">등록</div>
          ${drow('등록일', esc(dot(m.regDate)))}
          ${drow('등록배경', esc(m.regType))}
@@ -199,18 +453,60 @@
          ${drow('신급', esc(BADGE_GRADE(m)))}
          ${drow('신급교회', esc(m.gradeChurch))}
          ${drow('집례자', esc(m.officiant))}
-
          <div class="dsec">가족</div>
          ${drow('결혼관계', esc(m.marriage))}
          ${drow('결혼일', esc(dot(m.wedDate)))}
          ${drow('배우자', esc(m.spouseName))}
-         ${famHtml}
+         ${dFamilyChips(m)}`;
+    }
+    function dMemoPrayers(m) {
+      return `${m.memo ? `<div class="dsec">메모</div><div style="font-size:14px; color:var(--text); white-space:pre-wrap; padding-top:6px;">${esc(m.memo)}</div>` : ''}
+         ${(Array.isArray(m.prayers) && m.prayers.length) ? `<div class="dsec">기도제목</div>${[...m.prayers].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((p) => `<div style="padding:7px 0; border-top:1px solid var(--line);"><span style="font-size:12px; color:var(--muted); margin-right:8px;">${esc(p.date || '')}</span><span style="font-size:14px; color:var(--text); white-space:pre-wrap;">${esc(p.text || '')}</span></div>`).join('')}` : ''}`;
+    }
+    function dFooter(m) {
+      return `${m.archived
+        ? `<div style="background:var(--amber-soft); color:var(--amber-text); border-radius:8px; padding:8px 12px; font-size:13px; text-align:center; margin-top:22px;">보관됨 · 명부 목록에서 숨겨진 상태입니다.</div>
+           <button id="dRestore" class="btn-line" style="width:100%; height:46px; margin-top:10px; color:var(--green); border-color:var(--green);">명부로 복원</button>`
+        : `<button id="dArchive" class="btn-line" style="width:100%; height:46px; margin-top:22px;">명부에서 숨김</button>`}
+         <div style="text-align:center; margin-top:14px;">
+           <span id="dHardDelete" style="font-size:13px; color:var(--danger); cursor:pointer; border-bottom:1px solid #e7c9c4;">완전 삭제</span>
+           <div style="font-size:11px; color:var(--muted); margin-top:4px;">되돌릴 수 없음 · 참조·헌금 확인 후</div></div>`;
+    }
+    function renderDetailBody(m) {
+      const L = getLayout();
+      if (L === '2') return dIdentityGreen(m) + dSummaryTiles(m) + dIconCard(m) + dFamilyCard(m);
+      if (L === '3') return dIdentity(m) + dIconCard(m) + dFamilyCard(m);
+      if (L === '4') return dIdentity(m) + dActions(m, true) + dIconCard(m) + dFamilyCard(m);
+      return dIdentity(m) + dActions(m, false) + dColsBody(m);
+    }
 
-         ${m.memo ? `<div class="dsec">메모</div><div style="font-size:14px; color:var(--text); white-space:pre-wrap; padding-top:6px;">${esc(m.memo)}</div>` : ''}
-         ${(Array.isArray(m.prayers) && m.prayers.length) ? `<div class="dsec">기도제목</div>${[...m.prayers].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((p) => `<div style="padding:7px 0; border-top:1px solid var(--line);"><span style="font-size:12px; color:var(--muted); margin-right:8px;">${esc(p.date || '')}</span><span style="font-size:14px; color:var(--text); white-space:pre-wrap;">${esc(p.text || '')}</span></div>`).join('')}` : ''}
-
-         <button id="dDelete" class="btn-line" style="width:100%; height:46px; margin-top:22px; color:var(--danger); border-color:#e7c9c4;">삭제</button>`;
-      $('dDelete').addEventListener('click', () => removeMember(id));
+    function openDetail(id) {
+      const m = allMembers.find((x) => x.id === id);
+      if (!m) return;
+      detailId = id;
+      const hh = m.householdId || m.id;
+      if (hh !== extraOpenHH) { extraOpen = false; extraOpenHH = hh; }
+      $('detailView').innerHTML = renderDetailBody(m) + dMemoPrayers(m) + dFooter(m);
+      if (m.archived) $('dRestore').addEventListener('click', () => restoreMember(id));
+      else $('dArchive').addEventListener('click', () => archiveMember(id));
+      $('dHardDelete').addEventListener('click', () => hardDeleteMember(id));
+      $('detailView').querySelectorAll('[data-openid]').forEach((el) =>
+        el.addEventListener('click', () => openDetail(el.dataset.openid)));
+      const et = $('extraToggle');
+      if (et) {
+        if (extraOpen) {
+          $('extraFields').style.display = '';
+          $('extraToggleLabel').textContent = '접기';
+          $('extraToggleArrow').textContent = '▴';
+        }
+        et.addEventListener('click', () => {
+          const nowOpen = $('extraFields').style.display === 'none';
+          $('extraFields').style.display = nowOpen ? '' : 'none';
+          $('extraToggleLabel').textContent = nowOpen ? '접기' : '전체 보기';
+          $('extraToggleArrow').textContent = nowOpen ? '▴' : '▾';
+          extraOpen = nowOpen;
+        });
+      }
       show('detail');
     }
 
@@ -246,7 +542,9 @@
       $('fGradeDate').value = m?.gradeDate || '';
       $('fGradeChurch').value = m?.gradeChurch || '';
       $('fOfficiant').value = m?.officiant || '';
-      $('fRole').value = m?.role || '성도';
+      { const rc = m?.roleCat || roleCatOf(m?.role) || '성도';
+        $('fRoleCat').value = rc;
+        fillRoleSub($('fRole'), rc, m?.role || (ROLE_GROUPS[rc] || [])[0] || '성도'); }
       $('fType').value = m?.memberType || '교인';
       $('fStatus').value = m?.status || '예배출석';
       $('fHead').value = m?.headName || '';
@@ -411,7 +709,7 @@
     function setHeadBadge(no) {
       const b = $('headNoBadge');
       if (no !== null && no !== undefined && no !== '') {
-        b.textContent = '#' + no; b.style.display = 'flex';
+        b.textContent = padNo(no) || ('#' + no); b.style.display = 'flex';
       } else { b.textContent = ''; b.style.display = 'none'; }
     }
     // [검색] 클릭: 본인 이름 비교 → 명부 조회 → 연결/팝업/안내
@@ -570,6 +868,7 @@
         gradeDate: $('fGradeDate').value,
         gradeChurch: $('fGradeChurch').value.trim(),
         officiant: $('fOfficiant').value.trim(),
+        roleCat: $('fRoleCat').value,
         role: $('fRole').value,
         memberType: $('fType').value,
         status: $('fStatus').value,
@@ -607,13 +906,39 @@
       }
     }
 
-    async function removeMember(id) {
+    async function archiveMember(id) {
       const m = allMembers.find((x) => x.id === id);
-      if (!confirm(`'${m?.name || '이 성도'}' 님을 명부에서 삭제할까요?`)) return;
+      if (!confirm(`'${m?.name || '이 성도'}' 님을 명부에서 숨길까요?\n문서는 보존되며 언제든 복원할 수 있습니다.`)) return;
+      try {
+        await updateDoc(doc(db, 'members', id), { archived: true, archivedAt: serverTimestamp(), archivedBy: me.uid });
+        await loadMembers();
+        leaveToList(); closeViaBack();
+      } catch (e) {
+        alert('숨김 실패: ' + (e.code || e.message));
+      }
+    }
+    async function restoreMember(id) {
+      try {
+        await updateDoc(doc(db, 'members', id), { archived: false, archivedAt: null, archivedBy: null });
+        await loadMembers();
+        leaveToList(); closeViaBack();
+      } catch (e) {
+        alert('복원 실패: ' + (e.code || e.message));
+      }
+    }
+    async function hardDeleteMember(id) {
+      const m = allMembers.find((x) => x.id === id);
+      const refs = allMembers.filter((x) => x.id !== id && (x.headId === id || x.spouseId === id));
+      if (refs.length) {
+        const names = refs.map((x) => `· ${x.name || '(이름 없음)'} (${x.spouseId === id ? '배우자' : '세대원'})`).join('\n');
+        alert(`'${m?.name || '이 성도'}' 님을 세대주/배우자로 참조하는 성도가 있어 완전 삭제할 수 없습니다.\n\n${names}\n\n먼저 연결을 정리하거나 “명부에서 숨김”을 사용하세요.`);
+        return;
+      }
+      if (!confirm(`'${m?.name || '이 성도'}' 님을 완전히 삭제합니다.\n\n· 되돌릴 수 없습니다.\n· 헌금 내역이 있으면 영수증 보존을 위해 삭제하지 말고 “명부에서 숨김”을 사용하세요.\n\n계속할까요?`)) return;
       try {
         await deleteDoc(doc(db, 'members', id));
         await loadMembers();
-        closeViaBack();
+        leaveToList(); closeViaBack();
       } catch (e) {
         alert('삭제 실패: ' + (e.code || e.message));
       }
@@ -671,6 +996,7 @@
       $('editView').style.display = (view === 'edit') ? '' : 'none';
       $('fab').style.display = (view === 'list') ? 'flex' : 'none';
       $('editBtn').style.display = (view === 'detail') ? 'block' : 'none';
+      $('layoutBtn').style.display = (view === 'detail') ? 'block' : 'none';
       $('barTitle').textContent =
         (view === 'list') ? '성도 관리' :
         (view === 'detail') ? '성도 정보' :
