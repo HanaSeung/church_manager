@@ -16,7 +16,7 @@
     let detailId = null;
     let overlayPushed = false;
     // 편집 중 선택된 참조(세대주/배우자)의 문서 id
-    let pickHeadId = null, pickSpouseId = null;
+    let pickHeadId = null, pickSpouseId = null, pickGuideId = null;
 
     const ROLE_GROUPS = {
       '목사': ['담임목사', '부목사', '소속목사', '원로목사'],
@@ -389,6 +389,7 @@
         ['phone', '집전화', m.phoneHome], ['mail', '이메일', m.email],
         ['church', '이전교회', m.prevChurch], ['guide', '인도자', m.guide],
         ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
+        ['calendar', '임명일', dot(m.roleDate)], ['church', '임직교회', m.roleChurch],
       ];
       return { core, extra };
     }
@@ -453,6 +454,8 @@
          ${drow('신급', esc(BADGE_GRADE(m)))}
          ${drow('신급교회', esc(m.gradeChurch))}
          ${drow('집례자', esc(m.officiant))}
+         ${drow('임명일', esc(dot(m.roleDate)))}
+         ${drow('임직교회', esc(m.roleChurch))}
          <div class="dsec">가족</div>
          ${drow('결혼관계', esc(m.marriage))}
          ${drow('결혼일', esc(dot(m.wedDate)))}
@@ -545,6 +548,8 @@
       { const rc = m?.roleCat || roleCatOf(m?.role) || '성도';
         $('fRoleCat').value = rc;
         fillRoleSub($('fRole'), rc, m?.role || (ROLE_GROUPS[rc] || [])[0] || '성도'); }
+      $('fRoleDate').value = m?.roleDate || '';
+      $('fRoleChurch').value = m?.roleChurch || '';
       $('fType').value = m?.memberType || '교인';
       $('fStatus').value = m?.status || '예배출석';
       $('fHead').value = m?.headName || '';
@@ -558,6 +563,11 @@
       pickSpouseId = m?.spouseId || null;
       const _headM = m?.headId ? allMembers.find((x) => x.id === m.headId) : null;
       setHeadBadge(_headM ? _headM.memberNo : null);
+      const _spouseM = m?.spouseId ? allMembers.find((x) => x.id === m.spouseId) : null;
+      setSpouseBadge(_spouseM ? _spouseM.memberNo : null);
+      pickGuideId = m?.guideId || null;
+      const _guideM = m?.guideId ? allMembers.find((x) => x.id === m.guideId) : null;
+      setGuideBadge(_guideM ? _guideM.memberNo : null);
       $('dupHint').className = 'hint'; $('dupHint').textContent = '';
       $('editMsg').style.display = 'none';
       updateAge();
@@ -583,6 +593,80 @@
     }
     $('fBirth').addEventListener('input', (e) => { e.target.value = fmtBirth(e.target.value); updateAge(); });
     $('fBirth').addEventListener('blur', (e) => { e.target.value = fmtBirthBlur(e.target.value); updateAge(); });
+
+    // 임명일: 숫자 8자리 → blur/엔터 시 YYYY-MM-DD, 달력 버튼은 네이티브 선택기
+    function dateOk(v) {
+      v = (v || '').trim(); if (!v) return true;
+      const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); if (!mm) return false;
+      const y = +mm[1], mo = +mm[2], d = +mm[3];
+      const dt = new Date(y, mo - 1, d);
+      return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+    }
+    function normRoleDate(v) {
+      const digits = (v || '').replace(/\D/g, '');
+      if (digits === '') return { val: '', ok: true };
+      if (digits.length !== 8) return { val: '', ok: false };
+      const f = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6, 8);
+      return dateOk(f) ? { val: f, ok: true } : { val: '', ok: false };
+    }
+    function applyRoleDate() {
+      const r = normRoleDate($('fRoleDate').value);
+      $('fRoleDate').value = r.val;
+      $('fRoleDate').classList.toggle('invalid', !r.ok);
+      $('eRoleDateErr').classList.toggle('show', !r.ok);
+      return r;
+    }
+    $('fRoleDate').addEventListener('blur', applyRoleDate);
+    $('fRoleDate').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+    $('fRoleDate').addEventListener('input', () => { $('fRoleDate').classList.remove('invalid'); $('eRoleDateErr').classList.remove('show'); });
+    $('fRoleDateCal').addEventListener('click', () => {
+      const p = $('fRoleDatePick');
+      p.value = /^\d{4}-\d{2}-\d{2}$/.test($('fRoleDate').value) ? $('fRoleDate').value : '';
+      if (p.showPicker) { try { p.showPicker(); } catch (_) { p.click(); } } else { p.click(); }
+    });
+    $('fRoleDatePick').addEventListener('change', () => { if ($('fRoleDatePick').value) { $('fRoleDate').value = $('fRoleDatePick').value; $('fRoleDate').classList.remove('invalid'); $('eRoleDateErr').classList.remove('show'); } });
+
+    // 공용 날짜 입력: 숫자 입력 → blur/엔터 시 하이픈, 무효면 값 비우고 경고, 달력 버튼 병행
+    const CAL_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    function normDateStr(v, precision) {
+      const digits = (v || '').replace(/\D/g, '');
+      const need = precision === 'month' ? 6 : 8;
+      if (digits === '') return { val: '', ok: true };
+      if (digits.length !== need) return { val: '', ok: false };
+      if (precision === 'month') {
+        const mo = +digits.slice(4, 6);
+        return (mo >= 1 && mo <= 12) ? { val: digits.slice(0, 4) + '-' + digits.slice(4, 6), ok: true } : { val: '', ok: false };
+      }
+      const f = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6, 8);
+      return dateOk(f) ? { val: f, ok: true } : { val: '', ok: false };
+    }
+    function setupDateInput(id, errId, calId, pickId, precision) {
+      const inp = $(id), err = $(errId), cal = $(calId), pick = $(pickId);
+      const re = precision === 'month' ? /^\d{4}-\d{2}$/ : /^\d{4}-\d{2}-\d{2}$/;
+      function apply() {
+        const r = normDateStr(inp.value, precision);
+        inp.value = r.val;
+        inp.classList.toggle('invalid', !r.ok);
+        err.classList.toggle('show', !r.ok);
+        return r;
+      }
+      inp.addEventListener('blur', apply);
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+      inp.addEventListener('input', () => { inp.classList.remove('invalid'); err.classList.remove('show'); });
+      if (cal && pick) {
+        cal.innerHTML = CAL_SVG;
+        cal.addEventListener('click', () => {
+          pick.value = re.test(inp.value) ? inp.value : '';
+          if (pick.showPicker) { try { pick.showPicker(); } catch (_) { pick.click(); } } else { pick.click(); }
+        });
+        pick.addEventListener('change', () => { if (pick.value) { inp.value = pick.value; inp.classList.remove('invalid'); err.classList.remove('show'); } });
+      }
+      return apply;
+    }
+    const applyRegDate = setupDateInput('fRegDate', 'eRegDateErr', 'fRegDateCal', 'fRegDatePick', 'date');
+    const applyGradeDate = setupDateInput('fGradeDate', 'eGradeDateErr', 'fGradeDateCal', 'fGradeDatePick', 'month');
+    const applyWedDate = setupDateInput('fWed', 'eWedErr', 'fWedCal', 'fWedPick', 'month');
+    const applyPrayDate = setupDateInput('fPrayDate', 'ePrayDateErr', 'prayDateCal', 'prayDatePick', 'date');
 
     // ── 기도제목 (날짜별) ──
     let prayers = [];          // [{date, text}]
@@ -631,6 +715,7 @@
       renderPrayers();
     }
     $('prayAddBtn').addEventListener('click', () => {
+      applyPrayDate();
       const t = $('fPrayText').value.trim();
       if (!t) { alert('기도제목 내용을 입력하세요.'); return; }
       prayers.push({ date: $('fPrayDate').value || prayToday(), text: t });
@@ -697,7 +782,8 @@
       const m = allMembers.find((x) => x.id === id);
       if (!m) return;
       if (pickTarget === 'head') { connectHead(m); }
-      else if (pickTarget === 'spouse') { $('fSpouse').value = m.name; pickSpouseId = id; }
+      else if (pickTarget === 'spouse') { $('fSpouse').value = m.name; pickSpouseId = id; setSpouseBadge(m.memberNo); }
+      else if (pickTarget === 'guide') { connectGuide(m); }
       $('pickBk').classList.remove('on');
     }
     // 세대주 연결 + 회원번호 배지
@@ -706,12 +792,20 @@
       $('fHead').value = m.name;
       setHeadBadge(m.memberNo);
     }
-    function setHeadBadge(no) {
-      const b = $('headNoBadge');
-      if (no !== null && no !== undefined && no !== '') {
-        b.textContent = padNo(no) || ('#' + no); b.style.display = 'flex';
-      } else { b.textContent = ''; b.style.display = 'none'; }
+    function connectGuide(m) {
+      pickGuideId = m.id;
+      $('fGuide').value = m.name;
+      setGuideBadge(m.memberNo);
     }
+    function setNoBadge(b, no) {
+      b.style.display = 'flex';
+      b.style.background = ''; b.style.color = ''; b.style.border = '';
+      const has = (no !== null && no !== undefined && no !== '');
+      b.textContent = has ? (padNo(no) || ('#' + no)) : '#';
+    }
+    function setHeadBadge(no) { setNoBadge($('headNoBadge'), no); }
+    function setSpouseBadge(no) { setNoBadge($('spouseNoBadge'), no); }
+    function setGuideBadge(no) { setNoBadge($('guideNoBadge'), no); }
     // [검색] 클릭: 본인 이름 비교 → 명부 조회 → 연결/팝업/안내
     function handleHeadSearch() {
       const typed = $('fHead').value.trim();
@@ -727,10 +821,28 @@
       if (matches.length === 1) { connectHead(matches[0]); return; }
       openPicker('head', typed);
     }
+    function handleGuideSearch() {
+      const typed = $('fGuide').value.trim();
+      if (!typed) { openPicker('guide'); return; }
+      const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
+      if (matches.length === 0) { setGuideBadge(null); pickGuideId = null; alert('명부에 없는 이름입니다.'); return; }
+      if (matches.length === 1) { connectGuide(matches[0]); return; }
+      openPicker('guide', typed);
+    }
+    function handleSpouseSearch() {
+      const typed = $('fSpouse').value.trim();
+      if (!typed) { openPicker('spouse'); return; }
+      const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
+      if (matches.length === 0) { setSpouseBadge(null); pickSpouseId = null; alert('명부에 없는 이름입니다.'); return; }
+      if (matches.length === 1) { $('fSpouse').value = matches[0].name; pickSpouseId = matches[0].id; setSpouseBadge(matches[0].memberNo); return; }
+      openPicker('spouse', typed);
+    }
     $('headBtn').addEventListener('click', handleHeadSearch);
     $('fHead').addEventListener('input', () => { pickHeadId = null; setHeadBadge(null); });
-    $('spouseBtn').addEventListener('click', () => openPicker('spouse'));
-    $('fSpouse').addEventListener('input', () => { pickSpouseId = null; });
+    $('spouseBtn').addEventListener('click', handleSpouseSearch);
+    $('fSpouse').addEventListener('input', () => { pickSpouseId = null; setSpouseBadge(null); });
+    $('guideBtn').addEventListener('click', handleGuideSearch);
+    $('fGuide').addEventListener('input', () => { pickGuideId = null; setGuideBadge(null); });
     $('pickInput').addEventListener('input', (e) => renderPick(e.target.value));
     $('pickClose').addEventListener('click', () => $('pickBk').classList.remove('on'));
     $('pickBk').addEventListener('click', (e) => { if (e.target === $('pickBk')) $('pickBk').classList.remove('on'); });
@@ -849,6 +961,10 @@
         ($('fEmailDomain').value === '__custom' && !$('fEmailCustom').value.trim() ? $('fEmailCustom') : $('fEmailId')).focus();
         return;
       }
+      applyRoleDate();
+      applyRegDate();
+      applyGradeDate();
+      applyWedDate();
       const base = {
         name,
         gender: $('fGender').value,
@@ -863,6 +979,7 @@
         regDate: $('fRegDate').value,
         regType: $('fRegType').value,
         guide: $('fGuide').value.trim(),
+        guideId: pickGuideId || null,
         prevChurch: $('fPrev').value.trim(),
         grade: $('fGrade').value,
         gradeDate: $('fGradeDate').value,
@@ -870,6 +987,8 @@
         officiant: $('fOfficiant').value.trim(),
         roleCat: $('fRoleCat').value,
         role: $('fRole').value,
+        roleDate: fmtBirth($('fRoleDate').value),
+        roleChurch: $('fRoleChurch').value.trim(),
         memberType: $('fType').value,
         status: $('fStatus').value,
         marriage: $('fMarriage').value,

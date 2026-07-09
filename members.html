@@ -87,10 +87,11 @@
     .drow .dv { flex:1; }
     .dsec { font-size:12px; font-weight:700; color:var(--green); margin:18px 0 2px; }
     .pickbk { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:1000;
-      display:none; align-items:flex-end; justify-content:center; }
+      display:none; align-items:center; justify-content:center; padding:16px; }
     .pickbk.on { display:flex; }
-    .pick { background:var(--card); width:100%; max-width:720px; border-radius:14px 14px 0 0;
-      max-height:70vh; display:flex; flex-direction:column; }
+    .pick { background:var(--card); width:100%; max-width:480px; border-radius:14px;
+      height:70vh; max-height:600px; display:flex; flex-direction:column;
+      overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.35); }
     .pickrow { padding:13px 16px; border-top:1px solid var(--line); cursor:pointer; font-size:15px; }
     .pickrow:active { background:var(--green-soft); }
     ::placeholder { color:#b3b8b3; }
@@ -260,20 +261,38 @@
         <div class="acc-head" data-acc="acc2"><span class="h-t">2. 등록정보</span><span class="h-s">펼치기 <span class="chev">›</span></span></div>
         <div class="acc-body">
           <div class="frow">
-            <div class="field"><label>등록일</label><input id="fRegDate" type="date"></div>
+            <div class="field"><label>등록일</label>
+              <div style="display:flex; gap:6px; align-items:center; position:relative;">
+                <input id="fRegDate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="flex:1; min-width:0;">
+                <button type="button" class="btn-line" id="fRegDateCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
+                <input id="fRegDatePick" type="date" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+              </div>
+              <div class="ferr" id="eRegDateErr">날짜가 올바르지 않습니다.</div>
+            </div>
             <div class="field"><label>등록배경</label>
               <select id="fRegType"><option value="">선택</option><option>전도</option><option>스스로</option><option>기관사역을 통해</option></select>
             </div>
           </div>
-          <div class="frow">
-            <div class="field"><label>인도자</label><input id="fGuide" type="text" placeholder="전도한 분"></div>
-            <div class="field"><label>이전 교회</label><input id="fPrev" type="text" placeholder="○○교회"></div>
+          <div class="field"><label>인도자</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span id="guideNoBadge" class="headno"></span>
+              <input id="fGuide" type="text" placeholder="전도한 분" style="flex:1; min-width:0;">
+              <button class="btn-line" id="guideBtn">검색</button>
+            </div>
           </div>
+          <div class="field"><label>이전 교회</label><input id="fPrev" type="text" placeholder="○○교회"></div>
           <div class="frow">
             <div class="field"><label>신급</label>
               <select id="fGrade"><option value="">선택</option><option>원입</option><option>학습</option><option>세례</option><option>입교</option><option>유아세례</option></select>
             </div>
-            <div class="field"><label>신급일</label><input id="fGradeDate" type="month"></div>
+            <div class="field"><label>신급일</label>
+              <div style="display:flex; gap:6px; align-items:center; position:relative;">
+                <input id="fGradeDate" type="text" inputmode="numeric" placeholder="YYYY-MM" style="flex:1; min-width:0;">
+                <button type="button" class="btn-line" id="fGradeDateCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
+                <input id="fGradeDatePick" type="month" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+              </div>
+              <div class="ferr" id="eGradeDateErr">날짜가 올바르지 않습니다.</div>
+            </div>
           </div>
           <div class="frow" style="margin-bottom:0;">
             <div class="field"><label>신급교회</label><input id="fGradeChurch" type="text" placeholder="신급 받은 교회"></div>
@@ -292,9 +311,20 @@
               <select id="fRole" style="flex:1; min-width:0;"></select>
             </div>
           </div>
+          <div class="frow">
+            <div class="field"><label>임명일</label>
+              <div style="display:flex; gap:6px; align-items:center; position:relative;">
+                <input id="fRoleDate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="flex:1; min-width:0;">
+                <button type="button" class="btn-line" id="fRoleDateCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+                <input id="fRoleDatePick" type="date" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+              </div>
+              <div class="ferr" id="eRoleDateErr">날짜가 올바르지 않습니다.</div>
+            </div>
+            <div class="field"><label>임직교회</label><input id="fRoleChurch" type="text" placeholder="임직 받은 교회"></div>
+          </div>
           <div class="frow" style="margin-bottom:0;">
             <div class="field"><label>교인구분</label>
-              <select id="fType"><option selected>교인</option><option>새가족</option><option>타교인</option><option>타종교</option><option>별세</option><option>성도</option></select>
+              <select id="fType"><option selected>교인</option><option>새가족</option><option>타교인</option><option>타종교</option><option>비성도</option><option>별세</option><option>성도</option></select>
             </div>
             <div class="field"><label>현재 상태</label>
               <select id="fStatus"><option selected>예배출석</option><option>가끔출석</option><option>군입대</option><option>유학</option><option>불출석</option></select>
@@ -309,14 +339,22 @@
         <div class="acc-body">
           <div class="frow">
             <div class="field"><label>결혼관계</label>
-              <select id="fMarriage"><option value="">선택</option><option>미혼</option><option>기혼</option><option>이별</option><option>사별</option><option>재혼</option><option>별거</option></select>
+              <select id="fMarriage"><option value="">선택</option><option>미혼</option><option>기혼</option><option>이혼</option><option>사별</option><option>재혼</option><option>별거</option></select>
             </div>
-            <div class="field"><label>결혼일</label><input id="fWed" type="month"></div>
+            <div class="field"><label>결혼일</label>
+              <div style="display:flex; gap:6px; align-items:center; position:relative;">
+                <input id="fWed" type="text" inputmode="numeric" placeholder="YYYY-MM" style="flex:1; min-width:0;">
+                <button type="button" class="btn-line" id="fWedCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
+                <input id="fWedPick" type="month" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+              </div>
+              <div class="ferr" id="eWedErr">날짜가 올바르지 않습니다.</div>
+            </div>
           </div>
           <div class="field" style="margin-bottom:0;"><label>배우자</label>
-            <div style="display:flex; gap:8px;">
-              <input id="fSpouse" type="text" placeholder="배우자 이름" style="flex:1;">
-              <button class="btn-line" id="spouseBtn">명부 검색</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span id="spouseNoBadge" class="headno"></span>
+              <input id="fSpouse" type="text" placeholder="배우자 이름" style="flex:1; min-width:0;">
+              <button class="btn-line" id="spouseBtn">검색</button>
             </div>
           </div>
         </div>
@@ -333,11 +371,14 @@
           <div class="field"><label>메모</label><textarea id="fMemo" rows="3" placeholder="자유롭게 기록"></textarea></div>
           <div class="field" style="margin-bottom:0;">
             <label>기도제목 (날짜별)</label>
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-              <input id="fPrayDate" type="date" style="width:150px; flex-shrink:0;">
+            <div style="display:flex; gap:6px; margin-bottom:8px; align-items:center; position:relative;">
+              <input id="fPrayDate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="width:118px; flex-shrink:0;">
+              <button type="button" class="btn-line" id="prayDateCal" style="padding:0 8px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
+              <input id="prayDatePick" type="date" style="position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
               <input id="fPrayText" type="text" placeholder="기도제목 내용" style="flex:1; min-width:0;">
               <button class="btn-line" id="prayAddBtn" style="padding:0 14px;">추가</button>
             </div>
+            <div class="ferr" id="ePrayDateErr">날짜가 올바르지 않습니다.</div>
             <div id="prayList"></div>
             <div id="prayMoreWrap" style="text-align:center; margin-top:8px; display:none;">
               <button class="btn-line" id="prayMoreBtn" style="padding:6px 20px;">더 보기</button>
@@ -367,7 +408,7 @@
         <input id="pickInput" type="text" placeholder="이름 검색" style="flex:1; height:40px; padding:0 12px; border:1px solid var(--line); border-radius:8px; font-size:15px; font-family:inherit;">
         <span id="pickClose" style="font-size:14px; color:var(--muted); cursor:pointer;">닫기</span>
       </div>
-      <div id="pickList" style="overflow:auto;"></div>
+      <div id="pickList" style="flex:1; min-height:0; overflow:auto;"></div>
     </div>
   </div>
 
@@ -411,7 +452,7 @@
     let detailId = null;
     let overlayPushed = false;
     // 편집 중 선택된 참조(세대주/배우자)의 문서 id
-    let pickHeadId = null, pickSpouseId = null;
+    let pickHeadId = null, pickSpouseId = null, pickGuideId = null;
 
     const ROLE_GROUPS = {
       '목사': ['담임목사', '부목사', '소속목사', '원로목사'],
@@ -784,6 +825,7 @@
         ['phone', '집전화', m.phoneHome], ['mail', '이메일', m.email],
         ['church', '이전교회', m.prevChurch], ['guide', '인도자', m.guide],
         ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
+        ['calendar', '임명일', dot(m.roleDate)], ['church', '임직교회', m.roleChurch],
       ];
       return { core, extra };
     }
@@ -848,6 +890,8 @@
          ${drow('신급', esc(BADGE_GRADE(m)))}
          ${drow('신급교회', esc(m.gradeChurch))}
          ${drow('집례자', esc(m.officiant))}
+         ${drow('임명일', esc(dot(m.roleDate)))}
+         ${drow('임직교회', esc(m.roleChurch))}
          <div class="dsec">가족</div>
          ${drow('결혼관계', esc(m.marriage))}
          ${drow('결혼일', esc(dot(m.wedDate)))}
@@ -940,10 +984,15 @@
       { const rc = m?.roleCat || roleCatOf(m?.role) || '성도';
         $('fRoleCat').value = rc;
         fillRoleSub($('fRole'), rc, m?.role || (ROLE_GROUPS[rc] || [])[0] || '성도'); }
+      $('fRoleDate').value = m?.roleDate || '';
+      $('fRoleChurch').value = m?.roleChurch || '';
       $('fType').value = m?.memberType || '교인';
       $('fStatus').value = m?.status || '예배출석';
       $('fHead').value = m?.headName || '';
       $('fRel').value = m?.relation || '';
+      if (m && !$('fHead').value && ((m.headId && m.headId === m.id) || m.relation === '본인')) {
+        $('fHead').value = m.name || '';
+      }
       $('fMarriage').value = m?.marriage || '';
       $('fWed').value = m?.wedDate || '';
       $('fSpouse').value = m?.spouseName || '';
@@ -953,6 +1002,11 @@
       pickSpouseId = m?.spouseId || null;
       const _headM = m?.headId ? allMembers.find((x) => x.id === m.headId) : null;
       setHeadBadge(_headM ? _headM.memberNo : null);
+      const _spouseM = m?.spouseId ? allMembers.find((x) => x.id === m.spouseId) : null;
+      setSpouseBadge(_spouseM ? _spouseM.memberNo : null);
+      pickGuideId = m?.guideId || null;
+      const _guideM = m?.guideId ? allMembers.find((x) => x.id === m.guideId) : null;
+      setGuideBadge(_guideM ? _guideM.memberNo : null);
       $('dupHint').className = 'hint'; $('dupHint').textContent = '';
       $('editMsg').style.display = 'none';
       updateAge();
@@ -978,6 +1032,80 @@
     }
     $('fBirth').addEventListener('input', (e) => { e.target.value = fmtBirth(e.target.value); updateAge(); });
     $('fBirth').addEventListener('blur', (e) => { e.target.value = fmtBirthBlur(e.target.value); updateAge(); });
+
+    // 임명일: 숫자 8자리 → blur/엔터 시 YYYY-MM-DD, 달력 버튼은 네이티브 선택기
+    function dateOk(v) {
+      v = (v || '').trim(); if (!v) return true;
+      const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); if (!mm) return false;
+      const y = +mm[1], mo = +mm[2], d = +mm[3];
+      const dt = new Date(y, mo - 1, d);
+      return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d;
+    }
+    function normRoleDate(v) {
+      const digits = (v || '').replace(/\D/g, '');
+      if (digits === '') return { val: '', ok: true };
+      if (digits.length !== 8) return { val: '', ok: false };
+      const f = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6, 8);
+      return dateOk(f) ? { val: f, ok: true } : { val: '', ok: false };
+    }
+    function applyRoleDate() {
+      const r = normRoleDate($('fRoleDate').value);
+      $('fRoleDate').value = r.val;
+      $('fRoleDate').classList.toggle('invalid', !r.ok);
+      $('eRoleDateErr').classList.toggle('show', !r.ok);
+      return r;
+    }
+    $('fRoleDate').addEventListener('blur', applyRoleDate);
+    $('fRoleDate').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+    $('fRoleDate').addEventListener('input', () => { $('fRoleDate').classList.remove('invalid'); $('eRoleDateErr').classList.remove('show'); });
+    $('fRoleDateCal').addEventListener('click', () => {
+      const p = $('fRoleDatePick');
+      p.value = /^\d{4}-\d{2}-\d{2}$/.test($('fRoleDate').value) ? $('fRoleDate').value : '';
+      if (p.showPicker) { try { p.showPicker(); } catch (_) { p.click(); } } else { p.click(); }
+    });
+    $('fRoleDatePick').addEventListener('change', () => { if ($('fRoleDatePick').value) { $('fRoleDate').value = $('fRoleDatePick').value; $('fRoleDate').classList.remove('invalid'); $('eRoleDateErr').classList.remove('show'); } });
+
+    // 공용 날짜 입력: 숫자 입력 → blur/엔터 시 하이픈, 무효면 값 비우고 경고, 달력 버튼 병행
+    const CAL_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    function normDateStr(v, precision) {
+      const digits = (v || '').replace(/\D/g, '');
+      const need = precision === 'month' ? 6 : 8;
+      if (digits === '') return { val: '', ok: true };
+      if (digits.length !== need) return { val: '', ok: false };
+      if (precision === 'month') {
+        const mo = +digits.slice(4, 6);
+        return (mo >= 1 && mo <= 12) ? { val: digits.slice(0, 4) + '-' + digits.slice(4, 6), ok: true } : { val: '', ok: false };
+      }
+      const f = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6, 8);
+      return dateOk(f) ? { val: f, ok: true } : { val: '', ok: false };
+    }
+    function setupDateInput(id, errId, calId, pickId, precision) {
+      const inp = $(id), err = $(errId), cal = $(calId), pick = $(pickId);
+      const re = precision === 'month' ? /^\d{4}-\d{2}$/ : /^\d{4}-\d{2}-\d{2}$/;
+      function apply() {
+        const r = normDateStr(inp.value, precision);
+        inp.value = r.val;
+        inp.classList.toggle('invalid', !r.ok);
+        err.classList.toggle('show', !r.ok);
+        return r;
+      }
+      inp.addEventListener('blur', apply);
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+      inp.addEventListener('input', () => { inp.classList.remove('invalid'); err.classList.remove('show'); });
+      if (cal && pick) {
+        cal.innerHTML = CAL_SVG;
+        cal.addEventListener('click', () => {
+          pick.value = re.test(inp.value) ? inp.value : '';
+          if (pick.showPicker) { try { pick.showPicker(); } catch (_) { pick.click(); } } else { pick.click(); }
+        });
+        pick.addEventListener('change', () => { if (pick.value) { inp.value = pick.value; inp.classList.remove('invalid'); err.classList.remove('show'); } });
+      }
+      return apply;
+    }
+    const applyRegDate = setupDateInput('fRegDate', 'eRegDateErr', 'fRegDateCal', 'fRegDatePick', 'date');
+    const applyGradeDate = setupDateInput('fGradeDate', 'eGradeDateErr', 'fGradeDateCal', 'fGradeDatePick', 'month');
+    const applyWedDate = setupDateInput('fWed', 'eWedErr', 'fWedCal', 'fWedPick', 'month');
+    const applyPrayDate = setupDateInput('fPrayDate', 'ePrayDateErr', 'prayDateCal', 'prayDatePick', 'date');
 
     // ── 기도제목 (날짜별) ──
     let prayers = [];          // [{date, text}]
@@ -1026,6 +1154,7 @@
       renderPrayers();
     }
     $('prayAddBtn').addEventListener('click', () => {
+      applyPrayDate();
       const t = $('fPrayText').value.trim();
       if (!t) { alert('기도제목 내용을 입력하세요.'); return; }
       prayers.push({ date: $('fPrayDate').value || prayToday(), text: t });
@@ -1092,7 +1221,8 @@
       const m = allMembers.find((x) => x.id === id);
       if (!m) return;
       if (pickTarget === 'head') { connectHead(m); }
-      else if (pickTarget === 'spouse') { $('fSpouse').value = m.name; pickSpouseId = id; }
+      else if (pickTarget === 'spouse') { $('fSpouse').value = m.name; pickSpouseId = id; setSpouseBadge(m.memberNo); }
+      else if (pickTarget === 'guide') { connectGuide(m); }
       $('pickBk').classList.remove('on');
     }
     // 세대주 연결 + 회원번호 배지
@@ -1101,20 +1231,30 @@
       $('fHead').value = m.name;
       setHeadBadge(m.memberNo);
     }
-    function setHeadBadge(no) {
-      const b = $('headNoBadge');
-      if (no !== null && no !== undefined && no !== '') {
-        b.textContent = padNo(no) || ('#' + no); b.style.display = 'flex';
-      } else { b.textContent = ''; b.style.display = 'none'; }
+    function connectGuide(m) {
+      pickGuideId = m.id;
+      $('fGuide').value = m.name;
+      setGuideBadge(m.memberNo);
     }
+    function setNoBadge(b, no) {
+      b.style.display = 'flex';
+      b.style.background = ''; b.style.color = ''; b.style.border = '';
+      const has = (no !== null && no !== undefined && no !== '');
+      b.textContent = has ? (padNo(no) || ('#' + no)) : '#';
+    }
+    function setHeadBadge(no) { setNoBadge($('headNoBadge'), no); }
+    function setSpouseBadge(no) { setNoBadge($('spouseNoBadge'), no); }
+    function setGuideBadge(no) { setNoBadge($('guideNoBadge'), no); }
     // [검색] 클릭: 본인 이름 비교 → 명부 조회 → 연결/팝업/안내
     function handleHeadSearch() {
       const typed = $('fHead').value.trim();
       const selfName = $('fName').value.trim();
       if (!typed) { openPicker('head'); return; }
       if (selfName && typed === selfName) {
-        pickHeadId = null; setHeadBadge(null);
-        $('fRel').value = '본인'; $('fHead').value = '';
+        pickHeadId = editingId || null;
+        const _selfM = editingId ? allMembers.find((x) => x.id === editingId) : null;
+        setHeadBadge(_selfM ? _selfM.memberNo : null);
+        $('fRel').value = '본인';
         return;
       }
       const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
@@ -1122,10 +1262,28 @@
       if (matches.length === 1) { connectHead(matches[0]); return; }
       openPicker('head', typed);
     }
+    function handleGuideSearch() {
+      const typed = $('fGuide').value.trim();
+      if (!typed) { openPicker('guide'); return; }
+      const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
+      if (matches.length === 0) { setGuideBadge(null); pickGuideId = null; alert('명부에 없는 이름입니다.'); return; }
+      if (matches.length === 1) { connectGuide(matches[0]); return; }
+      openPicker('guide', typed);
+    }
+    function handleSpouseSearch() {
+      const typed = $('fSpouse').value.trim();
+      if (!typed) { openPicker('spouse'); return; }
+      const matches = allMembers.filter((x) => x.name === typed && x.id !== editingId);
+      if (matches.length === 0) { setSpouseBadge(null); pickSpouseId = null; alert('명부에 없는 이름입니다.'); return; }
+      if (matches.length === 1) { $('fSpouse').value = matches[0].name; pickSpouseId = matches[0].id; setSpouseBadge(matches[0].memberNo); return; }
+      openPicker('spouse', typed);
+    }
     $('headBtn').addEventListener('click', handleHeadSearch);
     $('fHead').addEventListener('input', () => { pickHeadId = null; setHeadBadge(null); });
-    $('spouseBtn').addEventListener('click', () => openPicker('spouse'));
-    $('fSpouse').addEventListener('input', () => { pickSpouseId = null; });
+    $('spouseBtn').addEventListener('click', handleSpouseSearch);
+    $('fSpouse').addEventListener('input', () => { pickSpouseId = null; setSpouseBadge(null); });
+    $('guideBtn').addEventListener('click', handleGuideSearch);
+    $('fGuide').addEventListener('input', () => { pickGuideId = null; setGuideBadge(null); });
     $('pickInput').addEventListener('input', (e) => renderPick(e.target.value));
     $('pickClose').addEventListener('click', () => $('pickBk').classList.remove('on'));
     $('pickBk').addEventListener('click', (e) => { if (e.target === $('pickBk')) $('pickBk').classList.remove('on'); });
@@ -1144,7 +1302,10 @@
         }
         return { householdId: hh || selfId, headId: pickHeadId, headName: $('fHead').value, relation: relation || '' };
       }
-      return { householdId: selfId, headId: selfId, headName: '', relation: relation || '본인' };
+      const _selfName = $('fName').value.trim();
+      const _typedHead = $('fHead').value.trim();
+      const _isSelf = _typedHead && _typedHead === _selfName;
+      return { householdId: selfId, headId: selfId, headName: _isSelf ? _selfName : '', relation: relation || '본인' };
     }
 
     // ── 연락처·이메일 유틸 ──
@@ -1244,6 +1405,10 @@
         ($('fEmailDomain').value === '__custom' && !$('fEmailCustom').value.trim() ? $('fEmailCustom') : $('fEmailId')).focus();
         return;
       }
+      applyRoleDate();
+      applyRegDate();
+      applyGradeDate();
+      applyWedDate();
       const base = {
         name,
         gender: $('fGender').value,
@@ -1258,6 +1423,7 @@
         regDate: $('fRegDate').value,
         regType: $('fRegType').value,
         guide: $('fGuide').value.trim(),
+        guideId: pickGuideId || null,
         prevChurch: $('fPrev').value.trim(),
         grade: $('fGrade').value,
         gradeDate: $('fGradeDate').value,
@@ -1265,6 +1431,8 @@
         officiant: $('fOfficiant').value.trim(),
         roleCat: $('fRoleCat').value,
         role: $('fRole').value,
+        roleDate: fmtBirth($('fRoleDate').value),
+        roleChurch: $('fRoleChurch').value.trim(),
         memberType: $('fType').value,
         status: $('fStatus').value,
         marriage: $('fMarriage').value,

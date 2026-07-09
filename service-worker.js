@@ -1,4 +1,4 @@
-const CACHE = 'church-manager-v70';
+const CACHE = 'church-manager-v87';
 const ASSETS = [
   'index.html',
   'manifest.json',
