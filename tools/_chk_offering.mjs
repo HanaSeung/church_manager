@@ -233,6 +233,11 @@
     $('incName').value = m.name;
     $('incMemberNo').textContent = linked.no || '–';
     $('nameStatus').innerHTML = `<div class="status st-ok">✓ ${esc(m.name)} 성도로 연동됨${linked.no ? (' · #' + linked.no) : ''}</div>`;
+    // 배우자 체크 시: 등록된 배우자 이름 자동입력(덮어쓰기). 없으면 비움(직접 입력 가능).
+    if ($('spouseChk').checked) {
+      const sp = m.spouseId ? members.find((x) => x.id === m.spouseId) : null;
+      $('spouseName').value = sp ? (sp.name || '') : '';
+    }
   }
   function onNameEdit() {
     // 이름을 고치면 연동 해제 (다시 Enter로 검색)
@@ -342,11 +347,33 @@
       }
       resetForm();
       await loadList();
+      return true;
     } catch (e) { showMsg('저장 실패: ' + (e.code || e.message)); }
     finally { btn.disabled = false; btn.textContent = '저장'; }
   }
 
   // ----- 목록 -----
+  const SVG_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  const SVG_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  function incTable(rows) {
+    const body = rows.map((r) => {
+      const item = esc(r.c3 || r.c2 || r.c1 || '');
+      const ymd = esc((r.date || '').replace(/-/g, ''));
+      const fy = fiscalYearOf(r.date);
+      const idno = r.memberNo ? ('#' + r.memberNo) : '';
+      const sp = r.spouseName ? esc(r.spouseName) : '–';
+      const wkm = (r.week || '').match(/(\d+)\s*주/); const wkNo = wkm ? wkm[1] : '';
+      return `<tr>
+        <td>${r.no || ''}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
+        <td>${esc(r.code || '')}</td><td>${item}</td><td>${esc(idno)}</td><td>${esc(r.memberName || '')}</td>
+        <td class="ra amt">${wonFmt(r.amount)}</td><td>${sp}</td>
+        <td class="ce"><button class="iact i-edit" data-edit="${r.id}" aria-label="수정">${SVG_EDIT}</button><button class="iact i-del" data-del="${r.id}" aria-label="삭제">${SVG_DEL}</button></td>
+      </tr>`;
+    }).join('');
+    return `<div class="itblwrap"><table class="itbl">
+      <thead><tr><th>No.</th><th>회계년도</th><th>주</th><th>날짜</th><th>code</th><th>항목</th><th>id</th><th>이름</th><th>금액</th><th>배우자</th><th class="ce">수정·삭제</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+  }
   function rowHtml(r, id) {
     const isInc = curTab === 'inc';
     const main = esc(r.catPath || '(항목 없음)');
@@ -374,7 +401,12 @@
       const sum = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
       $('listSum').textContent = `${rows.length}건 · ${wonFmt(sum)}원`;
       if (!rows.length) { box.innerHTML = '<div class="empty">이 기간에 기록이 없습니다.</div>'; return; }
-      box.innerHTML = rows.map((r) => rowHtml(r, r.id)).join('');
+      if (curTab === 'inc') {
+        box.innerHTML = incTable(rows);
+        box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => alert('수정 기능은 다음 단계에서 추가됩니다.'); });
+      } else {
+        box.innerHTML = rows.map((r) => rowHtml(r, r.id)).join('');
+      }
       box.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => delRec(coll, b.getAttribute('data-del')); });
     } catch (e) { box.innerHTML = `<div class="empty">불러오지 못했습니다.<br>(${esc(e.code || e.message)})</div>`; }
   }
@@ -461,7 +493,9 @@
     $('incCat').addEventListener('change', () => { updateCode(); updateIncFace(); });
     $('expCat').addEventListener('change', updateCode);
     $('incName').addEventListener('input', onNameEdit);
-    $('incName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doNameSearch(); } });
+    $('incName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doNameSearch(); if (linked) $('inAmount').focus(); } });
+    $('incSearchBtn').addEventListener('click', doNameSearch);
+    $('inAmount').addEventListener('keydown', async (e) => { if (e.key === 'Enter') { e.preventDefault(); if (await save()) { if (curTab === 'inc') $('incName').focus(); } } });
     $('spouseChk').addEventListener('change', toggleSpouse);
     $('inAmount').addEventListener('input', () => { const n = onlyNum($('inAmount').value); $('inAmount').value = n ? wonFmt(n) : ''; });
     $('qaSubmit').onclick = submitQuickAdd;
