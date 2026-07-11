@@ -55,6 +55,34 @@
   };
   const pathOf = (it) => [it.c1, it.c2, it.c3].filter(Boolean).join(' › ');
 
+  // ----- 항목 역매핑 (수정 화면) -----
+  // offering 문서는 항목 노드를 참조하지 않고 이름·코드를 '복사'해 저장한다.
+  // 재채번·항목 재생성으로 code가 어긋나면 예전엔 조용히 첫 항목으로 잘못 잡혔다.
+  // → ① code 매칭 → ② 실패 시 이름 경로(catPath)로 재시도 → ③ 둘 다 실패면 저장 차단.
+  // ②가 핵심: 재채번을 해도 이름은 바뀌지 않으므로 대부분 자동 복구된다.
+  let catMiss = false;   // true면 save() 차단
+  const catKey = (s) => String(s == null ? '' : s).replace(/\s/g, '');
+  function resolveCatIdx(list, r) {
+    const code = r.code || '';
+    if (code) {
+      const i = list.findIndex((it) => (it.code || '') === code);
+      if (i >= 0) return i;
+    }
+    const want = catKey(r.catPath || [r.c1, r.c2, r.c3].filter(Boolean).join(' › '));
+    if (!want) return -1;
+    return list.findIndex((it) => catKey(pathOf(it)) === want);
+  }
+  function setCatMiss(on, r) {
+    catMiss = !!on;
+    const box = $('catMissMsg');
+    if (!box) return;
+    box.classList.toggle('hide', !catMiss);
+    if (catMiss && r) {
+      const p = r.catPath || [r.c1, r.c2, r.c3].filter(Boolean).join(' › ') || '(항목 없음)';
+      box.textContent = `이 기록의 항목 "${p}" 을(를) 현재 항목 목록에서 찾을 수 없습니다. 항목을 다시 선택하세요.`;
+    }
+  }
+
   // ----- 상태 -----
   let me = { uid: null, level: 1 };
   let config = null;
@@ -378,6 +406,7 @@
     editId = null;
     $('editBanner').classList.add('hide');
     $('saveBtn').textContent = '저장';
+    setCatMiss(false);   // 수정 모드를 벗어나면 항목 미발견 경고·저장차단도 해제
   }
   function resetForm() {
     $('inAmount').value = ''; $('inMemo').value = '';
@@ -397,6 +426,8 @@
     const memo = $('inMemo').value.trim();
     if (!date) return showMsg('날짜를 선택하세요.');
     if (!amount) return showMsg('금액을 입력하세요.');
+    // 항목 역매핑 실패 상태에서 저장하면 엉뚱한 항목으로 덮어써진다. 반드시 차단.
+    if (catMiss) return showMsg('항목을 다시 선택한 뒤 저장하세요.');
     // '이월' 대분류(전기이월 등)는 명부 연동 없이 저장 허용 (사람이 낸 헌금이 아님)
     if (curTab === 'inc' && !linked && !isCarryOver(config.income[+$('incCat').value])) {
       return showMsg('이름을 입력하고 Enter로 검색해 명부와 연동하세요.');
@@ -456,9 +487,10 @@
     $('inDate').value = r.date || '';
     $('weekBadge').textContent = r.date ? weekLabel(r.date) : '–';
     refreshIncomeCats();
-    // 2) 항목 code → 셀렉트 인덱스 역매핑
-    const idx = config.income.findIndex((it) => (it.code || '') === (r.code || ''));
+    // 2) 항목 역매핑: code → 실패 시 이름 경로(catPath) → 둘 다 실패면 경고+저장차단
+    const idx = resolveCatIdx(config.income, r);
     if (idx >= 0) $('incCat').value = String(idx);
+    setCatMiss(idx < 0, r);
     updateCode(); updateIncFace();
     // 3) 이름/명부 연동 복원 (배우자 자동덮어쓰기 방지 위해 먼저 체크 해제 후 setLinked)
     $('spouseChk').checked = false;
@@ -483,7 +515,7 @@
     $('editBannerText').textContent = `수정 중 · ${r.memberName || ''} ${(r.date || '').replace(/-/g, '').slice(4)}`;
     $('editBanner').classList.remove('hide');
     $('saveBtn').textContent = '수정 저장';
-    if (idx < 0) showMsg('이 기록의 항목이 현재 연도 목록에 없습니다. 항목을 다시 선택하세요.');
+    // (항목 미발견 경고는 setCatMiss()의 #catMissMsg 가 전담 — 저장도 함께 차단된다)
     $('formSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -494,8 +526,10 @@
     $('inDate').value = r.date || '';
     $('weekBadge').textContent = r.date ? weekLabel(r.date) : '–';
     refreshExpenseCats();
-    const idx = config.expense.findIndex((it) => (it.code || '') === (r.code || ''));
+    // 항목 역매핑: code → 실패 시 이름 경로(catPath) → 둘 다 실패면 경고+저장차단
+    const idx = resolveCatIdx(config.expense, r);
     if (idx >= 0) $('expCat').value = String(idx);
+    setCatMiss(idx < 0, r);
     updateCode(); updateExpFace();
     // 청구인 복원
     if (r.claimantId) {
@@ -513,7 +547,7 @@
     $('editBannerText').textContent = `수정 중 · ${r.claimantName || r.payee || ''} ${(r.date || '').replace(/-/g, '').slice(4)}`;
     $('editBanner').classList.remove('hide');
     $('saveBtn').textContent = '수정 저장';
-    if (idx < 0) showMsg('이 기록의 항목이 현재 연도 목록에 없습니다. 항목을 다시 선택하세요.');
+    // (항목 미발견 경고는 setCatMiss()의 #catMissMsg 가 전담 — 저장도 함께 차단된다)
     $('formSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -860,19 +894,57 @@
   // 수입=income.html, 지출=expense.html 로 이관됨. 옛 인페이지 flat 편집기(openEditor/saveConfig)는
   // 호출부가 없고 옛 finConfig/items 문서를 덮어쓸 위험이 있어 제거함.
 
-  // ===== 이전 헌금 자료 불러오기 (교적 프로그램 .xls = HTML 표) =====
-  // 엑셀 CODE는 앱 코드와 의미가 달라 사용하지 않는다(항목명 경로로 매칭).
+  // ===== 이전 자료 불러오기 (교적 프로그램 .xls = 실제로는 HTML 표) =====
+  // 수입·지출 공용. 패널을 연 시점의 탭(impKind)으로 대상이 결정된다.
+  // ⚠ 엑셀 CODE는 앱 코드와 의미가 완전히 다르다(엑셀 200440=식당›식대지원 / 앱 200440=차량관리).
+  //    → CODE·ID 열은 읽지 않는다. 항목명 경로로만 매칭한다.
   // 회계년도·주는 저장하지 않고 날짜에서 재계산한다.
-  const IMP_CARRY = '전기이월';   // 이 항목 행은 제외(직접 입력)
+  const IMP_CARRY = '전기이월';   // ※ 엑셀 원본의 항목명이다(앱 항목명 '일반재정 이월'과 무관). 수입에서만 이 행을 제외(직접 입력)
+  const IMP_META = {
+    inc: {
+      kind: 'income', coll: 'offerings', label: '수입',
+      title: '이전 헌금 자료 불러오기',
+      hint: '교적 프로그램의 ‘헌금 검색결과 리스트’ 파일(.xls)을 선택한 뒤 [미리보기]로 확인하고 등록하세요.<br>전기이월 행은 자동 제외됩니다(직접 입력).'
+    },
+    exp: {
+      kind: 'expense', coll: 'expenses', label: '지출',
+      title: '이전 지출 자료 불러오기',
+      hint: '교적 프로그램의 ‘지출 검색결과 리스트’ 파일(.xls)을 선택한 뒤 [미리보기]로 확인하고 등록하세요.<br>원본에 청구인·수령인 정보가 없으면 해당 칸은 비워집니다.'
+    }
+  };
+  let impKind = 'inc';            // 'inc' | 'exp' — 패널을 연 탭
   let impRows = null;             // 검증 통과한 저장용 payload 배열
   let impFileName = '';
 
   const nsp = (s) => String(s == null ? '' : s).replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
   const nokey = (s) => nsp(s).replace(/\s/g, '');
+  // ⚠ 임포트 전용 금액 파서. onlyNum()을 쓰면 안 된다.
+  //    원본 금액은 '2500000.0000' 형태인데 onlyNum은 숫자 아닌 문자를 '제거'하므로
+  //    '25000000000'(250억)이 되어 값이 정확히 10,000배로 부풀려진다.
+  //    → 소수점을 살려 Number로 파싱한 뒤 반올림한다.
+  const impAmt = (s) => {
+    const t = String(s == null ? '' : s).replace(/[,\s\u00A0₩원]/g, '');
+    if (!t || !/^-?\d*\.?\d+$/.test(t)) return 0;
+    const n = Math.round(Number(t));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  // 적요/비고 전용: 줄바꿈은 살리고 각 줄만 정리한다. nsp()를 쓰면 여러 줄이 한 줄로 뭉개진다.
+  const nspMulti = (s) => String(s == null ? '' : s)
+    .replace(/\u00A0/g, ' ').replace(/\r\n?/g, '\n')
+    .split('\n').map((l) => l.replace(/[^\S\n]+/g, ' ').trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n').trim();
 
   function toggleImportPanel() {
     const p = $('importPanel');
     const willShow = p.classList.contains('hide');
+    if (willShow) {
+      impKind = (curTab === 'exp') ? 'exp' : 'inc';   // 연 시점의 탭으로 고정
+      const M = IMP_META[impKind];
+      $('impTitle').textContent = M.title;
+      $('impHint').innerHTML = M.hint;
+      impRows = null; $('impRunBtn').disabled = true; $('impRunBtn').textContent = '등록';
+      $('impLog').innerHTML = ''; $('impFile').value = '';
+    }
     p.classList.toggle('hide', !willShow);
     if (willShow) loadImportHistory();
   }
@@ -908,15 +980,19 @@
     return { head: cellsOf(trs[0]), rows: trs.slice(1).map(cellsOf).filter((r) => r.length >= 8) };
   }
 
-  // 회계연도별 말단 항목 캐시
-  const impLeafCache = {};
-  function leavesForFY(fy) {
-    if (!impLeafCache[fy]) impLeafCache[fy] = leavesFromNodes(incomeNodes.filter((n) => Number(n.fy) === fy));
-    return impLeafCache[fy];
+  // 회계연도별 말단 항목 캐시 (종류별로 분리)
+  const impLeafCache = { inc: {}, exp: {} };
+  function leavesForFY(kind, fy) {
+    const c = impLeafCache[kind];
+    if (!c[fy]) {
+      const src = (kind === 'exp') ? expenseNodes : incomeNodes;
+      c[fy] = leavesFromNodes(src.filter((n) => Number(n.fy) === fy));
+    }
+    return c[fy];
   }
-  // 엑셀 항목문자열("일반재정 절기헌금 신년감사") → 앱 말단 항목
-  function matchLeaf(fy, catText) {
-    const leaves = leavesForFY(fy);
+  // 엑셀 항목문자열("식당  식대지원") → 앱 말단 항목. CODE는 쓰지 않는다.
+  function matchLeaf(kind, fy, catText) {
+    const leaves = leavesForFY(kind, fy);
     if (!leaves.length) return null;
     const key = nokey(catText);
     // 1) 전체 경로 일치
@@ -943,6 +1019,85 @@
     } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
 
     const ix = {}; head.forEach((h, i) => { if (ix[nokey(h)] === undefined) ix[nokey(h)] = i; });
+    if (impKind === 'exp') previewExp(head, rows, ix, box);
+    else previewInc(head, rows, ix, box);
+  }
+
+  // ----- 지출 미리보기 -----
+  // 쓰는 열: 날짜 · 항목 · 금액 · 적요. (No·회계년도·주·CODE·청구인ID·청구인·수령인·출금구분·예금주 → 버림)
+  // 원본 282건 전수 확인 결과 청구인·수령인·예금주 열은 전부 비어 있었으나,
+  // 값이 들어 있는 파일도 받을 수 있으므로 있으면 읽어 둔다(명부 매칭은 하지 않고 이름만 저장).
+  function previewExp(head, rows, ix, box) {
+    const cDate = ix['날짜'], cCat = ix['항목'], cAmt = ix['금액'];
+    const cClaim = ix['청구인'], cPayee = ix['수령인'], cMemo = ix['적요'];
+    if ([cDate, cCat, cAmt].some((v) => v === undefined)) {
+      box.innerHTML = '<div class="err">필요한 열(날짜·항목·금액)을 찾지 못했습니다.<br>읽은 헤더: '
+        + esc(head.join(' | ')) + '</div>';
+      return;
+    }
+    const out = [], errs = [];
+    const catMiss = {};
+    rows.forEach((r, i) => {
+      const ln = i + 2;   // 엑셀 행 번호(헤더 포함)
+      const catText = nsp(r[cCat] || '');
+      const rawDate = String(r[cDate] || '').replace(/[^0-9]/g, '');
+      const amount = impAmt(r[cAmt]);
+      const claimantName = cClaim === undefined ? '' : nsp(r[cClaim] || '');
+      const payee = cPayee === undefined ? '' : nsp(r[cPayee] || '');
+      const memo = cMemo === undefined ? '' : nspMulti(r[cMemo] || '');   // 적요는 줄바꿈 보존
+
+      if (!catText && !rawDate && !amount) return;                 // 빈 줄
+      if (rawDate.length !== 8) { errs.push(`${ln}행: 날짜 형식 오류 (${esc(r[cDate] || '')})`); return; }
+      const date = `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`;
+      if (!amount) { errs.push(`${ln}행: 금액 없음`); return; }
+
+      const fy = fiscalYearOf(date);
+      const it = matchLeaf('exp', fy, catText);
+      if (!it) { catMiss[`${fy}|${catText}`] = (catMiss[`${fy}|${catText}`] || 0) + 1; return; }
+
+      out.push({
+        type: 'expense', date, week: weekLabel(date),
+        c1: it.c1, c2: it.c2 || '', c3: it.c3 || '', catPath: pathOf(it), code: it.code || '',
+        claimantNo: null, claimantId: null, claimantName,   // 원본에 명부 ID가 없으므로 이름만
+        payee,
+        amount, memo
+      });
+    });
+
+    const catMissList = Object.entries(catMiss);
+    const blocked = errs.length + catMissList.length;
+    const sum = out.reduce((a, b) => a + b.amount, 0);
+
+    let h = `<div class="ok">읽은 행 ${rows.length}건 · 등록 대상 <b>${out.length}건</b> · 합계 ${wonFmt(sum)}원</div>`;
+    if (catMissList.length) {
+      h += `<div class="err">항목 미매칭 ${catMissList.length}종 — 등록할 수 없습니다</div><ul>`;
+      catMissList.forEach(([k, v]) => { const [fy, t] = k.split('|'); h += `<li class="err">[${fy}회기] ${esc(t)} — ${v}건</li>`; });
+      h += '</ul><div class="ihint">지출항목 설정에서 해당 항목을 만든 뒤 다시 [미리보기] 하세요.</div>';
+    }
+    if (errs.length) {
+      h += `<div class="err">데이터 오류 ${errs.length}건</div><ul>`;
+      errs.slice(0, 20).forEach((e) => { h += `<li class="err">${e}</li>`; });
+      if (errs.length > 20) h += `<li class="err">… 외 ${errs.length - 20}건</li>`;
+      h += '</ul>';
+    }
+    const noClaim = out.filter((p) => !p.claimantName).length;
+    if (noClaim) h += `<div class="warn">청구인 없음 ${noClaim}건 — 원본에 값이 없어 빈칸으로 등록됩니다</div>`;
+
+    if (blocked) {
+      h += '<div class="err" style="margin-top:6px;">오류를 해결한 뒤 다시 미리보기 하세요.</div>';
+      box.innerHTML = h;
+      return;
+    }
+    if (!out.length) { h += '<div class="err">등록할 행이 없습니다.</div>'; box.innerHTML = h; return; }
+
+    impRows = out;
+    $('impRunBtn').disabled = false;
+    $('impRunBtn').textContent = `${out.length}건 등록`;
+    box.innerHTML = h;
+  }
+
+  // ----- 수입 미리보기 -----
+  function previewInc(head, rows, ix, box) {
     const cDate = ix['날짜'], cCat = ix['항목'], cName = ix['이름'], cAmt = ix['금액'];
     const cSpouse = ix['배우자'], cMemo = ix['비고'];
     if ([cDate, cCat, cName, cAmt].some((v) => v === undefined)) {
@@ -962,9 +1117,9 @@
       const catText = nsp(r[cCat] || '');
       const rawDate = String(r[cDate] || '').replace(/[^0-9]/g, '');
       const name = nsp(r[cName] || '');
-      const amount = onlyNum(r[cAmt]);
+      const amount = impAmt(r[cAmt]);
       const spouseName = cSpouse === undefined ? '' : nsp(r[cSpouse] || '');
-      const memo = cMemo === undefined ? '' : nsp(r[cMemo] || '');
+      const memo = cMemo === undefined ? '' : nspMulti(r[cMemo] || '');   // 비고도 줄바꿈 보존
 
       if (!catText && !rawDate && !amount) return;                 // 빈 줄
       if (nokey(catText).indexOf(nokey(IMP_CARRY)) >= 0) { skipped.push(ln); return; }  // 전기이월 제외
@@ -973,7 +1128,7 @@
       if (!amount) { errs.push(`${ln}행: 금액 없음`); return; }
 
       const fy = fiscalYearOf(date);
-      const it = matchLeaf(fy, catText);
+      const it = matchLeaf('inc', fy, catText);
       if (!it) { catMiss[`${fy}|${catText}`] = (catMiss[`${fy}|${catText}`] || 0) + 1; return; }
 
       const cand = nameMap[name] || [];
@@ -1039,33 +1194,34 @@
 
   async function runImport() {
     if (!impRows || !impRows.length) return;
-    if (!confirm(`${impRows.length}건을 등록할까요?`)) return;
+    const M = IMP_META[impKind];
+    if (!confirm(`${M.label} ${impRows.length}건을 등록할까요?`)) return;
     const btn = $('impRunBtn'); const box = $('impLog');
     btn.disabled = true; $('impPreviewBtn').disabled = true;
     const importId = 'imp_' + toYMD(new Date()).replace(/-/g, '') + '_' + String(Date.now()).slice(-6);
     try {
-      let seq = await nextSeq('offerings');
+      let seq = await nextSeq(M.coll);
       const CH = 400;
       for (let i = 0; i < impRows.length; i += CH) {
         const batch = writeBatch(db);
         impRows.slice(i, i + CH).forEach((p) => {
-          batch.set(doc(collection(db, 'offerings')),
+          batch.set(doc(collection(db, M.coll)),
             { ...p, importId, no: seq++, createdAt: serverTimestamp(), createdBy: me.uid });
         });
         await batch.commit();
         btn.textContent = `등록 중… ${Math.min(i + CH, impRows.length)}/${impRows.length}`;
       }
       const n = impRows.length;
-      await addImportHistory({ importId, file: impFileName, count: n, at: new Date().toISOString() });
+      await addImportHistory({ importId, file: impFileName, count: n, coll: M.coll, label: M.label, at: new Date().toISOString() });
       impRows = null; $('impFile').value = '';
       btn.textContent = '등록'; btn.disabled = true;
-      box.innerHTML = `<div class="ok">${n}건을 등록했습니다. (임포트 번호 ${esc(importId)})</div>`;
+      box.innerHTML = `<div class="ok">${M.label} ${n}건을 등록했습니다. (임포트 번호 ${esc(importId)})</div>`;
       await loadImportHistory();
       await loadList();
     } catch (e) {
       box.innerHTML = `<div class="err">등록 실패: ${esc(e.code || e.message)}<br>`
         + `일부만 등록됐을 수 있습니다. 아래 이력에서 [${esc(importId)}]를 취소한 뒤 다시 시도하세요.</div>`;
-      await addImportHistory({ importId, file: impFileName, count: -1, at: new Date().toISOString() });
+      await addImportHistory({ importId, file: impFileName, count: -1, coll: M.coll, label: M.label, at: new Date().toISOString() });
       await loadImportHistory();
     } finally { $('impPreviewBtn').disabled = false; }
   }
@@ -1091,18 +1247,23 @@
       <div class="impitem">
         <div style="flex:1 1 auto; min-width:0;">
           <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(r.file || '–')}</div>
-          <div style="color:var(--hint);">${esc((r.at || '').slice(0, 10))} · ${r.count >= 0 ? r.count + '건' : '실패(부분등록 가능)'} · ${esc(r.importId)}</div>
+          <div style="color:var(--hint);">${esc((r.at || '').slice(0, 10))} · ${esc(r.label || '수입')} · ${r.count >= 0 ? r.count + '건' : '실패(부분등록 가능)'} · ${esc(r.importId)}</div>
         </div>
         <button type="button" class="impbtn2 dgr" data-imp="${esc(r.importId)}">취소</button>
       </div>`).join('');
     box.querySelectorAll('button[data-imp]').forEach((b) => { b.onclick = () => undoImport(b.dataset.imp); });
   }
   async function undoImport(importId) {
-    if (!confirm(`임포트 [${importId}] 로 등록된 수입 기록을 모두 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+    // 삭제 대상 컬렉션은 이력에 기록된 coll 을 따른다.
+    // (coll 이 없는 옛 이력 = 지출 임포트 도입 전 = 전부 수입이므로 offerings 로 폴백)
+    const rec = (await getImportHistory()).find((r) => r.importId === importId) || {};
+    const coll = rec.coll || 'offerings';
+    const label = rec.label || '수입';
+    if (!confirm(`임포트 [${importId}] 로 등록된 ${label} 기록을 모두 삭제할까요?\n되돌릴 수 없습니다.`)) return;
     const box = $('impLog');
     box.innerHTML = '<div>삭제 중…</div>';
     try {
-      const qs = await getDocs(query(collection(db, 'offerings'), where('importId', '==', importId)));
+      const qs = await getDocs(query(collection(db, coll), where('importId', '==', importId)));
       const ds = qs.docs;
       for (let i = 0; i < ds.length; i += 400) {
         const b = writeBatch(db);
@@ -1129,8 +1290,8 @@
     if (isSet) { $('itemEditor').classList.add('hide'); return; }
     $('incFields').classList.toggle('hide', t !== 'inc');
     $('expFields').classList.toggle('hide', t !== 'exp');
-    $('importBtn').classList.toggle('hide', t !== 'inc');   // 불러오기는 수입탭 전용
-    if (t !== 'inc') closeImportPanel();
+    $('importBtn').classList.remove('hide');   // 불러오기: 수입·지출 탭 모두 (설치탭은 위에서 return)
+    closeImportPanel();   // 탭을 바꾸면 패널을 닫는다 (열린 채로 두면 impKind가 실제 탭과 어긋난다)
     $('memoLabel').textContent = t === 'inc' ? '비고' : '적요';
     $('memoSub').textContent = '';
     resetForm();
@@ -1153,8 +1314,8 @@
     $('backBtn').onclick = () => { location.href = 'index.html'; };
     $('rightBtn').onclick = () => alert('통계 화면은 이후 단계에서 추가됩니다.');
     $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); refreshExpenseCats(); });
-    $('incCat').addEventListener('change', () => { updateCode(); updateIncFace(); });
-    $('expCat').addEventListener('change', () => { updateCode(); updateExpFace(); });
+    $('incCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateIncFace(); });
+    $('expCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateExpFace(); });
     $('incName').addEventListener('input', onNameEdit);
     $('incName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doNameSearch(); if (linked) $('inAmount').focus(); } });
     $('incSearchBtn').addEventListener('click', doNameSearch);
