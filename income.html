@@ -43,6 +43,7 @@
     .iconbtn.del { color:var(--danger); }
     .inactive { opacity:.45; }
     .tag { font-size:10.5px; padding:0 6px; border-radius:99px; background:#eceee9; color:#8a8f89; margin-left:5px; }
+    .fundtag { font-size:10.5px; padding:1px 7px; border-radius:99px; background:var(--green-soft); color:var(--green-deep); margin-left:6px; flex:none; white-space:nowrap; }
     .empty { text-align:center; color:var(--muted); font-size:14px; padding:48px 16px; }
   </style>
   <style>
@@ -54,7 +55,9 @@
     .fld { margin-bottom:12px; }
     .fld label { display:block; font-size:12.5px; color:var(--muted); margin-bottom:5px; }
     .fld input { width:100%; height:42px; padding:0 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; color:var(--text); background:var(--card); }
+    .fld select { width:100%; height:42px; padding:0 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; color:var(--text); background:var(--card); }
     .fld input.invalid { border-color:var(--danger); box-shadow:0 0 0 2px rgba(217,48,37,.14); }
+    .fhint { font-size:11.5px; color:var(--muted); margin-top:5px; }
     .ferr { display:none; font-size:11.5px; color:var(--danger); margin-top:5px; }
     .ferr.show { display:block; }
     .mbtns { display:flex; gap:10px; margin-top:8px; }
@@ -95,6 +98,11 @@
         <input id="mName" autocomplete="off" placeholder="예: 주일헌금">
         <div class="ferr" id="mNameErr"></div>
       </div>
+      <div class="fld">
+        <label>기금</label>
+        <select id="mFund"></select>
+        <div class="fhint" id="mFundHint"></div>
+      </div>
       <div class="mbtns">
         <button class="b-cancel" id="mCancel">취소</button>
         <button class="b-save" id="mSave">저장</button>
@@ -113,6 +121,26 @@
     const KIND = 'income';     // 이 화면은 수입항목만 다룸
     const MIN_LEVEL = 3;       // 재정담당(3단계) 이상만
     const BASE_CODE = 100010, STEP = 10, MAX_DEPTH = 3;
+
+    // ---- 기금(fund) ----
+    // 목적기금은 교회가 마음대로 쓸 수 없는 '별도 주머니'다. 결산에서 잔액을 분리해 집계한다.
+    // 저장 규칙: 노드에 fund 가 없거나 '' 이면 상위에서 상속. 끝까지 없으면 '일반'.
+    //   → 지출항목·일반 수입항목은 아무것도 저장하지 않아도 자동으로 '일반'이 된다 (백필 불필요).
+    const FUNDS = ['일반', '선교', '장학', '건축', '차량'];
+    const DEFAULT_FUND = '일반';
+
+    // 상위로 거슬러 올라가며 명시된 fund 를 찾는다. byId 없으면 cats 에서 조회.
+    function fundOf(node, byId) {
+      let n = node, guard = 0;
+      while (n && guard++ < 10) {
+        if (n.fund && FUNDS.includes(n.fund)) return n.fund;
+        if (!n.parentId) break;
+        n = byId ? byId[n.parentId] : cats.find((c) => c.id === n.parentId);
+      }
+      return DEFAULT_FUND;
+    }
+    // 부모가 물려주는 기금 (신규 추가 시 '상위와 같음'이 무엇이 되는지 안내용)
+    const inheritedFund = (parent) => (parent ? fundOf(parent) : DEFAULT_FUND);
 
     let me = { uid: null, level: 1 };
     let cats = [];        // 모든 연도의 수입항목 노드
@@ -220,6 +248,7 @@
     const hasChildren = (id) => cats.some((c) => Number(c.fy) === curFY && c.parentId === id);
 
     // ---- 기본 세트 (빈 화면일 때 '기본 항목 불러오기'로 1회 생성) ----
+    // [코드, 항목명, 단계, 기금]  — 기금 생략 = 상위와 같음 (최상위면 '일반')
     const DEFAULT_INCOME = [
       ['100010', '일반재정', 1],
       ['100020', '주일헌금', 2], ['100030', '감사헌금', 2], ['100040', '십일조', 2],
@@ -228,13 +257,14 @@
       ['100100', '성탄감사', 3], ['100110', '추수감사', 3],
       ['100120', '기타헌금', 2],
       ['100130', '특별헌금', 1],
-      ['100140', '선교헌금', 2], ['100150', '장학헌금', 2], ['100160', '건축헌금', 2], ['100170', '차량구입', 2],
+      ['100140', '선교헌금', 2, '선교'], ['100150', '장학헌금', 2, '장학'],
+      ['100160', '건축헌금', 2, '건축'], ['100170', '차량구입', 2, '차량'],
       ['100180', '기타', 1],
       ['100190', '후원금', 2], ['100200', '이자', 2], ['100210', '기타', 2],
       ['100220', '이월', 1],
       ['100230', '일반재정 이월', 2],
-      ['100240', '선교헌금 이월', 2], ['100250', '장학헌금 이월', 2],
-      ['100260', '건축헌금 이월', 2], ['100270', '차량헌금 이월', 2]
+      ['100240', '선교헌금 이월', 2, '선교'], ['100250', '장학헌금 이월', 2, '장학'],
+      ['100260', '건축헌금 이월', 2, '건축'], ['100270', '차량헌금 이월', 2, '차량']
     ];
     async function seedDefaults() {
       if (inFY().length > 0) { alert('이미 이 연도에 항목이 있어 기본 세트를 불러오지 않습니다.'); return; }
@@ -243,10 +273,11 @@
       if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
       try {
         let lastL1 = null, lastL2 = null;
-        for (const [code, name, level] of DEFAULT_INCOME) {
+        for (const [code, name, level, fund] of DEFAULT_INCOME) {
           const parentId = level === 1 ? null : (level === 2 ? lastL1 : lastL2);
           const ref = await addDoc(collection(db, COL), {
             kind: KIND, fy: curFY, code, name, level, parentId,
+            fund: fund || '',
             active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           });
           if (level === 1) { lastL1 = ref.id; lastL2 = null; }
@@ -282,6 +313,7 @@
             batch.set(doc(db, COL, idMap[n.id]), {
               kind: KIND, fy: curFY, code: n.code, name: n.name, level: n.level,
               parentId: n.parentId ? (idMap[n.parentId] || null) : null,
+              fund: n.fund || '',
               active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
             });
           });
@@ -343,9 +375,11 @@
     }
     function render() {
       const rows = [];
+      const byId = {};
+      cats.forEach((c) => { byId[c.id] = c; });
       const walk = (pid, level) => {
         childrenOf(pid).forEach((c) => {
-          rows.push(rowHtml(c, level));
+          rows.push(rowHtml(c, level, fundOf(c, byId)));
           walk(c.id, level + 1);
         });
       };
@@ -370,18 +404,21 @@
       bindRowEvents();
     }
 
-    function rowHtml(c, level) {
+    function rowHtml(c, level, fund) {
       const pad = level * 18;
       const canAdd = level < MAX_DEPTH;
       const icon = level === 1 ? '📁' : (level === 2 ? '↳' : '·');
       const addBtn = canAdd
         ? `<button class="iconbtn add" data-add="${c.id}" aria-label="하위 추가">＋</button>`
         : '<span style="width:30px;"></span>';
+      // 목적기금만 뱃지로 표시 (일반재정은 기본값이라 표시하지 않는다)
+      const fundTag = (fund && fund !== DEFAULT_FUND)
+        ? `<span class="fundtag">${esc(fund)}</span>` : '';
       return `<div class="trow lvl${level}">
         <span class="t-code">${esc(c.code)}</span>
         <span class="t-name" style="padding-left:${pad}px;">
           <span style="color:var(--muted); font-size:13px;">${icon}</span>
-          <span class="nm">${esc(c.name)}</span>
+          <span class="nm">${esc(c.name)}</span>${fundTag}
         </span>
         <span class="t-acts">${addBtn}<button class="iconbtn" data-edit="${c.id}" aria-label="수정">✎</button><button class="iconbtn del" data-del="${c.id}" aria-label="삭제">🗑</button></span>
       </div>`;
@@ -408,12 +445,37 @@
       openModal('항목 수정', p ? `상위: ${p.name} (${p.code})` : '최상위(1단계) 항목입니다.');
       $('mCode').value = c.code || '';
       $('mName').value = c.name || '';
+      $('mFund').value = FUNDS.includes(c.fund) ? c.fund : '';
+      syncFundHint(p);
+    }
+    // 기금 셀렉트: '' = 상위와 같음(상속)
+    function buildFundSelect() {
+      $('mFund').innerHTML = '<option value="">상위와 같음</option>'
+        + FUNDS.map((f) => `<option value="${f}">${f}</option>`).join('');
+    }
+    // '상위와 같음'을 골랐을 때 실제로 무엇이 되는지 안내
+    function syncFundHint(parent) {
+      const inh = inheritedFund(parent);
+      $('mFundHint').textContent = $('mFund').value
+        ? '이 항목과 그 하위가 이 기금으로 집계됩니다.'
+        : `상위와 같음 → 현재 ‘${inh}’ 로 집계됩니다.`;
+    }
+    function curParent() {
+      if (editId) {
+        const c = cats.find((x) => x.id === editId);
+        return c && c.parentId ? cats.find((x) => x.id === c.parentId) : null;
+      }
+      return addParent;
     }
     function openModal(title, parentText) {
       $('mTitle').textContent = title;
       $('mParent').textContent = parentText || '';
       clearErr();
-      if (!editId) { $('mCode').value = nextCode(); $('mName').value = ''; }
+      if (!editId) {
+        $('mCode').value = nextCode(); $('mName').value = '';
+        $('mFund').value = '';
+        syncFundHint(addParent);
+      }
       $('mask').classList.add('on');
       setTimeout(() => $('mName').focus(), 50);
     }
@@ -436,15 +498,17 @@
       else if (cats.some((c) => Number(c.fy) === curFY && c.code === code && c.id !== editId)) { showErr('mCode', '이미 사용 중인 코드입니다.'); bad = true; }
       if (!name) { showErr('mName', '항목명을 입력하세요.'); bad = true; }
       if (bad) return;
+      const fund = FUNDS.includes($('mFund').value) ? $('mFund').value : '';   // '' = 상위와 같음
       const btn = $('mSave'); btn.disabled = true; btn.textContent = '저장 중…';
       try {
         if (editId) {
-          await updateDoc(doc(db, COL, editId), { code, name, updatedAt: serverTimestamp() });
+          await updateDoc(doc(db, COL, editId), { code, name, fund, updatedAt: serverTimestamp() });
         } else {
           const level = addParent ? ((addParent.level || 1) + 1) : 1;
           await addDoc(collection(db, COL), {
             kind: KIND, fy: curFY, code, name, level,
             parentId: addParent ? addParent.id : null,
+            fund,
             active: true,
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           });
@@ -470,6 +534,8 @@
     }
 
     // ---- 이벤트 연결 ----
+    buildFundSelect();
+    $('mFund').onchange = () => syncFundHint(curParent());
     $('addTopBtn').onclick = openTop;
     $('fySel').onchange = onYearChange;
     $('renumBtn').onclick = renumberAll;

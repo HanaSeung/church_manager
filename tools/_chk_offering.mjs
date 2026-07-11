@@ -1279,7 +1279,9 @@
   }
 
   // ----- 탭 -----
+  const TABS = ['inc', 'exp', 'set'];   // 이 파일이 실제로 그리는 탭 ('stats'는 별도 파일)
   function setTab(t) {
+    if (t === 'stats') { location.href = 'stats.html'; return; }   // 통계는 stats.html 로 이동
     curTab = t;
     document.querySelectorAll('.tab').forEach((el) => el.classList.toggle('on', el.dataset.tab === t));
     const isSet = t === 'set';
@@ -1312,7 +1314,6 @@
 
     document.querySelectorAll('.tab').forEach((el) => { el.onclick = () => setTab(el.dataset.tab); });
     $('backBtn').onclick = () => { location.href = 'index.html'; };
-    $('rightBtn').onclick = () => alert('통계 화면은 이후 단계에서 추가됩니다.');
     $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); refreshExpenseCats(); });
     $('incCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateIncFace(); });
     $('expCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateExpFace(); });
@@ -1352,11 +1353,14 @@
     $('thisWeekBtn').onclick = () => { const [a, b] = weekRange($('inDate').value || today); $('fromDate').value = a; $('toDate').value = b; loadList(); };
     $('setIncBtn').onclick = () => { location.href = 'income.html'; };
     $('setExpBtn').onclick = () => { location.href = 'expense.html'; };
+    $('setBudgetBtn').onclick = () => { location.href = 'budget.html'; };
     $('setCloseBtn').onclick = openCloseMonth;
     $('cmCancel').onclick = closeCloseMonth;
     $('cmSave').onclick = saveCloseMonth;
     $('closeMonthSel').addEventListener('change', updateCloseHint);
     $('closeMonthModal').addEventListener('click', (e) => { if (e.target === $('closeMonthModal')) closeCloseMonth(); });
 
-    setTab('inc');
+    // stats.html 에서 돌아올 때 ?tab=exp 처럼 탭을 지정할 수 있다
+    const qTab = new URLSearchParams(location.search).get('tab');
+    setTab(TABS.includes(qTab) ? qTab : 'inc');
   }
