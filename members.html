@@ -154,6 +154,7 @@
           <button class="ftab" data-filter="baptized" title="세례교인"><span>세례</span><span class="fcnt" id="cntBaptized">0</span></button>
           <button class="ftab" data-filter="member" title="교인"><span>교인</span><span class="fcnt" id="cntMember">0</span></button>
         </div>
+        <button class="ftab" data-filter="deceased" id="ftabDeceased" style="display:none;">별세</button>
         <button class="ftab" data-filter="archived" id="ftabArchived" style="display:none;">보관됨</button>
       </div>
       </div>
@@ -311,9 +312,9 @@
             </div>
             <div class="field"><label>신급일</label>
               <div style="display:flex; gap:6px; align-items:center; position:relative;">
-                <input id="fGradeDate" type="text" inputmode="numeric" placeholder="YYYY-MM" style="flex:1; min-width:0;">
+                <input id="fGradeDate" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="flex:1; min-width:0;">
                 <button type="button" class="btn-line" id="fGradeDateCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
-                <input id="fGradeDatePick" type="month" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+                <input id="fGradeDatePick" type="date" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
               </div>
               <div class="ferr" id="eGradeDateErr">날짜가 올바르지 않습니다.</div>
             </div>
@@ -353,6 +354,19 @@
             <div class="field"><label>현재 상태</label>
               <select id="fStatus"><option selected>예배출석</option><option>가끔출석</option><option>군입대</option><option>유학</option><option>불출석</option></select>
             </div>
+            <!-- 별세일: 교인구분='별세'일 때만 노출. 배우자의 '사별' 표시도 이 값을 끌어다 쓴다. -->
+            <div class="field" id="rowDeceased" style="display:none;"><label>별세일</label>
+              <div style="display:flex; gap:6px; align-items:center; position:relative;">
+                <input id="fDeceased" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="flex:1; min-width:0;">
+                <button type="button" class="btn-line" id="fDeceasedCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+                <input id="fDeceasedPick" type="date" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+              </div>
+              <div class="ferr" id="eDeceasedErr">날짜가 올바르지 않습니다.</div>
+            </div>
+            <!-- 출석교회: 교인구분='타교인'일 때만 노출 (지금 다니는 교회) -->
+            <div class="field" id="rowAttendChurch" style="display:none;"><label>출석교회</label>
+              <input id="fAttendChurch" type="text" placeholder="○○교회">
+            </div>
           </div>
         </div>
       </div>
@@ -367,9 +381,9 @@
             </div>
             <div class="field"><label>결혼일</label>
               <div style="display:flex; gap:6px; align-items:center; position:relative;">
-                <input id="fWed" type="text" inputmode="numeric" placeholder="YYYY-MM" style="flex:1; min-width:0;">
+                <input id="fWed" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="flex:1; min-width:0;">
                 <button type="button" class="btn-line" id="fWedCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
-                <input id="fWedPick" type="month" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+                <input id="fWedPick" type="date" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
               </div>
               <div class="ferr" id="eWedErr">날짜가 올바르지 않습니다.</div>
             </div>
@@ -490,10 +504,13 @@
       '성도': ['성도'],
       '선교사': ['선교사'],
       '사모': ['사모'],
+      '없음': [''],   // 비성도·타종교 등 직분이 없는 사람. 세부는 빈칸 → 배지 미표시, 정렬 맨 뒤.
     };
     const ROLE_CATS = Object.keys(ROLE_GROUPS);
     const OFFICER_CATS = ['목사', '장로', '안수집사', '권사'];
-    function roleCatOf(sub) { return ROLE_CATS.find((c) => ROLE_GROUPS[c].includes(sub)) || ''; }
+    // 세부직분 → 대분류 역조회. 빈 값은 '없음'(직분 미부여)이 아니라 '미상'으로 보고 ''를 돌려준다.
+    // ('없음' 대분류의 세부가 빈 문자열이라, 가드 없으면 옛 데이터의 빈 role이 전부 '없음'으로 잡힌다)
+    function roleCatOf(sub) { if (!sub) return ''; return ROLE_CATS.find((c) => ROLE_GROUPS[c].includes(sub)) || ''; }
     function fillRoleCat(sel) { sel.innerHTML = ROLE_CATS.map((c) => `<option${c === '성도' ? ' selected' : ''}>${c}</option>`).join(''); }
     function fillRoleSub(sel, cat, pick) { sel.innerHTML = (ROLE_GROUPS[cat] || []).map((s) => `<option${s === pick ? ' selected' : ''}>${s}</option>`).join(''); }
     const padNo = (n) => (Number.isFinite(Number(n)) && Number(n) > 0) ? '#' + String(Number(n)).padStart(3, '0') : '';
@@ -519,15 +536,20 @@
     const initial = (name) => (name || '?').trim().charAt(0) || '?';
     const dot = (s) => (s || '').replace(/-/g, '.');
 
-    function calcAge(birth) {
+    // 나이 계산. refDate(별세일)가 있으면 그 날 기준으로 고정 → 별세자의 나이가 매년 늘지 않는다.
+    function calcAge(birth, refDate) {
       const m = (birth || '').trim().match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})$/);
       if (!m) return null;
       const by = +m[1], bm = +m[2], bd = +m[3];
-      const t = new Date();
+      const r = (refDate || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const t = r ? new Date(+r[1], +r[2] - 1, +r[3]) : new Date();
       let age = t.getFullYear() - by;
       if ((t.getMonth() + 1) < bm || ((t.getMonth() + 1) === bm && t.getDate() < bd)) age--;
       return (age >= 0 && age < 130) ? age : null;
     }
+    // 나이 표기: 별세자는 '향년', 생존자는 '만'
+    const ageLabel = (m) => (m && m.deceasedDate) ? '향년' : '만';
+    const ageOf = (m) => (m ? calcAge(m.birth, m.deceasedDate) : null);
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) { location.replace('index.html'); return; }
@@ -717,15 +739,22 @@
     }
 
     function renderList() {
+      const isDead = (m) => m.memberType === '별세';
       const na = allMembers.filter((m) => m.archived).length;
+      const nd = allMembers.filter((m) => !m.archived && isDead(m)).length;
       const ta = $('ftabArchived');
       ta.style.display = na ? '' : 'none';
       ta.textContent = '보관됨 ' + na;
-      if (currentFilter === 'archived' && na === 0) {
+      const td = $('ftabDeceased');
+      td.style.display = nd ? '' : 'none';
+      td.textContent = '별세 ' + nd;
+      if ((currentFilter === 'archived' && na === 0) || (currentFilter === 'deceased' && nd === 0)) {
         currentFilter = 'all';
         document.querySelectorAll('.ftab').forEach((x) => x.classList.toggle('ftab-on', x.dataset.filter === 'all'));
       }
-      const live = allMembers.filter((m) => !m.archived);
+      // 별세자는 '전체'를 포함한 일반 탭에서 제외한다(데이터는 남기고 화면에서만 뺀다).
+      // 배우자의 사별일·헌금 기록·가정 구성원 연결이 유지되어야 하므로 archived(숨김) 처리하지 않는다.
+      const live = allMembers.filter((m) => !m.archived && !isDead(m));
       const catOf = (m) => m.roleCat || roleCatOf(m.role) || '성도';
       $('cntAll').textContent = live.length;
       $('cntNew').textContent = live.filter((m) => m.memberType === '새가족').length;
@@ -736,8 +765,9 @@
       const kw = rawKw.toLowerCase();
       let rows;
       if (currentFilter === 'archived') rows = allMembers.filter((m) => m.archived);
+      else if (currentFilter === 'deceased') rows = allMembers.filter((m) => !m.archived && isDead(m));
       else {
-        rows = allMembers.filter((m) => !m.archived);
+        rows = allMembers.filter((m) => !m.archived && !isDead(m));
         if (currentFilter === 'new') rows = rows.filter((m) => m.memberType === '새가족');
         else if (currentFilter === 'officer') rows = rows.filter((m) => OFFICER_CATS.includes(m.roleCat || roleCatOf(m.role) || '성도'));
         else if (currentFilter === 'baptized') rows = rows.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교'));
@@ -911,16 +941,16 @@
     }
 
     function dIdentity(m) {
-      const age = calcAge(m.birth);
-      const top = [m.gender, (age != null ? age + '세' : null), m.memberType, m.status].filter(Boolean).join(' · ');
+      const age = ageOf(m);
+      const top = [m.gender, (age != null ? `${ageLabel(m)} ${age}세` : null), m.memberType, m.status].filter(Boolean).join(' · ');
       return `<div style="text-align:center; margin-bottom:14px;">
         <div class="avatar" style="width:66px; height:66px; font-size:26px; margin:0 auto 8px;">${esc(initial(m.name))}</div>
         <div style="font-size:19px; font-weight:700;">${esc(m.name || '(이름 없음)')}${m.role ? ` <span class="badge" style="vertical-align:3px;">${esc(m.role)}</span>` : ''}${m.memberType === '새가족' ? ' <span class="badge badge-new" style="vertical-align:3px;">새가족</span>' : ''}</div>
         <div style="font-size:13px; color:var(--muted); margin-top:3px;">${esc(top)}</div></div>`;
     }
     function dIdentityGreen(m) {
-      const age = calcAge(m.birth);
-      const meta = [m.role, m.gender, (age != null ? age + '세' : null), m.status].filter(Boolean).join(' · ');
+      const age = ageOf(m);
+      const meta = [m.role, m.gender, (age != null ? `${ageLabel(m)} ${age}세` : null), m.status].filter(Boolean).join(' · ');
       return `<div style="background:var(--green); border-radius:14px; padding:16px; color:#fff; display:flex; align-items:center; gap:12px; margin-bottom:10px;">
         <div style="width:54px; height:54px; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; font-size:22px; font-weight:700; display:flex; align-items:center; justify-content:center;">${esc(initial(m.name))}</div>
         <div><div style="font-size:19px; font-weight:700;">${esc(m.name || '(이름 없음)')}</div><div style="font-size:12px; color:#d7e7df; margin-top:2px;">${esc(meta)}</div></div></div>`;
@@ -940,12 +970,26 @@
         ${cell(m.email ? 'mailto:' + m.email : '', 'mail', '메일', false)}
         ${cell(map, 'map', '지도', false)}</div>`;
     }
+    // 사별일 = 배우자(별세자)의 별세일. 죽은 쪽에만 저장하고 산 쪽은 끌어다 쓴다.
+    function spouseDeathDate(m) {
+      if (!m || !m.spouseId) return '';
+      const sp = allMembers.find((x) => x.id === m.spouseId);
+      return (sp && sp.deceasedDate) ? sp.deceasedDate : '';
+    }
+    function marriageTxt(m) {
+      if (!m || !m.marriage) return '';
+      if (m.marriage === '사별') {
+        const d = spouseDeathDate(m);
+        return d ? `사별 · ${dot(d)}` : '사별';
+      }
+      return m.marriage;
+    }
     function dFields(m) {
-      const age = calcAge(m.birth);
-      const birthTxt = m.birth ? (m.birth + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · 만 ${age}세` : '')) : '';
+      const age = ageOf(m);
+      const birthTxt = m.birth ? (m.birth + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · ${ageLabel(m)} ${age}세` : '')) : '';
       const addr = [m.zipcode ? '(' + m.zipcode + ')' : '', m.address, m.addressDetail].filter(Boolean).join(' ');
       const reg = [dot(m.regDate), m.regType].filter(Boolean).join(' · ');
-      const wed = [m.marriage, dot(m.wedDate)].filter(Boolean).join(' · ');
+      const wed = [marriageTxt(m), dot(m.wedDate)].filter(Boolean).join(' · ');
       const core = [
         ['mobile', '휴대폰', m.phone || ''], ['cake', '생일', birthTxt], ['map', '주소', addr],
         ['calendar', '등록', reg], ['award', '신급', BADGE_GRADE(m)], ['heart', '결혼', wed],
@@ -955,6 +999,8 @@
         ['church', '이전교회', m.prevChurch], ['church', '옮긴교회', m.movedChurch], ['guide', '인도자', m.guide],
         ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
         ['calendar', '임명일', dot(m.roleDate)], ['church', '임직교회', m.roleChurch],
+        ['church', '출석교회', m.attendChurch],
+        ['calendar', '별세일', dot(m.deceasedDate)],
       ];
       return { core, extra };
     }
@@ -994,7 +1040,7 @@
       return `<div style="font-size:12px; color:var(--muted); margin:14px 4px 6px;">가정 구성원</div>
         <div style="background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;">${fam.map((x, i) => {
           const self = x.id === m.id; const relD = relLabel(x.relation);
-          const kage = calcAge(x.birth); const relTxt = relD + ((kage != null && /아들|딸|손자|손녀/.test(relD)) ? ` · ${kage}세` : '');
+          const kage = ageOf(x); const relTxt = relD + ((kage != null && /아들|딸|손자|손녀/.test(relD)) ? ` · ${kage}세` : '');
           const av = self ? 'background:var(--green); color:#fff;' : 'background:var(--green-soft); color:var(--green);';
           return `<div ${self ? '' : `data-openid="${x.id}"`} style="display:flex; align-items:center; gap:11px; padding:11px 14px; ${i ? 'border-top:1px solid var(--line);' : ''} ${self ? 'background:var(--green-soft);' : 'opacity:.55; cursor:pointer;'}">
             <span style="width:30px; height:30px; border-radius:50%; ${av} font-size:12px; display:flex; align-items:center; justify-content:center;">${esc(initial(x.name))}</span>
@@ -1003,8 +1049,8 @@
         }).join('')}</div>`;
     }
     function dColsBody(m) {
-      const age = calcAge(m.birth);
-      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · 만 ${age}세` : '')) : '';
+      const age = ageOf(m);
+      const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · ${ageLabel(m)} ${age}세` : '')) : '';
       return `<div class="dsec">기본</div>
          ${drow('휴대폰', m.phone ? `<a href="tel:${esc(telClean(m.phone))}" style="color:var(--green); text-decoration:none;">${esc(m.phone)}</a>` : '')}
          ${drow('집전화', m.phoneHome ? `<a href="tel:${esc(telClean(m.phoneHome))}" style="color:var(--green); text-decoration:none;">${esc(m.phoneHome)}</a>` : '')}
@@ -1022,8 +1068,10 @@
          ${drow('집례자', esc(m.officiant))}
          ${drow('임명일', esc(dot(m.roleDate)))}
          ${drow('임직교회', esc(m.roleChurch))}
+         ${drow('출석교회', esc(m.attendChurch))}
+         ${drow('별세일', esc(dot(m.deceasedDate)))}
          <div class="dsec">가족</div>
-         ${drow('결혼관계', esc(m.marriage))}
+         ${drow('결혼관계', esc(marriageTxt(m)))}
          ${drow('결혼일', esc(dot(m.wedDate)))}
          ${drow('배우자', esc(m.spouseName))}
          ${dFamilyChips(m)}`;
@@ -1116,7 +1164,9 @@
       $('fAddress').value = m?.address || '';
       $('fAddressDetail').value = m?.addressDetail || '';
       setEmailFields(m?.email || '');
-      $('fRegDate').value = m?.regDate || new Date().toISOString().slice(0, 10);
+      // 신규 등록일 때만 오늘 날짜를 기본값으로. 기존 성도는 빈 값을 그대로 유지한다.
+      // (m?.regDate || today) 로 하면 등록일을 지운 성도가 다시 열 때 오늘 날짜로 되살아난다.
+      $('fRegDate').value = m ? (m.regDate || '') : new Date().toISOString().slice(0, 10);
       $('fRegType').value = m?.regType || '';
       $('fGuide').value = m?.guide || '';
       $('fPrev').value = m?.prevChurch || '';
@@ -1132,6 +1182,9 @@
       $('fRoleChurch').value = m?.roleChurch || '';
       $('fType').value = m?.memberType || '교인';
       $('fStatus').value = m?.status || '예배출석';
+      $('fDeceased').value = m?.deceasedDate || '';
+      $('fAttendChurch').value = m?.attendChurch || '';
+      syncDeceasedRow();
       $('fHead').value = m?.headName || '';
       $('fRel').value = m?.relation || '';
       if (m && !$('fHead').value && ((m.headId && m.headId === m.id) || m.relation === '본인')) {
@@ -1171,8 +1224,10 @@
       return fmtBirth(v);
     }
     function updateAge() {
-      const a = calcAge($('fBirth').value);
-      $('ageBox').textContent = (a != null) ? (a + '세') : '–';
+      // 교인구분='별세'면 별세일 기준으로 고정(향년). 아니면 오늘 기준(만).
+      const dead = ($('fType').value === '별세') ? $('fDeceased').value : '';
+      const a = calcAge($('fBirth').value, dead);
+      $('ageBox').textContent = (a != null) ? `${dead ? '향년' : '만'} ${a}세` : '–';
     }
     $('fBirth').addEventListener('input', (e) => { e.target.value = fmtBirth(e.target.value); updateAge(); });
     $('fBirth').addEventListener('blur', (e) => { e.target.value = fmtBirthBlur(e.target.value); updateAge(); });
@@ -1213,8 +1268,21 @@
     const CAL_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
     function normDateStr(v, precision) {
       const digits = (v || '').replace(/\D/g, '');
-      const need = precision === 'month' ? 6 : 8;
       if (digits === '') return { val: '', ok: true };
+      // 'partial': 연(4) / 연월(6) / 연월일(8) 모두 허용. 아는 만큼만 입력.
+      if (precision === 'partial') {
+        if (digits.length === 4) return { val: digits, ok: true };
+        if (digits.length === 6) {
+          const mo = +digits.slice(4, 6);
+          return (mo >= 1 && mo <= 12) ? { val: digits.slice(0, 4) + '-' + digits.slice(4, 6), ok: true } : { val: '', ok: false };
+        }
+        if (digits.length === 8) {
+          const f = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6, 8);
+          return dateOk(f) ? { val: f, ok: true } : { val: '', ok: false };
+        }
+        return { val: '', ok: false };
+      }
+      const need = precision === 'month' ? 6 : 8;
       if (digits.length !== need) return { val: '', ok: false };
       if (precision === 'month') {
         const mo = +digits.slice(4, 6);
@@ -1225,7 +1293,9 @@
     }
     function setupDateInput(id, errId, calId, pickId, precision) {
       const inp = $(id), err = $(errId), cal = $(calId), pick = $(pickId);
-      const re = precision === 'month' ? /^\d{4}-\d{2}$/ : /^\d{4}-\d{2}-\d{2}$/;
+      const re = precision === 'month' ? /^\d{4}-\d{2}$/
+        : precision === 'partial' ? /^\d{4}-\d{2}-\d{2}$/   // 달력엔 완전한 날짜만 넘긴다
+        : /^\d{4}-\d{2}-\d{2}$/;
       function apply() {
         const r = normDateStr(inp.value, precision);
         inp.value = r.val;
@@ -1247,9 +1317,27 @@
       return apply;
     }
     const applyRegDate = setupDateInput('fRegDate', 'eRegDateErr', 'fRegDateCal', 'fRegDatePick', 'date');
-    const applyGradeDate = setupDateInput('fGradeDate', 'eGradeDateErr', 'fGradeDateCal', 'fGradeDatePick', 'month');
-    const applyWedDate = setupDateInput('fWed', 'eWedErr', 'fWedCal', 'fWedPick', 'month');
+    // 신급일·결혼일: 연(1985) / 연월(1985-03) / 연월일(1985-03-15) 모두 허용 — 아는 만큼만 입력
+    const applyGradeDate = setupDateInput('fGradeDate', 'eGradeDateErr', 'fGradeDateCal', 'fGradeDatePick', 'partial');
+    const applyWedDate = setupDateInput('fWed', 'eWedErr', 'fWedCal', 'fWedPick', 'partial');
     const applyPrayDate = setupDateInput('fPrayDate', 'ePrayDateErr', 'prayDateCal', 'prayDatePick', 'date');
+    const applyDeceased = setupDateInput('fDeceased', 'eDeceasedErr', 'fDeceasedCal', 'fDeceasedPick', 'date');
+
+    // ── 교인구분에 따른 조건부 칸 (별세일 / 출석교회) ──
+    function syncDeceasedRow() {
+      const t = $('fType').value;
+      const dead = (t === '별세');
+      const other = (t === '타교인');
+      $('rowDeceased').style.display = dead ? '' : 'none';
+      $('rowAttendChurch').style.display = other ? '' : 'none';
+      if (!dead) { $('fDeceased').value = ''; $('fDeceased').classList.remove('invalid'); $('eDeceasedErr').classList.remove('show'); }
+      if (!other) { $('fAttendChurch').value = ''; }
+      updateAge();   // 별세 여부에 따라 만/향년 전환
+    }
+    $('fType').addEventListener('change', syncDeceasedRow);
+    $('fDeceased').addEventListener('input', updateAge);
+    $('fDeceased').addEventListener('blur', updateAge);
+    $('fDeceasedPick').addEventListener('change', updateAge);
 
     // ── 기도제목 (날짜별) ──
     let prayers = [];          // [{date, text}]
@@ -1333,14 +1421,15 @@
       }
     });
 
-    $('dupBtn').addEventListener('click', () => {
+    function handleDupCheck() {
       const name = $('fName').value.trim();
       const h = $('dupHint');
       if (!name) { h.className = 'hint warn'; h.textContent = '먼저 이름을 입력하세요.'; return; }
       const hit = allMembers.filter((x) => x.name === name && x.id !== editingId);
       if (hit.length) { h.className = 'hint warn'; h.textContent = `⚠ 명부에 「${name}」 님이 이미 ${hit.length}명 있습니다. 동명이인인지 확인하세요.`; }
       else { h.className = 'hint ok'; h.textContent = '✓ 같은 이름이 없습니다.'; }
-    });
+    }
+    $('dupBtn').addEventListener('click', handleDupCheck);
 
     // ── 명부 검색 오버레이 ──
     let pickTarget = null;
@@ -1428,6 +1517,17 @@
     $('fSpouse').addEventListener('input', () => { pickSpouseId = null; setSpouseBadge(null); });
     $('guideBtn').addEventListener('click', handleGuideSearch);
     $('fGuide').addEventListener('input', () => { pickGuideId = null; setGuideBadge(null); });
+
+    // Enter = 옆 버튼 클릭 (이름→동명이인 확인, 세대주/배우자/인도자→명부 검색)
+    const onEnter = (id, fn) => $(id).addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      fn();
+    });
+    onEnter('fName', handleDupCheck);
+    onEnter('fHead', handleHeadSearch);
+    onEnter('fSpouse', handleSpouseSearch);
+    onEnter('fGuide', handleGuideSearch);
     $('pickInput').addEventListener('input', (e) => renderPick(e.target.value));
     $('pickClose').addEventListener('click', () => $('pickBk').classList.remove('on'));
     $('pickBk').addEventListener('click', (e) => { if (e.target === $('pickBk')) $('pickBk').classList.remove('on'); });
@@ -1553,6 +1653,7 @@
       applyRegDate();
       applyGradeDate();
       applyWedDate();
+      applyDeceased();
       const base = {
         name,
         gender: $('fGender').value,
@@ -1580,6 +1681,8 @@
         roleChurch: $('fRoleChurch').value.trim(),
         memberType: $('fType').value,
         status: $('fStatus').value,
+        deceasedDate: $('fType').value === '별세' ? $('fDeceased').value : '',
+        attendChurch: $('fType').value === '타교인' ? $('fAttendChurch').value.trim() : '',
         marriage: $('fMarriage').value,
         wedDate: $('fWed').value,
         spouseId: pickSpouseId || null,

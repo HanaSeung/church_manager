@@ -3,7 +3,7 @@
   import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import {
     collection, addDoc, getDoc, getDocs, doc, deleteDoc, setDoc, updateDoc,
-    query, where, serverTimestamp
+    query, where, writeBatch, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const $ = (id) => document.getElementById(id);
@@ -860,6 +860,263 @@
   // 수입=income.html, 지출=expense.html 로 이관됨. 옛 인페이지 flat 편집기(openEditor/saveConfig)는
   // 호출부가 없고 옛 finConfig/items 문서를 덮어쓸 위험이 있어 제거함.
 
+  // ===== 이전 헌금 자료 불러오기 (교적 프로그램 .xls = HTML 표) =====
+  // 엑셀 CODE는 앱 코드와 의미가 달라 사용하지 않는다(항목명 경로로 매칭).
+  // 회계년도·주는 저장하지 않고 날짜에서 재계산한다.
+  const IMP_CARRY = '전기이월';   // 이 항목 행은 제외(직접 입력)
+  let impRows = null;             // 검증 통과한 저장용 payload 배열
+  let impFileName = '';
+
+  const nsp = (s) => String(s == null ? '' : s).replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
+  const nokey = (s) => nsp(s).replace(/\s/g, '');
+
+  function toggleImportPanel() {
+    const p = $('importPanel');
+    const willShow = p.classList.contains('hide');
+    p.classList.toggle('hide', !willShow);
+    if (willShow) loadImportHistory();
+  }
+  function closeImportPanel() {
+    $('importPanel').classList.add('hide');
+    impRows = null; $('impRunBtn').disabled = true; $('impRunBtn').textContent = '등록';
+    $('impLog').innerHTML = ''; $('impFile').value = '';
+  }
+
+  // 파일 → 텍스트 (UTF-8 우선, 깨지면 EUC-KR 재해석)
+  function readTextSmart(file) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onerror = () => rej(new Error('파일을 읽지 못했습니다.'));
+      fr.onload = () => {
+        const buf = fr.result;
+        let t = new TextDecoder('utf-8').decode(buf);
+        if (t.indexOf('\uFFFD') >= 0) {
+          try { t = new TextDecoder('euc-kr').decode(buf); } catch (e) { /* utf-8 유지 */ }
+        }
+        res(t);
+      };
+      fr.readAsArrayBuffer(file);
+    });
+  }
+
+  // HTML 표 파싱 → {head, rows}
+  function parseTableHtml(text) {
+    const dom = new DOMParser().parseFromString(text, 'text/html');
+    const trs = Array.from(dom.querySelectorAll('tr'));
+    if (trs.length < 2) throw new Error('표를 찾지 못했습니다. (엑셀 원본 형식이 맞는지 확인하세요)');
+    const cellsOf = (tr) => Array.from(tr.querySelectorAll('td,th')).map((td) => nsp(td.textContent));
+    return { head: cellsOf(trs[0]), rows: trs.slice(1).map(cellsOf).filter((r) => r.length >= 8) };
+  }
+
+  // 회계연도별 말단 항목 캐시
+  const impLeafCache = {};
+  function leavesForFY(fy) {
+    if (!impLeafCache[fy]) impLeafCache[fy] = leavesFromNodes(incomeNodes.filter((n) => Number(n.fy) === fy));
+    return impLeafCache[fy];
+  }
+  // 엑셀 항목문자열("일반재정 절기헌금 신년감사") → 앱 말단 항목
+  function matchLeaf(fy, catText) {
+    const leaves = leavesForFY(fy);
+    if (!leaves.length) return null;
+    const key = nokey(catText);
+    // 1) 전체 경로 일치
+    let hit = leaves.filter((l) => nokey([l.c1, l.c2, l.c3].filter(Boolean).join('')) === key);
+    if (hit.length === 1) return hit[0];
+    // 2) 말단명 단독 일치 (유일할 때만)
+    const last = nokey(nsp(catText).split(' ').pop());
+    hit = leaves.filter((l) => nokey(l.c3 || l.c2 || l.c1) === last);
+    if (hit.length === 1) return hit[0];
+    return null;
+  }
+
+  async function previewImport() {
+    const f = $('impFile').files[0];
+    const box = $('impLog');
+    impRows = null; $('impRunBtn').disabled = true; $('impRunBtn').textContent = '등록';
+    if (!f) { box.innerHTML = '<div class="err">파일을 선택하세요.</div>'; return; }
+    impFileName = f.name;
+    box.innerHTML = '<div>읽는 중…</div>';
+    let head, rows;
+    try {
+      const { head: h, rows: r } = parseTableHtml(await readTextSmart(f));
+      head = h; rows = r;
+    } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+
+    const ix = {}; head.forEach((h, i) => { if (ix[nokey(h)] === undefined) ix[nokey(h)] = i; });
+    const cDate = ix['날짜'], cCat = ix['항목'], cName = ix['이름'], cAmt = ix['금액'];
+    const cSpouse = ix['배우자'], cMemo = ix['비고'];
+    if ([cDate, cCat, cName, cAmt].some((v) => v === undefined)) {
+      box.innerHTML = '<div class="err">필요한 열(날짜·항목·이름·금액)을 찾지 못했습니다.<br>읽은 헤더: '
+        + esc(head.join(' | ')) + '</div>';
+      return;
+    }
+
+    // 명부 이름 맵
+    const nameMap = {};
+    members.forEach((m) => { const n = nsp(m.name); if (n) (nameMap[n] = nameMap[n] || []).push(m); });
+
+    const out = [], errs = [], skipped = [];
+    const catMiss = {}, nameMiss = {}, dupName = {};
+    rows.forEach((r, i) => {
+      const ln = i + 2;   // 엑셀 행 번호(헤더 포함)
+      const catText = nsp(r[cCat] || '');
+      const rawDate = String(r[cDate] || '').replace(/[^0-9]/g, '');
+      const name = nsp(r[cName] || '');
+      const amount = onlyNum(r[cAmt]);
+      const spouseName = cSpouse === undefined ? '' : nsp(r[cSpouse] || '');
+      const memo = cMemo === undefined ? '' : nsp(r[cMemo] || '');
+
+      if (!catText && !rawDate && !amount) return;                 // 빈 줄
+      if (nokey(catText).indexOf(nokey(IMP_CARRY)) >= 0) { skipped.push(ln); return; }  // 전기이월 제외
+      if (rawDate.length !== 8) { errs.push(`${ln}행: 날짜 형식 오류 (${esc(r[cDate] || '')})`); return; }
+      const date = `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`;
+      if (!amount) { errs.push(`${ln}행: 금액 없음`); return; }
+
+      const fy = fiscalYearOf(date);
+      const it = matchLeaf(fy, catText);
+      if (!it) { catMiss[`${fy}|${catText}`] = (catMiss[`${fy}|${catText}`] || 0) + 1; return; }
+
+      const cand = nameMap[name] || [];
+      if (cand.length > 1) { dupName[name] = (dupName[name] || 0) + 1; return; }
+      const m = cand[0] || null;
+      if (!m) nameMiss[name] = (nameMiss[name] || 0) + 1;
+
+      out.push({
+        type: 'income', date, week: weekLabel(date),
+        c1: it.c1, c2: it.c2 || '', c3: it.c3 || '', catPath: pathOf(it), code: it.code || '',
+        memberNo: m ? (m.memberNo || null) : null,
+        memberId: m ? m.id : null,
+        memberName: name,
+        spouse: !!spouseName,
+        spouseName,
+        amount, memo
+      });
+    });
+
+    const catMissList = Object.entries(catMiss);
+    const dupList = Object.entries(dupName);
+    const nameMissList = Object.entries(nameMiss).sort((a, b) => b[1] - a[1]);
+    const blocked = errs.length + catMissList.length + dupList.length;
+    const sum = out.reduce((a, b) => a + b.amount, 0);
+
+    let h = `<div class="ok">읽은 행 ${rows.length}건 · 등록 대상 <b>${out.length}건</b> · 합계 ${wonFmt(sum)}원</div>`;
+    if (skipped.length) h += `<div class="warn">전기이월 ${skipped.length}건 제외 (직접 입력)</div>`;
+
+    if (catMissList.length) {
+      h += `<div class="err">항목 미매칭 ${catMissList.length}종 — 등록할 수 없습니다</div><ul>`;
+      catMissList.forEach(([k, v]) => { const [fy, t] = k.split('|'); h += `<li class="err">[${fy}회기] ${esc(t)} — ${v}건</li>`; });
+      h += '</ul>';
+    }
+    if (dupList.length) {
+      h += `<div class="err">명부 동명이인 — 등록할 수 없습니다</div><ul>`;
+      dupList.forEach(([k, v]) => { h += `<li class="err">${esc(k)} — ${v}건</li>`; });
+      h += '</ul>';
+    }
+    if (errs.length) {
+      h += `<div class="err">데이터 오류 ${errs.length}건</div><ul>`;
+      errs.slice(0, 20).forEach((e) => { h += `<li class="err">${e}</li>`; });
+      if (errs.length > 20) h += `<li class="err">… 외 ${errs.length - 20}건</li>`;
+      h += '</ul>';
+    }
+    if (nameMissList.length) {
+      h += `<div class="warn">명부에 없는 이름 ${nameMissList.length}종 — 이름만 저장됩니다</div><ul>`;
+      nameMissList.forEach(([k, v]) => { h += `<li class="warn">${esc(k)} — ${v}건</li>`; });
+      h += '</ul><div class="ihint">명부에 등록해야 할 이름이 있으면 성도관리에서 등록 후 다시 [미리보기] 하세요.</div>';
+    }
+
+    if (blocked) {
+      h += '<div class="err" style="margin-top:6px;">오류를 해결한 뒤 다시 미리보기 하세요.</div>';
+      box.innerHTML = h;
+      return;
+    }
+    if (!out.length) { h += '<div class="err">등록할 행이 없습니다.</div>'; box.innerHTML = h; return; }
+
+    impRows = out;
+    $('impRunBtn').disabled = false;
+    $('impRunBtn').textContent = `${out.length}건 등록`;
+    box.innerHTML = h;
+  }
+
+  async function runImport() {
+    if (!impRows || !impRows.length) return;
+    if (!confirm(`${impRows.length}건을 등록할까요?`)) return;
+    const btn = $('impRunBtn'); const box = $('impLog');
+    btn.disabled = true; $('impPreviewBtn').disabled = true;
+    const importId = 'imp_' + toYMD(new Date()).replace(/-/g, '') + '_' + String(Date.now()).slice(-6);
+    try {
+      let seq = await nextSeq('offerings');
+      const CH = 400;
+      for (let i = 0; i < impRows.length; i += CH) {
+        const batch = writeBatch(db);
+        impRows.slice(i, i + CH).forEach((p) => {
+          batch.set(doc(collection(db, 'offerings')),
+            { ...p, importId, no: seq++, createdAt: serverTimestamp(), createdBy: me.uid });
+        });
+        await batch.commit();
+        btn.textContent = `등록 중… ${Math.min(i + CH, impRows.length)}/${impRows.length}`;
+      }
+      const n = impRows.length;
+      await addImportHistory({ importId, file: impFileName, count: n, at: new Date().toISOString() });
+      impRows = null; $('impFile').value = '';
+      btn.textContent = '등록'; btn.disabled = true;
+      box.innerHTML = `<div class="ok">${n}건을 등록했습니다. (임포트 번호 ${esc(importId)})</div>`;
+      await loadImportHistory();
+      await loadList();
+    } catch (e) {
+      box.innerHTML = `<div class="err">등록 실패: ${esc(e.code || e.message)}<br>`
+        + `일부만 등록됐을 수 있습니다. 아래 이력에서 [${esc(importId)}]를 취소한 뒤 다시 시도하세요.</div>`;
+      await addImportHistory({ importId, file: impFileName, count: -1, at: new Date().toISOString() });
+      await loadImportHistory();
+    } finally { $('impPreviewBtn').disabled = false; }
+  }
+
+  // ----- 임포트 이력 (finConfig/imports) + 롤백 -----
+  async function getImportHistory() {
+    try {
+      const s = await getDoc(doc(db, 'finConfig', 'imports'));
+      return (s.exists() && Array.isArray(s.data().list)) ? s.data().list : [];
+    } catch (e) { return []; }
+  }
+  async function addImportHistory(rec) {
+    const list = await getImportHistory();
+    list.unshift(rec);
+    await setDoc(doc(db, 'finConfig', 'imports'), { list: list.slice(0, 30) }, { merge: true });
+  }
+  async function loadImportHistory() {
+    const box = $('impHist');
+    box.innerHTML = '<span style="color:var(--hint);">불러오는 중…</span>';
+    const list = await getImportHistory();
+    if (!list.length) { box.innerHTML = '<span style="color:var(--hint);">이력이 없습니다.</span>'; return; }
+    box.innerHTML = list.map((r) => `
+      <div class="impitem">
+        <div style="flex:1 1 auto; min-width:0;">
+          <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(r.file || '–')}</div>
+          <div style="color:var(--hint);">${esc((r.at || '').slice(0, 10))} · ${r.count >= 0 ? r.count + '건' : '실패(부분등록 가능)'} · ${esc(r.importId)}</div>
+        </div>
+        <button type="button" class="impbtn2 dgr" data-imp="${esc(r.importId)}">취소</button>
+      </div>`).join('');
+    box.querySelectorAll('button[data-imp]').forEach((b) => { b.onclick = () => undoImport(b.dataset.imp); });
+  }
+  async function undoImport(importId) {
+    if (!confirm(`임포트 [${importId}] 로 등록된 수입 기록을 모두 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+    const box = $('impLog');
+    box.innerHTML = '<div>삭제 중…</div>';
+    try {
+      const qs = await getDocs(query(collection(db, 'offerings'), where('importId', '==', importId)));
+      const ds = qs.docs;
+      for (let i = 0; i < ds.length; i += 400) {
+        const b = writeBatch(db);
+        ds.slice(i, i + 400).forEach((d) => b.delete(d.ref));
+        await b.commit();
+      }
+      const list = (await getImportHistory()).filter((r) => r.importId !== importId);
+      await setDoc(doc(db, 'finConfig', 'imports'), { list }, { merge: true });
+      box.innerHTML = `<div class="ok">${ds.length}건을 삭제했습니다.</div>`;
+      await loadImportHistory();
+      await loadList();
+    } catch (e) { box.innerHTML = `<div class="err">삭제 실패: ${esc(e.code || e.message)}</div>`; }
+  }
+
   // ----- 탭 -----
   function setTab(t) {
     curTab = t;
@@ -872,6 +1129,8 @@
     if (isSet) { $('itemEditor').classList.add('hide'); return; }
     $('incFields').classList.toggle('hide', t !== 'inc');
     $('expFields').classList.toggle('hide', t !== 'exp');
+    $('importBtn').classList.toggle('hide', t !== 'inc');   // 불러오기는 수입탭 전용
+    if (t !== 'inc') closeImportPanel();
     $('memoLabel').textContent = t === 'inc' ? '비고' : '적요';
     $('memoSub').textContent = '';
     resetForm();
@@ -908,6 +1167,13 @@
     $('qaSubmit').onclick = submitQuickAdd;
     $('qaCancel').onclick = closeQuickAdd;
     $('saveBtn').onclick = save;
+    $('importBtn').onclick = toggleImportPanel;
+    $('impPreviewBtn').onclick = previewImport;
+    $('impRunBtn').onclick = runImport;
+    $('impCloseBtn').onclick = closeImportPanel;
+    $('impFile').addEventListener('change', () => {
+      impRows = null; $('impRunBtn').disabled = true; $('impRunBtn').textContent = '등록'; $('impLog').innerHTML = '';
+    });
     $('editCancelBtn').onclick = () => {
       resetForm();
       const t = toYMD(new Date());
