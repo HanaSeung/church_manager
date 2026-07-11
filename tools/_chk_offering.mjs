@@ -355,7 +355,9 @@
   // ----- 목록 -----
   const SVG_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
   const SVG_DEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const SVG_NOTE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>';
   function incTable(rows) {
+    rows = sortInc(rows.slice());
     const body = rows.map((r) => {
       const item = esc(r.c3 || r.c2 || r.c1 || '');
       const ymd = esc((r.date || '').replace(/-/g, ''));
@@ -365,13 +367,74 @@
       const wkm = (r.week || '').match(/(\d+)\s*주/); const wkNo = wkm ? wkm[1] : '';
       return `<tr>
         <td>${r.no || ''}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
-        <td>${esc(r.code || '')}</td><td>${item}</td><td>${esc(idno)}</td><td>${esc(r.memberName || '')}</td>
+        <td>${item}</td><td>${esc(idno)}</td><td>${esc(r.memberName || '')}</td>
         <td class="ra amt">${wonFmt(r.amount)}</td><td>${sp}</td>
+        <td class="ce">${r.memo ? `<button class="iact i-note" data-note="${r.id}" aria-label="비고 보기">${SVG_NOTE}</button>` : '–'}</td>
         <td class="ce"><button class="iact i-edit" data-edit="${r.id}" aria-label="수정">${SVG_EDIT}</button><button class="iact i-del" data-del="${r.id}" aria-label="삭제">${SVG_DEL}</button></td>
       </tr>`;
     }).join('');
+    const sar = (k) => incSortKey === k ? `<span class="sar">${incSortDir === 'asc' ? '▲' : '▼'}</span>` : '';
+    const th = (k, label) => `<th class="sortable" data-sk="${k}">${label}${sar(k)}</th>`;
     return `<div class="itblwrap"><table class="itbl">
-      <thead><tr><th>No.</th><th>회계년도</th><th>주</th><th>날짜</th><th>code</th><th>항목</th><th>id</th><th>이름</th><th>금액</th><th>배우자</th><th class="ce">수정·삭제</th></tr></thead>
+      <thead><tr>${th('no', 'No.')}${th('fy', '회계년도')}${th('week', '주')}${th('date', '날짜')}${th('item', '항목')}${th('id', 'id')}${th('name', '이름')}${th('amt', '금액')}${th('spouse', '배우자')}<th class="ce">비고</th><th class="ce">수정·삭제</th></tr></thead>
+      <tbody>${body}</tbody></table></div><div id="incMemoBar" class="imemo"></div>`;
+  }
+  function incGroupTable(rows) {
+    const codeNum = (c) => Number(String(c || '').replace(/[^0-9]/g, '')) || 0;
+    const fy = fiscalYearOf($('toDate').value || (rows[0] && rows[0].date) || '');
+    const nodes = incomeNodes.filter((n) => Number(n.fy) === fy);
+    const childrenOf = (pid) => nodes
+      .filter((n) => (n.parentId || null) === (pid || null))
+      .sort((a, b) => codeNum(a.code) - codeNum(b.code));
+    const hasChild = {}; nodes.forEach((n) => { if (n.parentId) hasChild[n.parentId] = true; });
+    const codeToLeaf = {}; nodes.forEach((n) => { if (!hasChild[n.id]) codeToLeaf[n.code] = n; });
+    // 기록을 말단 코드에 매칭, 매칭 안 되면 미분류
+    const recOf = {}; const unmatched = [];
+    rows.forEach((r) => { if (codeToLeaf[r.code]) (recOf[r.code] = recOf[r.code] || []).push(r); else unmatched.push(r); });
+    const roll = (n) => {
+      if (!hasChild[n.id]) { const rs = recOf[n.code] || []; return { cnt: rs.length, amt: rs.reduce((s, r) => s + (Number(r.amount) || 0), 0) }; }
+      let c = 0, a = 0; childrenOf(n.id).forEach((ch) => { const v = roll(ch); c += v.cnt; a += v.amt; }); return { cnt: c, amt: a };
+    };
+    const detailRows = (n) => (recOf[n.code] || [])
+      .slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+      .map((r) => {
+        const ymd = esc((r.date || '').replace(/-/g, ''));
+        const who = esc(r.memberName || '') + (r.spouseName ? `<span class="gsp">(배우자 ${esc(r.spouseName)})</span>` : '');
+        const mo = r.memo ? `<span class="gmemo">${esc(r.memo)}</span>` : '';
+        return `<tr class="gdet" data-of="${esc(n.code)}" style="display:none"><td></td><td></td><td class="gwho">${ymd} <span class="gnm2">${who}</span>${mo}</td><td></td><td class="ra">${wonFmt(r.amount)}</td></tr>`;
+      }).join('');
+    let body = '', no = 0, grand = 0;
+    const walk = (pid, level) => {
+      childrenOf(pid).forEach((n) => {
+        const v = roll(n); if (v.cnt === 0) return;
+        no++; if (level === 1) grand += v.amt;
+        const leaf = !hasChild[n.id];
+        const pfx = level === 2 ? '<span class="gpfx">- </span>' : level >= 3 ? '<span class="gpfx">= </span>' : '';
+        const car = leaf ? '<span class="gcar">▸</span>' : '';
+        body += `<tr class="glv${level}${leaf ? ' gleaf' : ''}">
+          <td class="gno">${no}</td><td class="gcode">${esc(n.code || '')}</td>
+          <td class="gitem"${leaf ? ` data-gc="${esc(n.code)}"` : ''}><span class="gnm">${car}${pfx}${esc(n.name || '')}</span></td>
+          <td class="gcnt">${v.cnt}</td><td class="ra amt">${wonFmt(v.amt)}</td></tr>`;
+        if (leaf) body += detailRows(n); else walk(n.id, level + 1);
+      });
+    };
+    walk(null, 1);
+    if (unmatched.length) {
+      no++; const uamt = unmatched.reduce((s, r) => s + (Number(r.amount) || 0), 0); grand += uamt;
+      const udet = unmatched.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).map((r) => {
+        const ymd = esc((r.date || '').replace(/-/g, ''));
+        const who = esc(r.memberName || '') + (r.spouseName ? `<span class="gsp">(배우자 ${esc(r.spouseName)})</span>` : '');
+        const mo = r.memo ? `<span class="gmemo">${esc(r.memo)}</span>` : '';
+        return `<tr class="gdet" data-of="__u" style="display:none"><td></td><td></td><td class="gwho">${ymd} <span class="gnm2">${who}</span>${mo}</td><td></td><td class="ra">${wonFmt(r.amount)}</td></tr>`;
+      }).join('');
+      body += `<tr class="glv1 gleaf"><td class="gno">${no}</td><td class="gcode"></td>
+        <td class="gitem" data-gc="__u"><span class="gnm"><span class="gcar">▸</span>(미분류)</span></td>
+        <td class="gcnt">${unmatched.length}</td><td class="ra amt">${wonFmt(uamt)}</td></tr>` + udet;
+    }
+    body += `<tr class="gtot"><td colspan="3" class="ra">총합계</td><td></td><td class="ra gtotv">${wonFmt(grand)}</td></tr>`;
+    return `<div class="itblwrap"><table class="itbl gtbl">
+      <colgroup><col style="width:40px"><col style="width:74px"><col><col style="width:56px"><col style="width:96px"></colgroup>
+      <thead><tr><th>No.</th><th>CODE</th><th class="gitemh">항목</th><th>건수</th><th>금액</th></tr></thead>
       <tbody>${body}</tbody></table></div>`;
   }
   function rowHtml(r, id) {
@@ -389,10 +452,72 @@
       </div>
     </div>`;
   }
+  let incView = 'date';
+  let lastIncRows = [];
+  let incSortKey = 'date', incSortDir = 'desc';
+  function incSortVal(r, k) {
+    switch (k) {
+      case 'no': return Number(r.no) || 0;
+      case 'fy': return fiscalYearOf(r.date);
+      case 'week': { const m = (r.week || '').match(/(\d+)\s*주/); return m ? Number(m[1]) : 0; }
+      case 'date': return r.date || '';
+      case 'item': return r.code || '';
+      case 'id': return Number(r.memberNo) || 0;
+      case 'name': return r.memberName || '';
+      case 'amt': return Number(r.amount) || 0;
+      case 'spouse': return r.spouseName || '';
+    }
+    return '';
+  }
+  function sortInc(rows) {
+    const k = incSortKey, sign = incSortDir === 'asc' ? 1 : -1;
+    const strKey = (k === 'date' || k === 'item' || k === 'name' || k === 'spouse');
+    return rows.sort((a, b) => {
+      const x = incSortVal(a, k), y = incSortVal(b, k);
+      let c = strKey ? String(x).localeCompare(String(y), 'ko') : (x - y);
+      if (c === 0) c = (Number(a.no) || 0) - (Number(b.no) || 0);
+      return sign * c;
+    });
+  }
+  function setIncSort(k) {
+    if (incSortKey === k) incSortDir = incSortDir === 'asc' ? 'desc' : 'asc';
+    else { incSortKey = k; incSortDir = 'asc'; }
+    renderIncList(lastIncRows);
+  }
+  function setIncView(v) {
+    incView = v;
+    $('viewDate').classList.toggle('on', v === 'date');
+    $('viewGroup').classList.toggle('on', v === 'group');
+    renderIncList(lastIncRows);
+  }
+  function renderIncList(rows) {
+    const box = $('listRows');
+    box.innerHTML = incView === 'group' ? incGroupTable(rows) : incTable(rows);
+    box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => alert('수정 기능은 다음 단계에서 추가됩니다.'); });
+    const memoMap = {}; rows.forEach((r) => { if (r.memo) memoMap[r.id] = r.memo; });
+    const memoBar = box.querySelector('#incMemoBar');
+    box.querySelectorAll('[data-note]').forEach((b) => {
+      const m = memoMap[b.getAttribute('data-note')] || '';
+      b.title = m;
+      b.onclick = () => { memoBar.innerHTML = '<b>비고:</b> ' + esc(m); memoBar.style.display = 'block'; };
+    });
+    box.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => delRec('offerings', b.getAttribute('data-del')); });
+    box.querySelectorAll('th[data-sk]').forEach((th) => { th.onclick = () => setIncSort(th.getAttribute('data-sk')); });
+    box.querySelectorAll('.gitem[data-gc]').forEach((el) => {
+      el.onclick = () => {
+        const code = el.getAttribute('data-gc');
+        const dets = box.querySelectorAll('.gdet[data-of="' + code + '"]');
+        if (!dets.length) return;
+        const show = dets[0].style.display === 'none';
+        dets.forEach((tr) => { tr.style.display = show ? 'table-row' : 'none'; });
+        const car = el.querySelector('.gcar'); if (car) car.classList.toggle('gopen', show);
+      };
+    });
+  }
   async function loadList() {
     const coll = curTab === 'inc' ? 'offerings' : 'expenses';
     const from = $('fromDate').value, to = $('toDate').value;
-    $('listTitle').textContent = '이 기간 ' + (curTab === 'inc' ? '수입' : '지출');
+    $('segView').classList.toggle('hide', curTab !== 'inc');
     const box = $('listRows'); box.innerHTML = '<div class="empty">불러오는 중…</div>';
     try {
       const qs = await getDocs(query(collection(db, coll), where('date', '>=', from), where('date', '<=', to)));
@@ -402,12 +527,12 @@
       $('listSum').textContent = `${rows.length}건 · ${wonFmt(sum)}원`;
       if (!rows.length) { box.innerHTML = '<div class="empty">이 기간에 기록이 없습니다.</div>'; return; }
       if (curTab === 'inc') {
-        box.innerHTML = incTable(rows);
-        box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => alert('수정 기능은 다음 단계에서 추가됩니다.'); });
+        lastIncRows = rows;
+        renderIncList(rows);
       } else {
         box.innerHTML = rows.map((r) => rowHtml(r, r.id)).join('');
+        box.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => delRec(coll, b.getAttribute('data-del')); });
       }
-      box.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => delRec(coll, b.getAttribute('data-del')); });
     } catch (e) { box.innerHTML = `<div class="empty">불러오지 못했습니다.<br>(${esc(e.code || e.message)})</div>`; }
   }
   async function delRec(coll, id) {
@@ -502,6 +627,8 @@
     $('qaCancel').onclick = closeQuickAdd;
     $('saveBtn').onclick = save;
     $('searchBtn').onclick = loadList;
+    $('viewDate').onclick = () => setIncView('date');
+    $('viewGroup').onclick = () => setIncView('group');
     $('thisWeekBtn').onclick = () => { const [a, b] = weekRange($('inDate').value || today); $('fromDate').value = a; $('toDate').value = b; loadList(); };
     $('setIncBtn').onclick = () => { location.href = 'income.html'; };
     $('setExpBtn').onclick = () => openEditor('expense');

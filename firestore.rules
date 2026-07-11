@@ -166,6 +166,10 @@ service cloud.firestore {
     match /expenses/{id}  { allow read, write: if isFinance(); }
     match /finConfig/{id} { allow read, write: if isFinance(); }
 
+    // ===== 회원번호 발급 카운터 =====
+    // 성도 생성 시 트랜잭션으로 lastNo 증가. 성도 생성 권한(재정담당 3단계)과 동일.
+    match /counters/{docId} { allow read, write: if isFinance(); }
+
     // ===== 그 외 모든 문서 =====
     // 기본 차단. (헌금·성도 등 상위 단계 데이터는 만들 때 단계별 규칙을 여기에 추가)
     match /{document=**} {

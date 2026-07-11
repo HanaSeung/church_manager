@@ -3,7 +3,7 @@
     import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
     import {
       collection, addDoc, getDoc, getDocs, doc, deleteDoc,
-      updateDoc, serverTimestamp
+      updateDoc, serverTimestamp, setDoc, runTransaction
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
     const $ = (id) => document.getElementById(id);
@@ -96,6 +96,41 @@
       return mx + 1;
     }
 
+    // 현재 명부의 최대 회원번호(발급 바닥값)
+    function currentMaxMemberNo() {
+      let mx = 0;
+      allMembers.forEach((m) => { const n = Number(m.memberNo); if (Number.isFinite(n) && n > mx) mx = n; });
+      return mx;
+    }
+    // 누적 카운터 발급: counters/members.lastNo 를 트랜잭션으로 증가. 현재 최댓값을 바닥값으로 함께 봄(self-heal).
+    async function issueMemberNos(count) {
+      const ref = doc(db, 'counters', 'members');
+      const floor = currentMaxMemberNo();
+      return await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        const last = (snap.exists() && Number(snap.data().lastNo)) || 0;
+        const start = Math.max(last, floor);
+        const nos = [];
+        for (let i = 1; i <= count; i++) nos.push(start + i);
+        tx.set(ref, { lastNo: start + count }, { merge: true });
+        return nos;
+      });
+    }
+    // 테스트 전용: 카운터를 현재 명부 최대 번호로 맞춤(끝쪽 빈 번호 회수). 최댓값보다 낮게는 안 내려감.
+    async function resetMemberCounter() {
+      const mx = currentMaxMemberNo();
+      if (!confirm(`회원번호 카운터를 현재 명부 최대 번호(${mx})로 맞출까요?\n다음 등록은 #${mx + 1}부터 시작합니다.\n\n⚠ 실제 헌금 기록이 있는 운영 데이터에서는 사용하지 마세요. 번호가 과거 기록과 충돌할 수 있습니다.`)) return;
+      const btn = $('resetNoBtn'); if (btn) { btn.disabled = true; btn.textContent = '초기화 중…'; }
+      try {
+        await setDoc(doc(db, 'counters', 'members'), { lastNo: mx }, { merge: true });
+        alert(`카운터를 ${mx}로 초기화했습니다. 다음 등록은 #${mx + 1}부터입니다.`);
+      } catch (e) {
+        alert('초기화 실패: ' + (e.code || e.message));
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '카운터 초기화'; }
+      }
+    }
+
     // 회원번호가 없는 성도에게 등록순(createdAt)으로 번호 일괄 부여
     async function assignAllMemberNos() {
       const has = (m) => Number.isFinite(Number(m.memberNo)) && Number(m.memberNo) > 0;
@@ -151,13 +186,14 @@
       if (!confirm(`${importParsed.length}명을 등록합니다. 계속할까요?`)) return;
       const btn = $('importRunBtn'); btn.disabled = true; $('importPreviewBtn').disabled = true;
       try {
-        let no = nextMemberNo() - 1;
+        const nos = await issueMemberNos(importParsed.length);
+        let ni = -1;
         const created = [];
         for (const r of importParsed) {
-          no += 1;
+          ni += 1;
           const base = {}; IMPORT_FIELDS.forEach((f) => { base[f] = (r[f] !== undefined && r[f] !== null) ? r[f] : ''; });
           base.prayers = Array.isArray(r.prayers) ? r.prayers : [];
-          base.createdAt = serverTimestamp(); base.createdBy = me.uid; base.memberNo = no; base.updatedAt = serverTimestamp();
+          base.createdAt = serverTimestamp(); base.createdBy = me.uid; base.memberNo = nos[ni]; base.updatedAt = serverTimestamp();
           const ref = await addDoc(collection(db, 'members'),
             { ...base, householdId: null, headId: null, headName: '', relation: r.relation || '' });
           created.push({ id: ref.id, name: r.name, relation: r.relation || '', headName: r.headName || '', spouseName: r.spouseName || '' });
@@ -202,6 +238,24 @@
       }
     }
 
+    // 초성 검색: 이름에서 초성 추출 + 검색어가 전부 초성인지 판별
+    const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+    const CHO_SET = new Set(CHO);
+    function chosungOf(str) {
+      let out = '';
+      for (const ch of String(str || '')) {
+        const c = ch.charCodeAt(0);
+        out += (c >= 0xAC00 && c <= 0xD7A3) ? CHO[Math.floor((c - 0xAC00) / 588)] : ch;
+      }
+      return out;
+    }
+    function isAllChosung(str) {
+      const s = String(str || '');
+      if (!s) return false;
+      for (const ch of s) { if (!CHO_SET.has(ch)) return false; }
+      return true;
+    }
+
     function renderList() {
       const na = allMembers.filter((m) => m.archived).length;
       const ta = $('ftabArchived');
@@ -218,7 +272,8 @@
       $('cntOfficer').textContent = live.filter((m) => OFFICER_CATS.includes(catOf(m))).length;
       $('cntBaptized').textContent = live.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교')).length;
       $('cntMember').textContent = live.filter((m) => m.memberType === '교인').length;
-      const kw = $('searchInput').value.trim().toLowerCase();
+      const rawKw = $('searchInput').value.trim();
+      const kw = rawKw.toLowerCase();
       let rows;
       if (currentFilter === 'archived') rows = allMembers.filter((m) => m.archived);
       else {
@@ -228,8 +283,11 @@
         else if (currentFilter === 'baptized') rows = rows.filter((m) => m.memberType === '교인' && (m.grade === '세례' || m.grade === '입교'));
         else if (currentFilter === 'member') rows = rows.filter((m) => m.memberType === '교인');
       }
-      if (kw) rows = rows.filter((m) =>
-        (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
+      if (kw) {
+        if (isAllChosung(rawKw)) rows = rows.filter((m) => chosungOf(m.name).includes(rawKw));
+        else rows = rows.filter((m) =>
+          (m.name || '').toLowerCase().includes(kw) || (m.phone || '').includes(kw));
+      }
       rows = sortRows(rows);
       detailOrder = rows.map((x) => x.id);
 
@@ -310,6 +368,7 @@
     });
 
     $('assignNoBtn').addEventListener('click', assignAllMemberNos);
+    $('resetNoBtn').addEventListener('click', resetMemberCounter);
 
     function openLayoutSheet() {
       const cur = getLayout();
@@ -1078,7 +1137,8 @@
         } else {
           base.createdAt = serverTimestamp();
           base.createdBy = me.uid;
-          base.memberNo = nextMemberNo();
+          const [issuedNo] = await issueMemberNos(1);
+          base.memberNo = issuedNo;
           const ref = await addDoc(collection(db, 'members'),
             { ...base, householdId: null, headId: null, headName: '', relation: $('fRel').value || '' });
           editingId = ref.id;
