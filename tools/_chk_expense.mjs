@@ -7,12 +7,12 @@
 
     const $ = (id) => document.getElementById(id);
     const COL = 'finConfig';   // 재정 설정 공용 컬렉션 (수입/지출 항목)
-    const KIND = 'income';     // 이 화면은 수입항목만 다룸
+    const KIND = 'expense';    // 이 화면은 지출항목만 다룸
     const MIN_LEVEL = 3;       // 재정담당(3단계) 이상만
-    const BASE_CODE = 100010, STEP = 10, MAX_DEPTH = 3;
+    const BASE_CODE = 200010, STEP = 10, MAX_DEPTH = 3;
 
     let me = { uid: null, level: 1 };
-    let cats = [];        // 모든 연도의 수입항목 노드
+    let cats = [];        // 모든 연도의 지출항목 노드
     let curFY = null;     // 현재 편집 중인 회계연도
     let closeMonth = 12;  // 결산월 (finConfig/settings)
     let migrated = false; // 레거시(fy 없음) 1회 이전 플래그
@@ -37,7 +37,7 @@
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
         const lv = snap.exists() ? (snap.data().level || 1) : 1;
-        if (lv < MIN_LEVEL) { alert('수입항목 설정은 재정 담당자만 이용할 수 있습니다.'); location.replace('index.html'); return; }
+        if (lv < MIN_LEVEL) { alert('지출항목 설정은 재정 담당자만 이용할 수 있습니다.'); location.replace('index.html'); return; }
         me = { uid: user.uid, level: lv };
         try {
           const s = await getDoc(doc(db, 'finConfig', 'settings'));
@@ -117,28 +117,44 @@
     const hasChildren = (id) => cats.some((c) => Number(c.fy) === curFY && c.parentId === id);
 
     // ---- 기본 세트 (빈 화면일 때 '기본 항목 불러오기'로 1회 생성) ----
-    const DEFAULT_INCOME = [
-      ['100010', '일반재정', 1],
-      ['100020', '주일헌금', 2], ['100030', '감사헌금', 2], ['100040', '십일조', 2],
-      ['100050', '구역헌금', 2], ['100060', '절기헌금', 2],
-      ['100070', '신년감사', 3], ['100080', '부활절감사', 3], ['100090', '맥추감사', 3],
-      ['100100', '성탄감사', 3], ['100110', '추수감사', 3],
-      ['100120', '기타헌금', 2],
-      ['100130', '특별헌금', 1],
-      ['100140', '선교헌금', 2], ['100150', '장학헌금', 2], ['100160', '건축헌금', 2], ['100170', '차량구입', 2],
-      ['100180', '기타', 1],
-      ['100190', '후원금', 2], ['100200', '이자', 2], ['100210', '기타', 2],
-      ['100220', '이월', 1],
-      ['100230', '전기이월', 2]
+    // 예닮교회 지출 계정표 기준. 코드는 트리 순서대로 200010부터 +10.
+    const DEFAULT_EXPENSE = [
+      ['200010', '목회', 1],
+      ['200020', '사례비', 2], ['200030', '배사례', 2], ['200040', '목회비', 2], ['200050', '은급적립', 2],
+      ['200060', '의료,전화', 2], ['200070', '도서비', 2], ['200080', '세미나 등', 2],
+      ['200090', '명절비', 2], ['200100', '휴가비', 2], ['200110', '유류비', 2],
+      ['200120', '교육', 1],
+      ['200130', '주일학교', 2], ['200140', '중고등부', 2], ['200150', '교제/도서', 2],
+      ['200160', '훈련/행사', 2], ['200170', '명절선물', 2], ['200180', '노회부담', 2],
+      ['200190', '노회여비', 2], ['200200', '행사사례비', 2], ['200210', '외부사례비', 2],
+      ['200220', '선교', 1],
+      ['200230', '심방/접대', 2], ['200240', '전도', 2], ['200250', '경조사', 2],
+      ['200260', '행정', 1],
+      ['200270', '인터넷,전화', 2], ['200280', '팩스', 2], ['200290', '복사기임대', 2],
+      ['200300', '사무/비품', 2], ['200310', '미디어,음향', 2], ['200320', '교회주소록', 2],
+      ['200330', '교회달력', 2], ['200340', '이사', 2],
+      ['200350', '시설관리', 1],
+      ['200360', '교회임대료', 2], ['200370', '사택임대료', 2], ['200380', '사택보증금', 2],
+      ['200390', '사택관리', 2], ['200400', '교회관리', 2], ['200410', '전기사용료', 2],
+      ['200420', '보험/시설', 2], ['200430', '정수기렌탈', 2],
+      ['200440', '차량관리', 1],
+      ['200450', '차량유류', 2], ['200460', '환경부담금', 2], ['200470', '차량수리비', 2],
+      ['200480', '자동차세', 2], ['200490', '보험/유지', 2],
+      ['200500', '식당', 1],
+      ['200510', '식대지원', 2], ['200520', '식재료', 2], ['200530', '상하수도', 2],
+      ['200540', 'LPG', 2], ['200550', '주방용품', 2],
+      ['200560', '기타', 1],
+      ['200570', '농협이자', 2], ['200580', '제세공과금', 2], ['200590', '정기적금(건축헌금)', 2],
+      ['200600', '기타', 2], ['200610', '예비비', 2]
     ];
     async function seedDefaults() {
       if (inFY().length > 0) { alert('이미 이 연도에 항목이 있어 기본 세트를 불러오지 않습니다.'); return; }
-      if (!confirm(`${curFY}년도에 기본 수입항목 세트를 불러올까요?`)) return;
+      if (!confirm(`${curFY}년도에 기본 지출항목 세트를 불러올까요?`)) return;
       const btn = $('seedBtn');
       if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
       try {
         let lastL1 = null, lastL2 = null;
-        for (const [code, name, level] of DEFAULT_INCOME) {
+        for (const [code, name, level] of DEFAULT_EXPENSE) {
           const parentId = level === 1 ? null : (level === 2 ? lastL1 : lastL2);
           const ref = await addDoc(collection(db, COL), {
             kind: KIND, fy: curFY, code, name, level, parentId,
@@ -166,7 +182,7 @@
         src = Number(String(inp).trim());
         if (!srcYears.includes(src)) { alert('목록에 없는 연도입니다.'); return; }
       }
-      if (!confirm(`${src}년도 수입항목을 ${curFY}년도로 복사할까요?`)) return;
+      if (!confirm(`${src}년도 지출항목을 ${curFY}년도로 복사할까요?`)) return;
       const btn = $('copyBtn'); if (btn) { btn.disabled = true; btn.textContent = '복사 중…'; }
       try {
         const nodes = cats.filter((c) => Number(c.fy) === src);
@@ -192,7 +208,7 @@
     async function clearAll() {
       const list = inFY();
       if (list.length === 0) return;
-      if (!confirm(`${curFY}년도 수입항목 ${list.length}개를 모두 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+      if (!confirm(`${curFY}년도 지출항목 ${list.length}개를 모두 삭제할까요?\n되돌릴 수 없습니다.`)) return;
       if (!confirm('정말 이 연도 전체를 삭제할까요? 이 작업은 취소할 수 없습니다.')) return;
       const btn = $('clearAllBtn'); btn.disabled = true; const t = btn.textContent; btn.textContent = '삭제 중…';
       try {
@@ -209,7 +225,7 @@
       }
     }
 
-    // ---- 자동번호 (트리 순서대로 100010부터 +10 재채번, 중지 포함, 확인 1회) ----
+    // ---- 자동번호 (트리 순서대로 200010부터 +10 재채번, 중지 포함, 확인 1회) ----
     async function renumberAll() {
       if (inFY().length === 0) return;
       if (!confirm('모든 항목의 코드를 10단위로 다시 매길까요?')) return;
@@ -255,7 +271,7 @@
         const copyBtn = others.length
           ? '<button class="btn-line-green" id="copyBtn" style="margin-left:8px;">다른 해 복사</button>' : '';
         box.style.display = 'block';
-        box.innerHTML = `${curFY}년도에 등록된 수입항목이 없습니다.<br>기본 세트를 불러오거나 다른 해를 복사하거나 ‘대분류 추가’로 시작하세요.`
+        box.innerHTML = `${curFY}년도에 등록된 지출항목이 없습니다.<br>기본 세트를 불러오거나 다른 해를 복사하거나 ‘대분류 추가’로 시작하세요.`
           + `<div style="margin-top:14px;"><button class="btn" id="seedBtn">기본 항목 불러오기</button>${copyBtn}</div>`;
         $('seedBtn').onclick = seedDefaults;
         if (others.length) $('copyBtn').onclick = copyFromYear;

@@ -2,7 +2,7 @@
   import { auth, db } from "./firebase-config.js";
   import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import {
-    collection, addDoc, getDoc, getDocs, doc, deleteDoc, setDoc,
+    collection, addDoc, getDoc, getDocs, doc, deleteDoc, setDoc, updateDoc,
     query, where, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
@@ -59,10 +59,12 @@
   let me = { uid: null, level: 1 };
   let config = null;
   let incomeNodes = [];   // 수입 항목 노드(전 연도). 날짜의 회계연도로 걸러 드롭다운 구성.
+  let expenseNodes = [];  // 지출 항목 노드(전 연도). expense.html에서 관리.
   let members = [];
   let membersOk = true;
   let curTab = 'inc';
   let linked = null;   // {id, no, name} 또는 null (없으면 무명 #0)
+  let claimant = null; // 지출 청구인 {id, no, name} 또는 null (명부 미연동 시 이름만 저장)
 
   // ----- 인증: 3단계(재정담당) 이상 -----
   onAuthStateChanged(auth, async (user) => {
@@ -82,23 +84,19 @@
   });
 
   async function loadConfig() {
-    // 지출 항목: 기존 단일 문서(finConfig/items). 지출은 아직 노드화 전.
-    try {
-      const s = await getDoc(doc(db, 'finConfig', 'items'));
-      const d = s.exists() ? s.data() : DEFAULT_CONFIG;
-      config = { income: [], expense: Array.isArray(d.expense) ? d.expense : [] };
-    } catch (e) {
-      config = { income: [], expense: JSON.parse(JSON.stringify(DEFAULT_CONFIG.expense)) };
-    }
-    // 결산월 + 수입 노드(전 연도) 로드. 실제 config.income은 입력 날짜의 회계연도로 refreshIncomeCats()에서 구성.
+    // 지출 항목: expense.html이 만든 노드에서 구성(옛 finConfig/items.expense는 더 이상 읽지 않음).
+    config = { income: [], expense: [] };
+    // 결산월 + 수입/지출 노드(전 연도) 로드. 실제 config.*는 입력 날짜의 회계연도로 refresh*Cats()에서 구성.
     try {
       const st = await getDoc(doc(db, 'finConfig', 'settings'));
       if (st.exists() && st.data().closeMonth) closeMonth = Number(st.data().closeMonth);
     } catch (e) { /* 기본 12 */ }
     try {
       const qs = await getDocs(collection(db, 'finConfig'));
-      incomeNodes = qs.docs.map((x) => ({ id: x.id, ...x.data() })).filter((n) => n.kind === 'income');
-    } catch (e) { incomeNodes = []; }
+      const all = qs.docs.map((x) => ({ id: x.id, ...x.data() }));
+      incomeNodes = all.filter((n) => n.kind === 'income');
+      expenseNodes = all.filter((n) => n.kind === 'expense');
+    } catch (e) { incomeNodes = []; expenseNodes = []; }
   }
   // 노드 → 활성 말단 경로 배열 {c1,c2,c3,code} (income.html이 만든 트리를 헌금 드롭다운용으로 평탄화)
   function leavesFromNodes(nodes) {
@@ -161,8 +159,7 @@
     updateIncFace();
   }
   async function saveConfig() {
-    // 지출 항목만 저장 (수입은 income.html 노드에서 관리)
-    await setDoc(doc(db, 'finConfig', 'items'), { expense: config.expense });
+    // 사용 안 함: 수입=income.html, 지출=expense.html 노드에서 관리.
   }
 
   // ----- 결산 월 설정 (finConfig/settings.closeMonth, 기본 12) -----
@@ -212,19 +209,56 @@
 
   // ----- 항목 셀렉트 -----
   function populateSelects() {
-    $('expCat').innerHTML = config.expense.map((it, i) => `<option value="${i}">${esc(pathOf(it))}</option>`).join('') || '<option value="">(항목 없음)</option>';
     refreshIncomeCats();
+    refreshExpenseCats();
     updateCode();
+  }
+  // 입력 날짜가 속한 회계연도의 세트로 지출 드롭다운 구성 (수입과 동일: 들여쓰기, 부모는 선택 불가)
+  function refreshExpenseCats() {
+    const fy = fiscalYearOf($('inDate') ? $('inDate').value : '');
+    const { opts, leaves } = buildIncomeTreeOptions(expenseNodes.filter((n) => Number(n.fy) === fy));
+    config.expense = leaves;
+    if (leaves.length) {
+      $('expCat').innerHTML = opts.join('');
+      $('expCat').value = '0';   // 첫 말단 항목 기본 선택(부모 줄은 선택 불가)
+    } else {
+      $('expCat').innerHTML = `<option value="">(${fy}년도 항목 없음)</option>`;
+    }
+    if (curTab === 'exp') updateCode();
+    updateExpFace();
   }
   function updateCode() {
     if (curTab === 'inc') { const it = config.income[+$('incCat').value]; $('incCode').textContent = it ? it.code : '–'; }
     else if (curTab === 'exp') { const it = config.expense[+$('expCat').value]; $('expCode').textContent = it ? it.code : '–'; }
   }
+  // '이월' 대분류 여부 (전기이월 등). 코드는 자동번호로 바뀔 수 있어 대분류명으로 판별.
+  const isCarryOver = (it) => !!it && (it.c1 || '') === '이월';
   // 닫힌 칸에는 선택한 항목의 '이름만' 표시(들여쓰기·표식 없이)
   function updateIncFace() {
     const it = config.income[+$('incCat').value];
     $('incCatText').textContent = it ? (it.c3 || it.c2 || it.c1 || '–')
       : ($('incCat').options[0] ? $('incCat').options[0].textContent : '–');
+    applyCarryOverUI();
+  }
+  // 이월 항목이면 이름/배우자 줄을 비우고 잠금(사람이 낸 헌금이 아니므로)
+  function applyCarryOverUI() {
+    const co = isCarryOver(config.income[+$('incCat').value]);
+    const nf = $('incNameField');
+    if (nf) nf.classList.toggle('hide', co);
+    if (co) {
+      linked = null;
+      $('incName').value = '';
+      $('incMemberNo').textContent = '–';
+      $('nameStatus').innerHTML = '';
+      $('spouseChk').checked = false;
+      $('spouseName').disabled = true;
+      $('spouseName').value = '';
+    }
+  }
+  function updateExpFace() {
+    const it = config.expense[+$('expCat').value];
+    $('expCatText').textContent = it ? (it.c3 || it.c2 || it.c1 || '–')
+      : ($('expCat').options[0] ? $('expCat').options[0].textContent : '–');
   }
 
   // ----- 이름 검색 / 연동 / 간편등록 -----
@@ -269,6 +303,42 @@
     box.innerHTML = '<div class="status st-warn">명부에 없는 이름입니다</div>';
     if (confirm(`'${val}' 님이 명부에 없습니다. 등록하시겠습니까?`)) openQuickAdd(val);
   }
+  // ----- 청구인 검색 / 연동 (지출 전용, 배우자·간편등록 없음) -----
+  function setClaimant(m) {
+    claimant = { id: m.id, no: Number(m.memberNo) || 0, name: m.name };
+    $('expClaimName').value = m.name;
+    $('expClaimNo').textContent = claimant.no || '–';
+    $('claimStatus').innerHTML = `<div class="status st-ok">✓ ${esc(m.name)} 성도로 연동됨${claimant.no ? (' · #' + claimant.no) : ''}</div>`;
+  }
+  function onClaimEdit() {
+    claimant = null;
+    $('expClaimNo').textContent = '–';
+    $('claimStatus').innerHTML = '';
+  }
+  function doClaimSearch() {
+    const val = $('expClaimName').value.trim();
+    const box = $('claimStatus');
+    claimant = null; $('expClaimNo').textContent = '–';
+    if (!val) { box.innerHTML = ''; return; }
+    if (!membersOk) { box.innerHTML = '<div class="status st-warn">명부 조회 권한이 없습니다</div>'; return; }
+    const exact = members.filter((m) => (m.name || '').trim() === val);
+    if (exact.length === 1) { setClaimant(exact[0]); return; }
+    if (exact.length > 1) {
+      box.innerHTML = '<div class="status st-warn" style="display:block;">동명이인입니다. 선택하세요</div><div class="st-pick" id="claimPickList"></div>';
+      const pl = $('claimPickList');
+      exact.forEach((m) => {
+        const el = document.createElement('div');
+        const info = [m.gender].filter(Boolean).join(' · ');
+        el.innerHTML = `${esc(m.name)}${m.memberNo ? ` <span style="color:var(--hint)">#${m.memberNo}</span>` : ''}${info ? ` · ${esc(info)}` : ''}`;
+        el.onclick = () => setClaimant(m);
+        pl.appendChild(el);
+      });
+      return;
+    }
+    // 명부에 없어도 저장 허용 (이름만 기록). 간편등록은 띄우지 않음.
+    box.innerHTML = '<div class="status st-warn">명부에 없는 이름입니다 (이름만 저장됩니다)</div>';
+  }
+
   function openQuickAdd(name) {
     $('qaName').value = name || '';
     $('qaGender').value = '';
@@ -303,13 +373,23 @@
     try { const qs = await getDocs(collection(db, coll)); let mx = 0; qs.forEach((d) => { const n = Number(d.data().no); if (Number.isFinite(n) && n > mx) mx = n; }); return mx + 1; }
     catch (e) { return Date.now(); }
   }
+  let editId = null;   // null=신규 추가, 값 있으면 해당 offerings 문서 수정 모드
+  function exitEditMode() {
+    editId = null;
+    $('editBanner').classList.add('hide');
+    $('saveBtn').textContent = '저장';
+  }
   function resetForm() {
     $('inAmount').value = ''; $('inMemo').value = '';
     $('expPayee').value = '';
+    $('expClaimName').value = ''; claimant = null;
+    $('expClaimNo').textContent = '–';
+    $('claimStatus').innerHTML = '';
     $('incName').value = ''; linked = null;
     $('incMemberNo').textContent = '–';
     $('nameStatus').innerHTML = '';
     $('spouseChk').checked = false; $('spouseName').disabled = true; $('spouseName').value = '';
+    exitEditMode();
   }
   async function save() {
     const date = $('inDate').value;
@@ -317,39 +397,124 @@
     const memo = $('inMemo').value.trim();
     if (!date) return showMsg('날짜를 선택하세요.');
     if (!amount) return showMsg('금액을 입력하세요.');
-    if (curTab === 'inc' && !linked) return showMsg('이름을 입력하고 Enter로 검색해 명부와 연동하세요.');
+    // '이월' 대분류(전기이월 등)는 명부 연동 없이 저장 허용 (사람이 낸 헌금이 아님)
+    if (curTab === 'inc' && !linked && !isCarryOver(config.income[+$('incCat').value])) {
+      return showMsg('이름을 입력하고 Enter로 검색해 명부와 연동하세요.');
+    }
     const btn = $('saveBtn'); btn.disabled = true; btn.textContent = '저장 중…';
     try {
       if (curTab === 'inc') {
         const it = config.income[+$('incCat').value];
         if (!it) throw { message: '헌금 항목을 선택하세요.' };
-        await addDoc(collection(db, 'offerings'), {
+        const payload = {
           type: 'income', date, week: weekLabel(date),
           c1: it.c1, c2: it.c2 || '', c3: it.c3 || '', catPath: pathOf(it), code: it.code || '',
-          memberNo: linked.no || null,
-          memberId: linked.id,
-          memberName: linked.name,
+          memberNo: linked ? (linked.no || null) : null,
+          memberId: linked ? linked.id : null,
+          memberName: linked ? linked.name : ($('incName').value.trim() || ''),
           spouse: $('spouseChk').checked,
           spouseName: $('spouseChk').checked ? $('spouseName').value.trim() : '',
-          amount, memo, no: await nextSeq('offerings'),
-          createdAt: serverTimestamp(), createdBy: me.uid
-        });
+          amount, memo
+        };
+        if (editId) {
+          // 수정: no·createdAt·createdBy 보존, updatedAt만 추가
+          await updateDoc(doc(db, 'offerings', editId), { ...payload, updatedAt: serverTimestamp(), updatedBy: me.uid });
+        } else {
+          await addDoc(collection(db, 'offerings'), { ...payload, no: await nextSeq('offerings'), createdAt: serverTimestamp(), createdBy: me.uid });
+        }
       } else {
         const it = config.expense[+$('expCat').value];
         if (!it) throw { message: '지출 항목을 선택하세요.' };
-        await addDoc(collection(db, 'expenses'), {
+        const payload = {
           type: 'expense', date, week: weekLabel(date),
           c1: it.c1, c2: it.c2 || '', c3: it.c3 || '', catPath: pathOf(it), code: it.code || '',
+          claimantNo: claimant ? (claimant.no || null) : null,
+          claimantId: claimant ? claimant.id : null,
+          claimantName: $('expClaimName').value.trim(),
           payee: $('expPayee').value.trim(),
-          amount, memo, no: await nextSeq('expenses'),
-          createdAt: serverTimestamp(), createdBy: me.uid
-        });
+          amount, memo
+        };
+        if (editId) {
+          // 수정: no·createdAt·createdBy 보존, updatedAt만 추가
+          await updateDoc(doc(db, 'expenses', editId), { ...payload, updatedAt: serverTimestamp(), updatedBy: me.uid });
+        } else {
+          await addDoc(collection(db, 'expenses'), { ...payload, no: await nextSeq('expenses'), createdAt: serverTimestamp(), createdBy: me.uid });
+        }
       }
       resetForm();
       await loadList();
       return true;
     } catch (e) { showMsg('저장 실패: ' + (e.code || e.message)); }
-    finally { btn.disabled = false; btn.textContent = '저장'; }
+    finally { btn.disabled = false; btn.textContent = editId ? '수정 저장' : '저장'; }
+  }
+
+  // ----- 수입 기록 수정 (A안: 상단 폼 재사용) -----
+  function startEditInc(id) {
+    const r = lastIncRows.find((x) => x.id === id);
+    if (!r) return;
+    // 1) 날짜 → 해당 회계연도 항목 세트로 재구성
+    $('inDate').value = r.date || '';
+    $('weekBadge').textContent = r.date ? weekLabel(r.date) : '–';
+    refreshIncomeCats();
+    // 2) 항목 code → 셀렉트 인덱스 역매핑
+    const idx = config.income.findIndex((it) => (it.code || '') === (r.code || ''));
+    if (idx >= 0) $('incCat').value = String(idx);
+    updateCode(); updateIncFace();
+    // 3) 이름/명부 연동 복원 (배우자 자동덮어쓰기 방지 위해 먼저 체크 해제 후 setLinked)
+    $('spouseChk').checked = false;
+    if (r.memberId) {
+      setLinked({ id: r.memberId, name: r.memberName || '', memberNo: r.memberNo || 0 });
+    } else {
+      linked = null;
+      $('incName').value = r.memberName || '';
+      $('incMemberNo').textContent = r.memberNo || '–';
+      $('nameStatus').innerHTML = '';
+    }
+    // 4) 배우자 복원
+    const hasSp = !!r.spouse || !!r.spouseName;
+    $('spouseChk').checked = hasSp;
+    $('spouseName').disabled = !hasSp;
+    $('spouseName').value = r.spouseName || '';
+    // 5) 금액 / 비고
+    $('inAmount').value = r.amount ? wonFmt(r.amount) : '';
+    $('inMemo').value = r.memo || '';
+    // 6) 수정 모드 진입
+    editId = id;
+    $('editBannerText').textContent = `수정 중 · ${r.memberName || ''} ${(r.date || '').replace(/-/g, '').slice(4)}`;
+    $('editBanner').classList.remove('hide');
+    $('saveBtn').textContent = '수정 저장';
+    if (idx < 0) showMsg('이 기록의 항목이 현재 연도 목록에 없습니다. 항목을 다시 선택하세요.');
+    $('formSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ----- 지출 기록 수정 (수입과 동일: 상단 폼 재사용) -----
+  function startEditExp(id) {
+    const r = lastExpRows.find((x) => x.id === id);
+    if (!r) return;
+    $('inDate').value = r.date || '';
+    $('weekBadge').textContent = r.date ? weekLabel(r.date) : '–';
+    refreshExpenseCats();
+    const idx = config.expense.findIndex((it) => (it.code || '') === (r.code || ''));
+    if (idx >= 0) $('expCat').value = String(idx);
+    updateCode(); updateExpFace();
+    // 청구인 복원
+    if (r.claimantId) {
+      setClaimant({ id: r.claimantId, name: r.claimantName || '', memberNo: r.claimantNo || 0 });
+    } else {
+      claimant = null;
+      $('expClaimName').value = r.claimantName || '';
+      $('expClaimNo').textContent = r.claimantNo || '–';
+      $('claimStatus').innerHTML = '';
+    }
+    $('expPayee').value = r.payee || '';
+    $('inAmount').value = r.amount ? wonFmt(r.amount) : '';
+    $('inMemo').value = r.memo || '';
+    editId = id;
+    $('editBannerText').textContent = `수정 중 · ${r.claimantName || r.payee || ''} ${(r.date || '').replace(/-/g, '').slice(4)}`;
+    $('editBanner').classList.remove('hide');
+    $('saveBtn').textContent = '수정 저장';
+    if (idx < 0) showMsg('이 기록의 항목이 현재 연도 목록에 없습니다. 항목을 다시 선택하세요.');
+    $('formSec').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ----- 목록 -----
@@ -437,21 +602,7 @@
       <thead><tr><th>No.</th><th>CODE</th><th class="gitemh">항목</th><th>건수</th><th>금액</th></tr></thead>
       <tbody>${body}</tbody></table></div>`;
   }
-  function rowHtml(r, id) {
-    const isInc = curTab === 'inc';
-    const main = esc(r.catPath || '(항목 없음)');
-    const who = isInc
-      ? (r.memberName || '') + (r.memberNo ? (' #' + r.memberNo) : '') + (r.spouseName ? ` (배우자 ${r.spouseName})` : '')
-      : (r.payee || '');
-    const meta = [who, r.date].filter(Boolean).join(' · ');
-    return `<div class="lrow">
-      <div class="li"><div class="lname">${main}</div><div class="lmeta">${esc(meta)}</div></div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span class="lamt ${isInc ? 'inc' : 'exp'}">${wonFmt(r.amount)}</span>
-        <button class="del" data-del="${id}">삭제</button>
-      </div>
-    </div>`;
-  }
+  // rowHtml(카드형 목록)은 수입·지출 모두 표(incTable/expTable)로 대체되어 제거함.
   let incView = 'date';
   let lastIncRows = [];
   let incSortKey = 'date', incSortDir = 'desc';
@@ -493,7 +644,7 @@
   function renderIncList(rows) {
     const box = $('listRows');
     box.innerHTML = incView === 'group' ? incGroupTable(rows) : incTable(rows);
-    box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => alert('수정 기능은 다음 단계에서 추가됩니다.'); });
+    box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => startEditInc(b.getAttribute('data-edit')); });
     const memoMap = {}; rows.forEach((r) => { if (r.memo) memoMap[r.id] = r.memo; });
     const memoBar = box.querySelector('#incMemoBar');
     box.querySelectorAll('[data-note]').forEach((b) => {
@@ -514,6 +665,170 @@
       };
     });
   }
+  // ----- 지출 표 (수입과 대칭) -----
+  let lastExpRows = [];
+  let expSortKey = 'date', expSortDir = 'desc';
+  function expSortVal(r, k) {
+    switch (k) {
+      case 'no': return Number(r.no) || 0;
+      case 'fy': return fiscalYearOf(r.date);
+      case 'week': { const m = (r.week || '').match(/(\d+)\s*주/); return m ? Number(m[1]) : 0; }
+      case 'date': return r.date || '';
+      case 'item': return r.code || '';
+      case 'id': return Number(r.claimantNo) || 0;
+      case 'claim': return r.claimantName || '';
+      case 'amt': return Number(r.amount) || 0;
+      case 'payee': return r.payee || '';
+    }
+    return '';
+  }
+  function sortExp(rows) {
+    const k = expSortKey, sign = expSortDir === 'asc' ? 1 : -1;
+    const strKey = (k === 'date' || k === 'item' || k === 'claim' || k === 'payee');
+    return rows.sort((a, b) => {
+      const x = expSortVal(a, k), y = expSortVal(b, k);
+      let c = strKey ? String(x).localeCompare(String(y), 'ko') : (x - y);
+      if (c === 0) c = (Number(a.no) || 0) - (Number(b.no) || 0);
+      return sign * c;
+    });
+  }
+  function setExpSort(k) {
+    if (expSortKey === k) expSortDir = expSortDir === 'asc' ? 'desc' : 'asc';
+    else { expSortKey = k; expSortDir = 'asc'; }
+    renderExpList(lastExpRows);
+  }
+  function expTable(rows) {
+    rows = sortExp(rows.slice());
+    const body = rows.map((r) => {
+      const item = esc(r.c3 || r.c2 || r.c1 || '');
+      const ymd = esc((r.date || '').replace(/-/g, ''));
+      const fy = fiscalYearOf(r.date);
+      const idno = r.claimantNo ? ('#' + r.claimantNo) : '';
+      const payee = r.payee ? esc(r.payee) : '–';
+      const wkm = (r.week || '').match(/(\d+)\s*주/); const wkNo = wkm ? wkm[1] : '';
+      return `<tr>
+        <td>${r.no || ''}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
+        <td>${item}</td><td>${esc(idno)}</td><td>${esc(r.claimantName || '')}</td>
+        <td class="ra amt">${wonFmt(r.amount)}</td><td>${payee}</td>
+        <td class="ce">${r.memo ? `<button class="iact i-note" data-note="${r.id}" aria-label="적요 보기">${SVG_NOTE}</button>` : '–'}</td>
+        <td class="ce"><button class="iact i-edit" data-edit="${r.id}" aria-label="수정">${SVG_EDIT}</button><button class="iact i-del" data-del="${r.id}" aria-label="삭제">${SVG_DEL}</button></td>
+      </tr>`;
+    }).join('');
+    const sar = (k) => expSortKey === k ? `<span class="sar">${expSortDir === 'asc' ? '▲' : '▼'}</span>` : '';
+    const th = (k, label) => `<th class="sortable" data-sk="${k}">${label}${sar(k)}</th>`;
+    return `<div class="itblwrap"><table class="itbl">
+      <thead><tr>${th('no', 'No.')}${th('fy', '회계년도')}${th('week', '주')}${th('date', '날짜')}${th('item', '항목')}${th('id', 'id')}${th('claim', '청구인')}${th('amt', '금액')}${th('payee', '수령인')}<th class="ce">적요</th><th class="ce">수정·삭제</th></tr></thead>
+      <tbody>${body}</tbody></table></div><div id="expMemoBar" class="imemo"></div>`;
+  }
+  function renderExpList(rows) {
+    const box = $('listRows');
+    box.innerHTML = expTable(rows);
+    box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => startEditExp(b.getAttribute('data-edit')); });
+    const memoMap = {}; rows.forEach((r) => { if (r.memo) memoMap[r.id] = r.memo; });
+    const memoBar = box.querySelector('#expMemoBar');
+    box.querySelectorAll('[data-note]').forEach((b) => {
+      const m = memoMap[b.getAttribute('data-note')] || '';
+      b.title = m;
+      b.onclick = () => { memoBar.innerHTML = '<b>적요:</b> ' + esc(m); memoBar.style.display = 'block'; };
+    });
+    box.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => delRec('expenses', b.getAttribute('data-del')); });
+    box.querySelectorAll('th[data-sk]').forEach((th) => { th.onclick = () => setExpSort(th.getAttribute('data-sk')); });
+  }
+
+  // ----- 기간 선택 모달 -----
+  // 회기(FY) N = (결산월 다음달, N-1년) ~ (결산월, N년)
+  // 예) 결산월 11 → FY2026 = 2025-12-01 ~ 2026-11-30. 결산월 12 → FY2026 = 2026-01-01 ~ 2026-12-31.
+  const lastDay = (y, m) => new Date(y, m, 0).getDate();   // m: 1~12
+  function fyStart(fy) {
+    const m = closeMonth === 12 ? 1 : closeMonth + 1;
+    const y = closeMonth === 12 ? fy : fy - 1;
+    return { y, m };
+  }
+  // 회기 시작에서 i(0-based)번째 달 → {y, m}
+  function fyMonth(fy, i) {
+    const s = fyStart(fy);
+    const t = s.m - 1 + i;
+    return { y: s.y + Math.floor(t / 12), m: (t % 12) + 1 };
+  }
+  // 회기 내 월 구간(0-based, 포함) → {from, to} YYMD
+  function fyRange(fy, i0, i1) {
+    const a = fyMonth(fy, i0), b = fyMonth(fy, i1);
+    return {
+      from: `${a.y}-${pad(a.m)}-01`,
+      to: `${b.y}-${pad(b.m)}-${pad(lastDay(b.y, b.m))}`
+    };
+  }
+  let ppFy = null, ppSel = null;   // ppSel: {i0, i1} 선택된 월 구간
+  function ppRangeOf(kind, mi) {
+    switch (kind) {
+      case 'all': return { i0: 0, i1: 11 };
+      case 'h1': return { i0: 0, i1: 5 };
+      case 'h2': return { i0: 6, i1: 11 };
+      case 'q1': return { i0: 0, i1: 2 };
+      case 'q2': return { i0: 3, i1: 5 };
+      case 'q3': return { i0: 6, i1: 8 };
+      case 'q4': return { i0: 9, i1: 11 };
+      case 'mon': return { i0: mi, i1: mi };
+    }
+    return null;
+  }
+  function ppRenderMonths() {
+    $('ppMonths').innerHTML = Array.from({ length: 12 }, (_, i) => {
+      const d = fyMonth(ppFy, i);
+      return `<button type="button" class="ppbtn mo" data-pp="mon" data-mi="${i}">${String(d.y).slice(2)}.${pad(d.m)}</button>`;
+    }).join('');
+    ppBind();
+  }
+  function ppSetFy(fy) {
+    ppFy = fy;
+    ppSel = null;
+    ppRenderMonths();
+    ppClearOn();
+    ppShowRange();   // 선택 전에는 회기 전체 기간 표시
+  }
+  function ppClearOn() {
+    document.querySelectorAll('#periodModal .ppbtn').forEach((b) => b.classList.remove('on'));
+  }
+  // 선택된 범위(없으면 회기 전체)의 실제 기간을 표시
+  function ppShowRange() {
+    const s = ppSel || { i0: 0, i1: 11 };
+    const r = fyRange(ppFy, s.i0, s.i1);
+    $('ppFyRange').textContent = `${r.from} ~ ${r.to}`;
+  }
+  function ppBind() {
+    document.querySelectorAll('#periodModal .ppbtn[data-pp]').forEach((b) => {
+      const kind = b.getAttribute('data-pp');
+      if (kind === 'none') return;
+      b.onclick = () => {
+        const mi = Number(b.getAttribute('data-mi'));
+        ppSel = ppRangeOf(kind, mi);
+        ppClearOn();
+        b.classList.add('on');
+        ppShowRange();
+      };
+    });
+  }
+  function openPeriodPick() {
+    // 회기 목록: finConfig 노드의 fy 값들 (없으면 현재 회기)
+    const years = [...new Set([...incomeNodes, ...expenseNodes]
+      .map((n) => Number(n.fy)).filter(Boolean))].sort((a, b) => b - a);
+    if (!years.length) years.push(currentFY());
+    const cur = years.includes(currentFY()) ? currentFY() : years[0];
+    $('ppFySel').innerHTML = years.map((y) =>
+      `<option value="${y}"${y === cur ? ' selected' : ''}>${y} 회기</option>`).join('');
+    ppSetFy(cur);
+    $('periodModal').style.display = 'flex';
+  }
+  function closePeriodPick() { $('periodModal').style.display = 'none'; }
+  function applyPeriodPick() {
+    if (!ppSel) { alert('범위를 선택하세요.'); return; }
+    const r = fyRange(ppFy, ppSel.i0, ppSel.i1);
+    $('fromDate').value = r.from;
+    $('toDate').value = r.to;
+    closePeriodPick();
+    loadList();
+  }
+
   async function loadList() {
     const coll = curTab === 'inc' ? 'offerings' : 'expenses';
     const from = $('fromDate').value, to = $('toDate').value;
@@ -530,8 +845,8 @@
         lastIncRows = rows;
         renderIncList(rows);
       } else {
-        box.innerHTML = rows.map((r) => rowHtml(r, r.id)).join('');
-        box.querySelectorAll('[data-del]').forEach((b) => { b.onclick = () => delRec(coll, b.getAttribute('data-del')); });
+        lastExpRows = rows;
+        renderExpList(rows);
       }
     } catch (e) { box.innerHTML = `<div class="empty">불러오지 못했습니다.<br>(${esc(e.code || e.message)})</div>`; }
   }
@@ -542,45 +857,8 @@
   }
 
   // ----- 설치: 항목 편집 -----
-  let editType = null;
-  function openEditor(type) { editType = type; $('itemEditor').classList.remove('hide'); renderEditor(); }
-  function suggestCode() {
-    const arr = config[editType]; const base = editType === 'income' ? 100000 : 200000;
-    let mx = base; arr.forEach((it) => { const n = Number(it.code); if (Number.isFinite(n) && n > mx) mx = n; });
-    return String(mx + 10);
-  }
-  function renderEditor() {
-    const arr = config[editType];
-    const title = editType === 'income' ? '수입 항목' : '지출 항목';
-    let html = `<div class="settitle" style="margin-top:12px;">${title} (${arr.length})</div>`;
-    html += arr.map((it, i) => `<div class="setrow">
-      <div><div class="srt">${esc(pathOf(it))}</div><div class="srd">코드 ${esc(it.code || '')}</div></div>
-      <button class="del" data-di="${i}">삭제</button></div>`).join('');
-    html += `<div style="border:1px solid var(--line); border-radius:10px; padding:11px 13px;">
-      <div class="srd" style="margin-bottom:7px;">새 항목 추가</div>
-      <div style="margin-bottom:6px;"><input id="ni1" placeholder="항목1 (예: 일반재정)"></div>
-      <div style="margin-bottom:6px;"><input id="ni2" placeholder="항목2 (예: 주일헌금)"></div>
-      <div style="margin-bottom:6px;"><input id="ni3" placeholder="항목3 (선택)"></div>
-      <div class="row"><input id="nic" class="grow" placeholder="코드" value="${suggestCode()}"><button class="qbtn" id="addItemBtn">추가</button></div>
-    </div>`;
-    $('itemEditor').innerHTML = html;
-    $('itemEditor').querySelectorAll('[data-di]').forEach((b) => { b.onclick = () => delItem(+b.getAttribute('data-di')); });
-    $('addItemBtn').onclick = addItem;
-  }
-  async function addItem() {
-    const c1 = $('ni1').value.trim(), c2 = $('ni2').value.trim(), c3 = $('ni3').value.trim(), code = $('nic').value.trim();
-    if (!c1) return alert('항목1을 입력하세요.');
-    if (!code) return alert('코드를 입력하세요.');
-    config[editType].push({ c1, c2, c3, code });
-    try { await saveConfig(); populateSelects(); renderEditor(); }
-    catch (e) { config[editType].pop(); alert('저장 실패: ' + (e.code || e.message)); }
-  }
-  async function delItem(i) {
-    if (!confirm('이 항목을 삭제할까요?')) return;
-    const removed = config[editType].splice(i, 1);
-    try { await saveConfig(); populateSelects(); renderEditor(); }
-    catch (e) { config[editType].splice(i, 0, removed[0]); alert('삭제 실패: ' + (e.code || e.message)); }
-  }
+  // 수입=income.html, 지출=expense.html 로 이관됨. 옛 인페이지 flat 편집기(openEditor/saveConfig)는
+  // 호출부가 없고 옛 finConfig/items 문서를 덮어쓸 위험이 있어 제거함.
 
   // ----- 탭 -----
   function setTab(t) {
@@ -595,9 +873,10 @@
     $('incFields').classList.toggle('hide', t !== 'inc');
     $('expFields').classList.toggle('hide', t !== 'exp');
     $('memoLabel').textContent = t === 'inc' ? '비고' : '적요';
-    $('memoSub').textContent = t === 'inc' ? '(선택)' : '(내용)';
+    $('memoSub').textContent = '';
     resetForm();
     if (t === 'inc') refreshIncomeCats();
+    else if (t === 'exp') refreshExpenseCats();
     updateCode();
     loadList();
   }
@@ -614,24 +893,38 @@
     document.querySelectorAll('.tab').forEach((el) => { el.onclick = () => setTab(el.dataset.tab); });
     $('backBtn').onclick = () => { location.href = 'index.html'; };
     $('rightBtn').onclick = () => alert('통계 화면은 이후 단계에서 추가됩니다.');
-    $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); });
+    $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); refreshExpenseCats(); });
     $('incCat').addEventListener('change', () => { updateCode(); updateIncFace(); });
-    $('expCat').addEventListener('change', updateCode);
+    $('expCat').addEventListener('change', () => { updateCode(); updateExpFace(); });
     $('incName').addEventListener('input', onNameEdit);
     $('incName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doNameSearch(); if (linked) $('inAmount').focus(); } });
     $('incSearchBtn').addEventListener('click', doNameSearch);
+    $('expClaimName').addEventListener('input', onClaimEdit);
+    $('expClaimName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doClaimSearch(); if (claimant) $('expPayee').focus(); } });
+    $('expClaimSearchBtn').addEventListener('click', doClaimSearch);
     $('inAmount').addEventListener('keydown', async (e) => { if (e.key === 'Enter') { e.preventDefault(); if (await save()) { if (curTab === 'inc') $('incName').focus(); } } });
     $('spouseChk').addEventListener('change', toggleSpouse);
     $('inAmount').addEventListener('input', () => { const n = onlyNum($('inAmount').value); $('inAmount').value = n ? wonFmt(n) : ''; });
     $('qaSubmit').onclick = submitQuickAdd;
     $('qaCancel').onclick = closeQuickAdd;
     $('saveBtn').onclick = save;
+    $('editCancelBtn').onclick = () => {
+      resetForm();
+      const t = toYMD(new Date());
+      $('inDate').value = t; $('weekBadge').textContent = weekLabel(t);
+      refreshIncomeCats();
+    };
     $('searchBtn').onclick = loadList;
+    $('periodPickBtn').onclick = openPeriodPick;
+    $('ppCancel').onclick = closePeriodPick;
+    $('ppApply').onclick = applyPeriodPick;
+    $('ppFySel').addEventListener('change', () => ppSetFy(Number($('ppFySel').value)));
+    $('periodModal').addEventListener('click', (e) => { if (e.target === $('periodModal')) closePeriodPick(); });
     $('viewDate').onclick = () => setIncView('date');
     $('viewGroup').onclick = () => setIncView('group');
     $('thisWeekBtn').onclick = () => { const [a, b] = weekRange($('inDate').value || today); $('fromDate').value = a; $('toDate').value = b; loadList(); };
     $('setIncBtn').onclick = () => { location.href = 'income.html'; };
-    $('setExpBtn').onclick = () => openEditor('expense');
+    $('setExpBtn').onclick = () => { location.href = 'expense.html'; };
     $('setCloseBtn').onclick = openCloseMonth;
     $('cmCancel').onclick = closeCloseMonth;
     $('cmSave').onclick = saveCloseMonth;
