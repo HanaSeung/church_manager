@@ -669,19 +669,43 @@
     return docs.every((d) => get(d) === first) ? first : MIXED;
   }
   // 저장은 리프(말단) 항목에만 한다. 상위에 저장하면 부모가 자식 합계를 또 더해 이중계상된다.
+  // 표시는 offering.html 수입·지출 탭과 같다 — 부모는 선택 불가 제목 줄, 리프는 들여쓰기 + '·' + 이름만.
+  const IND = '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';   // 한 단계 들여쓰기 (offering.html 과 동일)
   function leafOpts(sel) {
     const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
     const out = [];
-    const walk = (pid) => {
+    const walk = (pid, level) => {
       childrenOf(curKind, pid).forEach((c) => {
         const kids = childrenOf(curKind, c.id);
-        if (kids.length) { walk(c.id); return; }             // 부모는 고를 수 없다
+        const ind = IND.repeat(level - 1);
+        if (kids.length) {                                   // 부모는 고를 수 없다 (제목 줄)
+          out.push(`<option disabled style="color:var(--hint);">${ind}${esc(String(c.name || '').trim())}</option>`);
+          walk(c.id, level + 1);
+          return;
+        }
         const p = pathOf(c, byId);
-        out.push(`<option value="${esc(c.id)}"${catKey(p) === catKey(sel) ? ' selected' : ''}>${esc(p)}</option>`);
+        out.push(`<option value="${esc(c.id)}"${catKey(p) === catKey(sel) ? ' selected' : ''}>${ind}·\u00A0${esc(String(c.name || '').trim())}</option>`);
       });
     };
-    walk(null);
+    walk(null, 1);
     return out.join('');
+  }
+  // 이름 경로 → 리프 노드 id. 트리에 없으면 '' (항목이 지워졌거나 이름이 바뀐 기록).
+  function leafIdOf(path) {
+    if (!path) return '';
+    const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
+    const hit = scope(curKind).find((c) => isLeaf(curKind, c.id) && catKey(pathOf(c, byId)) === catKey(path));
+    return hit ? hit.id : '';
+  }
+  // 닫힌 칸에는 '이름만' 찍는다 (들여쓰기·표식·경로 없이). 못 고르는 상태면 '-'.
+  const leafName = (id) => {
+    const it = nodes.find((n) => n.id === id);
+    return it ? String(it.name || '').trim() : '';
+  };
+  function updateBCatFace() {
+    const s = $('bCat'), f = $('bCatFace');
+    if (!s || !f) return;
+    f.textContent = leafName(s.value) || '-';
   }
   function bulkHtml(recs) {
     if (!bulkOpen) return '';
@@ -698,6 +722,10 @@
     // 패널을 여는 지금이 '시작값'이다. 저장 시 이것과 비교한다.
     bulkInit = { date: vDate, path: vPath, amount: vAmt, memo: vMemo, payee: vPayee };
 
+    // 항목: 값이 제각각(MIXED)이거나 트리에서 못 찾으면 '-' 를 골라 둔다.
+    // 못 찾았는데 첫 항목이 자동 선택되면, 손대지 않아도 엉뚱한 항목으로 덮어써진다.
+    const selId = (vPath === MIXED) ? '' : leafIdOf(vPath);
+
     const mx = (v) => (v === MIXED ? ' mixed' : '');
     const val = (v) => (v === MIXED ? '' : esc(v));
     const ph = (v) => (v === MIXED ? ' placeholder="-"' : '');
@@ -712,7 +740,10 @@
       <div class="fld${mx(vDate)}"><span class="lab">날짜</span>
         <input id="bDate" type="date" value="${val(vDate)}"></div>
       <div class="fld${mx(vPath)}"><span class="lab">항목</span>
-        <select id="bCat">${vPath === MIXED ? '<option value="">-</option>' : ''}${leafOpts(vPath === MIXED ? '' : vPath)}</select></div>
+        <div class="selwrap">
+          <div class="selface"><span id="bCatFace">${esc(leafName(selId) || '-')}</span></div>
+          <select id="bCat" class="selreal">${selId ? '' : '<option value="" selected>-</option>'}${leafOpts(selId ? vPath : '')}</select>
+        </div></div>
       <div class="fld${mx(vAmt)}"><span class="lab">금액</span>
         <input id="bAmt" type="text" inputmode="numeric" value="${vAmt === MIXED ? '' : fmt(vAmt)}"${ph(vAmt)}></div>
       ${payeeRow}
@@ -889,6 +920,8 @@
   }
   $('body').addEventListener('change', (e) => {
     if (TYPE !== 'range' || !agg) return;
+    // 항목을 고르면 닫힌 칸(.selface)에 '이름만' 다시 찍는다. 패널은 다시 그리지 않는다.
+    if (e.target.id === 'bCat') { updateBCatFace(); return; }
     const recs = catFilterDocs(curKind === 'income' ? incDocs : expDocs);
     if (e.target.id === 'ckAll') {
       // 지금 화면에 보이는 것만 토글한다. 항목 필터로 걸러진 건 건드리지 않는다.

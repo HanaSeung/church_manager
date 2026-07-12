@@ -194,6 +194,19 @@
   /* 고른 건들의 값이 서로 다른 칸: 비워 두고 '-' 를 흐리게. 손대지 않으면 그대로 남는다. */
   .bulk .fld.mixed input, .bulk .fld.mixed select{color:var(--hint); background:var(--bg);}
   .bulk .fld.mixed .lab{color:var(--hint);}
+  /* 항목 드롭다운 — offering.html 수입·지출 탭과 같은 방식.
+     펼치면 계단식(부모 = 선택 불가 제목 줄), 닫히면 '이름만'.
+     진짜 select(.selreal)를 투명하게 덮어씌우고, 보이는 것은 .selface 다. */
+  .bulk .selwrap{position:relative; flex:1; min-width:0;}
+  .bulk .selface{height:36px; line-height:36px; border:1px solid var(--line); border-radius:8px;
+    background-color:var(--card); padding:0 30px 0 9px; font-size:13px; color:var(--text);
+    overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat:no-repeat; background-position:right 10px center;}
+  /* .bulk .fld select 규칙(높이·테두리)을 이겨야 하므로 선택자를 한 단계 더 준다. */
+  .bulk .fld select.selreal{position:absolute; inset:0; width:100%; height:100%;
+    opacity:0; margin:0; padding:0; border:none; background:none;}
+  .bulk .fld.mixed .selface{color:var(--hint); background-color:var(--bg);}
   .bulk .bf{display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--line);}
   .bulk .bsave{flex:1; height:42px; border:none; border-radius:8px; background:var(--green); color:#fff;
     font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;}
@@ -967,19 +980,43 @@
     return docs.every((d) => get(d) === first) ? first : MIXED;
   }
   // 저장은 리프(말단) 항목에만 한다. 상위에 저장하면 부모가 자식 합계를 또 더해 이중계상된다.
+  // 표시는 offering.html 수입·지출 탭과 같다 — 부모는 선택 불가 제목 줄, 리프는 들여쓰기 + '·' + 이름만.
+  const IND = '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';   // 한 단계 들여쓰기 (offering.html 과 동일)
   function leafOpts(sel) {
     const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
     const out = [];
-    const walk = (pid) => {
+    const walk = (pid, level) => {
       childrenOf(curKind, pid).forEach((c) => {
         const kids = childrenOf(curKind, c.id);
-        if (kids.length) { walk(c.id); return; }             // 부모는 고를 수 없다
+        const ind = IND.repeat(level - 1);
+        if (kids.length) {                                   // 부모는 고를 수 없다 (제목 줄)
+          out.push(`<option disabled style="color:var(--hint);">${ind}${esc(String(c.name || '').trim())}</option>`);
+          walk(c.id, level + 1);
+          return;
+        }
         const p = pathOf(c, byId);
-        out.push(`<option value="${esc(c.id)}"${catKey(p) === catKey(sel) ? ' selected' : ''}>${esc(p)}</option>`);
+        out.push(`<option value="${esc(c.id)}"${catKey(p) === catKey(sel) ? ' selected' : ''}>${ind}·\u00A0${esc(String(c.name || '').trim())}</option>`);
       });
     };
-    walk(null);
+    walk(null, 1);
     return out.join('');
+  }
+  // 이름 경로 → 리프 노드 id. 트리에 없으면 '' (항목이 지워졌거나 이름이 바뀐 기록).
+  function leafIdOf(path) {
+    if (!path) return '';
+    const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
+    const hit = scope(curKind).find((c) => isLeaf(curKind, c.id) && catKey(pathOf(c, byId)) === catKey(path));
+    return hit ? hit.id : '';
+  }
+  // 닫힌 칸에는 '이름만' 찍는다 (들여쓰기·표식·경로 없이). 못 고르는 상태면 '-'.
+  const leafName = (id) => {
+    const it = nodes.find((n) => n.id === id);
+    return it ? String(it.name || '').trim() : '';
+  };
+  function updateBCatFace() {
+    const s = $('bCat'), f = $('bCatFace');
+    if (!s || !f) return;
+    f.textContent = leafName(s.value) || '-';
   }
   function bulkHtml(recs) {
     if (!bulkOpen) return '';
@@ -996,6 +1033,10 @@
     // 패널을 여는 지금이 '시작값'이다. 저장 시 이것과 비교한다.
     bulkInit = { date: vDate, path: vPath, amount: vAmt, memo: vMemo, payee: vPayee };
 
+    // 항목: 값이 제각각(MIXED)이거나 트리에서 못 찾으면 '-' 를 골라 둔다.
+    // 못 찾았는데 첫 항목이 자동 선택되면, 손대지 않아도 엉뚱한 항목으로 덮어써진다.
+    const selId = (vPath === MIXED) ? '' : leafIdOf(vPath);
+
     const mx = (v) => (v === MIXED ? ' mixed' : '');
     const val = (v) => (v === MIXED ? '' : esc(v));
     const ph = (v) => (v === MIXED ? ' placeholder="-"' : '');
@@ -1010,7 +1051,10 @@
       <div class="fld${mx(vDate)}"><span class="lab">날짜</span>
         <input id="bDate" type="date" value="${val(vDate)}"></div>
       <div class="fld${mx(vPath)}"><span class="lab">항목</span>
-        <select id="bCat">${vPath === MIXED ? '<option value="">-</option>' : ''}${leafOpts(vPath === MIXED ? '' : vPath)}</select></div>
+        <div class="selwrap">
+          <div class="selface"><span id="bCatFace">${esc(leafName(selId) || '-')}</span></div>
+          <select id="bCat" class="selreal">${selId ? '' : '<option value="" selected>-</option>'}${leafOpts(selId ? vPath : '')}</select>
+        </div></div>
       <div class="fld${mx(vAmt)}"><span class="lab">금액</span>
         <input id="bAmt" type="text" inputmode="numeric" value="${vAmt === MIXED ? '' : fmt(vAmt)}"${ph(vAmt)}></div>
       ${payeeRow}
@@ -1187,6 +1231,8 @@
   }
   $('body').addEventListener('change', (e) => {
     if (TYPE !== 'range' || !agg) return;
+    // 항목을 고르면 닫힌 칸(.selface)에 '이름만' 다시 찍는다. 패널은 다시 그리지 않는다.
+    if (e.target.id === 'bCat') { updateBCatFace(); return; }
     const recs = catFilterDocs(curKind === 'income' ? incDocs : expDocs);
     if (e.target.id === 'ckAll') {
       // 지금 화면에 보이는 것만 토글한다. 항목 필터로 걸러진 건 건드리지 않는다.
