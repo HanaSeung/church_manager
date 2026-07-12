@@ -1,4 +1,4 @@
-const CACHE = 'church-manager-v172';
+const CACHE = 'church-manager-v208';
 const ASSETS = [
   'index.html',
   'manifest.json',
@@ -16,7 +16,8 @@ const ASSETS = [
   'income.html',
   'expense.html',
   'budget.html',
-  'stats.html'
+  'stats.html',
+  'report.html'
 ];
 
 self.addEventListener('install', (e) => {

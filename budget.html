@@ -284,10 +284,29 @@
     }
 
     function bindRows() {
-      $('tree').querySelectorAll('[data-bg]').forEach((inp) => {
+      // 화면에 보이는 순서 = 트리 순서. 엔터로 이 순서대로 훑어 내려간다.
+      // 수입·지출 탭은 각각 render() → bindRows() 를 다시 타므로 양쪽 모두 적용된다.
+      const inputs = [...$('tree').querySelectorAll('[data-bg]')];
+      inputs.forEach((inp, i) => {
+        const last = (i === inputs.length - 1);
+        inp.enterKeyHint = last ? 'done' : 'next';   // 폰 키보드의 엔터키 라벨
         inp.addEventListener('input', () => onAmtInput(inp));
         inp.addEventListener('blur', () => onAmtBlur(inp));
+        inp.addEventListener('keydown', (e) => onAmtKey(e, inputs, i));
       });
+    }
+
+    // 엔터 = 다음 입력칸으로. 예산은 수십 칸을 연속으로 치는 작업이라 손이 마우스로 가면 안 된다.
+    // ※ 다음 칸으로 focus 가 옮겨가면 blur 가 먼저 돌아 콤마가 정리된다(onAmtBlur).
+    function onAmtKey(e, inputs, i) {
+      const dir = e.key === 'Enter' ? 1 : (e.key === 'ArrowDown' ? 1 : (e.key === 'ArrowUp' ? -1 : 0));
+      if (!dir) return;
+      e.preventDefault();
+      const next = inputs[i + dir];
+      if (!next) { inputs[i].blur(); return; }        // 끝이면 키보드를 내린다
+      next.focus();
+      next.select();                                  // 바로 덮어쓸 수 있게 전체 선택
+      next.scrollIntoView({ block: 'center' });       // 폰에서 키보드에 가리지 않게
     }
 
     function onAmtInput(inp) {

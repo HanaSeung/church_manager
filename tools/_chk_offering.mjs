@@ -1304,7 +1304,7 @@
   }
 
   // ----- 초기화 -----
-  function initUI() {
+  async function initUI() {
     const today = toYMD(new Date());
     $('inDate').value = today;
     $('weekBadge').textContent = weekLabel(today);
@@ -1360,7 +1360,20 @@
     $('closeMonthSel').addEventListener('change', updateCloseHint);
     $('closeMonthModal').addEventListener('click', (e) => { if (e.target === $('closeMonthModal')) closeCloseMonth(); });
 
-    // stats.html 에서 돌아올 때 ?tab=exp 처럼 탭을 지정할 수 있다
-    const qTab = new URLSearchParams(location.search).get('tab');
+    // stats.html / report.html 에서 돌아올 때 ?tab=exp 처럼 탭을 지정할 수 있다
+    const qs = new URLSearchParams(location.search);
+    const qTab = qs.get('tab');
     setTab(TABS.includes(qTab) ? qTab : 'inc');
+
+    // report.html(기간 단위 검색)의 [수정] 버튼에서 넘어온 경우.
+    // startEditInc/Exp 는 lastIncRows/lastExpRows 에서 기록을 찾으므로
+    // 그 기록이 목록에 들어오도록 '기간'까지 같이 받아 조회한 뒤 편집을 연다.
+    const qFrom = qs.get('from'), qTo = qs.get('to'), qEdit = qs.get('edit');
+    if (qEdit && qFrom && qTo && (qTab === 'inc' || qTab === 'exp')) {
+      $('fromDate').value = qFrom;
+      $('toDate').value = qTo;
+      await loadList();
+      if (qTab === 'inc') startEditInc(qEdit); else startEditExp(qEdit);
+      history.replaceState(null, '', 'offering.html?tab=' + qTab);   // 새로고침 시 다시 편집모드로 들어가지 않게
+    }
   }

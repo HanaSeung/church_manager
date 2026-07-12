@@ -10,7 +10,7 @@
   *{margin:0; padding:0; box-sizing:border-box;}
   :root{--green:#2f6f4f; --green-soft:#e7f1ec; --green-deep:#245540;
     --bg:#f5f6f4; --card:#fff; --text:#1f2421; --muted:#6b726d; --hint:#9aa19c;
-    --line:#e2e5e1; --danger:#c0392b; --warn:#8a5a00; --warn-soft:#fdf3e0;}
+    --line:#e2e5e1;}
   html{scrollbar-gutter:stable;}
   body{font-family:'Malgun Gothic', system-ui, sans-serif; background:var(--bg); color:var(--text); line-height:1.6;}
   .wrap{max-width:720px; margin:0 auto; min-height:100vh; padding-bottom:40px;}
@@ -23,53 +23,20 @@
   .tab{flex:1; text-align:center; padding:13px 0; font-size:15px; color:var(--hint);
     cursor:pointer; border-bottom:2px solid transparent; font-weight:500;}
   .tab.on{color:var(--green); border-bottom-color:var(--green); font-weight:600;}
-  .bar{display:flex; align-items:center; gap:8px; padding:12px 14px; flex-wrap:wrap;}
-  .fysel{height:38px; padding:0 10px; border:1px solid var(--line); border-radius:8px;
-    font-size:14px; font-family:inherit; background:var(--card); color:var(--text);}
-  .rangetxt{font-size:12px; color:var(--muted);}
-  .xbtn{margin-left:auto; height:36px; padding:0 14px; border:1px solid var(--green);
-    background:var(--card); color:var(--green); border-radius:8px; font-size:13px;
-    font-weight:600; cursor:pointer; font-family:inherit;}
-  .xbtn:disabled{border-color:var(--line); color:var(--hint); cursor:default;}
-</style>
-<style>
-  .warnbox{margin:0 14px 12px; padding:10px 12px; border-radius:9px; font-size:12.5px;
-    background:var(--warn-soft); color:var(--warn); border:1px solid #f0dcb4; display:none;}
-  .warnbox.on{display:block;}
-  .warnbox b{font-weight:700;}
-  .sect{margin:0 0 18px;}
-  .sh{display:flex; align-items:baseline; gap:8px; padding:4px 14px 7px; font-size:14px; font-weight:700; color:var(--green-deep);}
-  .sh .sub{font-size:11.5px; font-weight:400; color:var(--muted);}
-  table.t{width:100%; border-collapse:collapse; background:var(--card); table-layout:fixed;}
-  table.t th{background:var(--green-soft); color:var(--green-deep); font-size:11.5px; font-weight:600;
-    padding:7px 6px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); text-align:center;}
-  table.t td{font-size:12.5px; padding:7px 6px; border-bottom:1px solid var(--line);
-    font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .c-g{width:78px;} .c-n{width:auto;} .c-m{width:96px;}
-  td.g{color:var(--muted); font-size:11.5px; text-align:left; padding-left:10px;}
-  td.n{text-align:left;} td.m{text-align:right; padding-right:10px;}
-  tr.sub td{background:#f7f9f8; font-weight:700;}
-  tr.tot td{background:var(--green-soft); font-weight:700; color:var(--green-deep); border-bottom:2px solid var(--green);}
-  td.neg{color:var(--danger);}
-  .lead{padding:10px 14px 0; font-size:12.5px; color:var(--muted);}
-  .loading{text-align:center; color:var(--muted); font-size:14px; padding:56px 16px;}
-  /* 월별 내역: 14열이라 가로 스크롤. 항목·소항목 2열은 왼쪽에 고정한다 */
-  .scrollx{overflow-x:auto; -webkit-overflow-scrolling:touch; border-top:1px solid var(--line);}
-  table.m{border-collapse:separate; border-spacing:0; background:var(--card); min-width:100%;}
-  table.m th{background:var(--green-soft); color:var(--green-deep); font-size:11px; font-weight:600;
-    padding:6px 8px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap;}
-  table.m td{font-size:11.5px; padding:6px 8px; border-bottom:1px solid var(--line);
-    font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap;}
-  table.m td.g, table.m td.n{text-align:left;}
-  table.m td.g{color:var(--muted); font-size:11px;}
-  table.m .fix1{position:sticky; left:0; z-index:2; width:66px; min-width:66px;}
-  table.m .fix2{position:sticky; left:66px; z-index:2; width:88px; min-width:88px;
-    box-shadow:1px 0 0 var(--line);}
-  table.m thead .fix1, table.m thead .fix2{z-index:3;}
-  table.m tbody .fix1, table.m tbody .fix2{background:var(--card);}
-  table.m tr.sub td{background:#f7f9f8; font-weight:700;}
-  table.m tr.tot td{background:var(--green-soft); font-weight:700; color:var(--green-deep);}
-  table.m td.sumcol{border-left:1px solid var(--line); font-weight:700;}
+
+  .lead{padding:16px 16px 10px; font-size:12.5px; color:var(--muted);}
+  .menu{padding:0 14px;}
+  .item{display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:14px 14px; margin-bottom:10px; cursor:pointer; font-family:inherit; color:inherit;}
+  .item:hover{border-color:var(--green); background:var(--green-soft);}
+  .item .ico{width:38px; height:38px; flex:0 0 38px; border-radius:10px; background:var(--green-soft);
+    display:flex; align-items:center; justify-content:center; font-size:19px;}
+  .item .tx{flex:1; min-width:0;}
+  .item .t1{display:block; font-size:15px; font-weight:600; line-height:1.35;}
+  .item .t2{display:block; font-size:12px; color:var(--muted); line-height:1.45; margin-top:2px;}
+  .item .arw{color:var(--hint); font-size:20px; line-height:1;}
+  .note{padding:6px 16px 0; font-size:11.5px; color:var(--hint);}
 </style>
 </head>
 <body>
@@ -87,675 +54,91 @@
     <div class="tab" data-go="set">설치</div>
   </div>
 
-  <div class="bar">
-    <select id="fySel" class="fysel" aria-label="회계연도"></select>
-    <span class="rangetxt" id="rangeTxt">–</span>
-    <button class="xbtn" id="xlsBtn" disabled>엑셀 내보내기</button>
+  <div class="lead">보고 싶은 표를 고르세요. 회기 · 기간은 표 안에서 바꿀 수 있습니다.</div>
+
+  <div class="menu">
+    <button class="item" data-type="bs">
+      <span class="ico">📋</span>
+      <span class="tx">
+        <span class="t1">예결산표</span>
+        <span class="t2">수입부 · 특별헌금 · 이월 · 지출부 · 기금별 잔액 · 월별 내역 · 엑셀 내보내기</span>
+      </span>
+      <span class="arw">›</span>
+    </button>
+    <button class="item" data-type="monthly">
+      <span class="ico">📅</span>
+      <span class="tx">
+        <span class="t1">년간 월별 집계표</span>
+        <span class="t2">12개월 가로표 — 수입 · 지출 골라서 크게</span>
+      </span>
+      <span class="arw">›</span>
+    </button>
+    <button class="item" data-type="weekly">
+      <span class="ico">🗓</span>
+      <span class="tx">
+        <span class="t1">월간 주별 집계표</span>
+        <span class="t2">한 달 주차 가로표 — 수입 · 지출 골라서</span>
+      </span>
+      <span class="arw">›</span>
+    </button>
+    <button class="item" data-type="range">
+      <span class="ico">🔍</span>
+      <span class="tx">
+        <span class="t1">기간 단위 검색</span>
+        <span class="t2">기간 · 구분 · 항목을 골라서 조회 (수입 · 지출 따로)</span>
+      </span>
+      <span class="arw">›</span>
+    </button>
+    <button class="item" data-type="member">
+      <span class="ico">👤</span>
+      <span class="tx">
+        <span class="t1">성도별 헌금 집계</span>
+        <span class="t2">성도별 · 항목별 헌금 합계 (기부금영수증 · 심방 자료)</span>
+      </span>
+      <span class="arw">›</span>
+    </button>
   </div>
 
-  <div class="warnbox" id="warnBox"></div>
-  <div id="body"><div class="loading">불러오는 중…</div></div>
+  <div class="note" id="note"></div>
 </div>
 <script type="module">
   import { auth, db } from "./firebase-config.js";
   import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-  import {
-    collection, query, where, getDocs, doc, getDoc
-  } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
   const $ = (id) => document.getElementById(id);
   const MIN_LEVEL = 3;
-  const COL = 'finConfig';
 
-  const FUNDS = ['일반', '선교', '장학', '건축', '차량'];
-  const DEFAULT_FUND = '일반';
-  const CARRY_C1 = '이월';          // 이월 대분류 이름 (offering.html 의 isCarryOver 와 같은 규칙)
+  // PC 는 표를 새 창에 띄운다(가로 제한 없이 전체화면). 폰은 새 창이 어색해서 그대로 이동한다.
+  const PC = window.matchMedia('(min-width:900px)').matches;
+  if (PC) $('note').textContent = '표는 새 창으로 열립니다. 창을 닫으면 이 화면으로 돌아옵니다.';
 
-  let closeMonth = 12;
-  let curFY = null;
-  let nodes = [];                   // finConfig 전체 노드
-  let incDocs = [], expDocs = [];   // 현재 회기 문서
-  let agg = null;                   // 집계 결과
-
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmt = (n) => Number(n || 0).toLocaleString('ko-KR');
-  const pad = (n) => String(n).padStart(2, '0');
-  const codeNum = (c) => Number(String(c).replace(/[^0-9]/g, '')) || 0;
-  // 경로 비교 키: 공백 차이를 흡수한다 ('일반재정 › 주일헌금' === '일반재정›주일헌금')
-  const catKey = (s) => String(s || '').replace(/\s+/g, '');
-
-  // ---- 회기 범위 (offering.html 과 동일 규칙) ----
-  // 회기 N = (결산월 다음달, N-1년) ~ (결산월, N년)
-  const lastDay = (y, m) => new Date(y, m, 0).getDate();
-  function fyStart(fy) {
-    const m = closeMonth === 12 ? 1 : closeMonth + 1;
-    const y = closeMonth === 12 ? fy : fy - 1;
-    return { y, m };
-  }
-  function fyMonth(fy, i) {
-    const s = fyStart(fy);
-    const t = s.m - 1 + i;
-    return { y: s.y + Math.floor(t / 12), m: (t % 12) + 1 };
-  }
-  function fyRange(fy) {
-    const a = fyMonth(fy, 0), b = fyMonth(fy, 11);
-    return { from: `${a.y}-${pad(a.m)}-01`, to: `${b.y}-${pad(b.m)}-${pad(lastDay(b.y, b.m))}` };
-  }
-  // 'YYYY-MM-DD' → 회기 내 월 순번 0~11 (범위 밖이면 -1)
-  function monthIdx(fy, ymd) {
-    const s = fyStart(fy);
-    const y = Number(String(ymd).slice(0, 4)), m = Number(String(ymd).slice(5, 7));
-    if (!y || !m) return -1;
-    const i = (y - s.y) * 12 + (m - s.m);
-    return (i >= 0 && i < 12) ? i : -1;
-  }
-  // 회기 월 라벨 ['12월','01월',…,'11월']
-  const monthLabels = (fy) => Array.from({ length: 12 }, (_, i) => pad(fyMonth(fy, i).m) + '월');
-  const fiscalYearOf = (d) => (d.getMonth() + 1) <= closeMonth ? d.getFullYear() : d.getFullYear() + 1;
-
-  // ---- 트리 도우미 ----
-  const scope = (kind) => nodes.filter((c) => Number(c.fy) === curFY && c.kind === kind);
-  const childrenOf = (kind, pid) => scope(kind)
-    .filter((c) => (c.parentId || null) === (pid || null))
-    .sort((a, b) => codeNum(a.code) - codeNum(b.code));
-  const isLeaf = (kind, id) => !scope(kind).some((c) => c.parentId === id);
-
-  function fundOf(node, byId) {
-    let n = node, guard = 0;
-    while (n && guard++ < 10) {
-      if (n.fund && FUNDS.includes(n.fund)) return n.fund;
-      if (!n.parentId) break;
-      n = byId[n.parentId];
-    }
-    return DEFAULT_FUND;
-  }
-  function pathOf(node, byId) {
-    const parts = []; let n = node, guard = 0;
-    while (n && guard++ < 10) { parts.unshift(String(n.name || '').trim()); n = n.parentId ? byId[n.parentId] : null; }
-    return parts.join(' › ');
-  }
-  function rootOf(node, byId) {
-    let n = node, guard = 0;
-    while (n && n.parentId && guard++ < 10) n = byId[n.parentId];
-    return n;
-  }
-
-  // ---- 로그인 · 초기 로드 ----
   $('backBtn').onclick = () => { location.href = 'index.html'; };
   document.querySelectorAll('[data-go]').forEach((el) => {
     el.onclick = () => { location.href = 'offering.html?tab=' + el.dataset.go; };
   });
 
+  document.querySelectorAll('[data-type]').forEach((el) => {
+    el.onclick = () => {
+      const url = 'report.html?type=' + el.dataset.type;
+      if (!PC) { location.href = url; return; }
+      // 팝업이 차단되면 같은 탭으로 떨어뜨린다. 눌렀는데 아무 일도 안 일어나면 안 된다.
+      const w = window.open(url, '_blank');
+      if (!w) location.href = url;
+    };
+  });
+
+  // 메뉴는 권한만 확인한다. 데이터는 각 보고서 창에서 읽는다(메뉴가 즉시 뜬다).
   onAuthStateChanged(auth, async (user) => {
     if (!user) { location.replace('index.html'); return; }
     try {
       const snap = await getDoc(doc(db, 'users', user.uid));
       const lv = snap.exists() ? (snap.data().level || 1) : 1;
-      if (lv < MIN_LEVEL) { alert('통계는 재정 담당자만 이용할 수 있습니다.'); location.replace('index.html'); return; }
-      try {
-        const s = await getDoc(doc(db, 'finConfig', 'settings'));
-        if (s.exists() && s.data().closeMonth) closeMonth = Number(s.data().closeMonth);
-      } catch (e) { /* 기본 12 */ }
-      await loadNodes();
-      buildYearSelect();
-      await reload();
+      if (lv < MIN_LEVEL) { alert('통계는 재정 담당자만 이용할 수 있습니다.'); location.replace('index.html'); }
     } catch (e) {
       console.error(e);
-      $('body').innerHTML = '<div class="loading">불러오지 못했습니다.</div>';
     }
   });
-
-  async function loadNodes() {
-    const qs = await getDocs(collection(db, COL));
-    nodes = qs.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .filter((c) => c.kind === 'income' || c.kind === 'expense');
-    if (curFY == null) {
-      const ys = [...new Set(nodes.map((c) => Number(c.fy)).filter(Boolean))];
-      curFY = ys.length ? Math.max(...ys) : fiscalYearOf(new Date());
-    }
-  }
-
-  function buildYearSelect() {
-    const ys = new Set(nodes.map((c) => Number(c.fy)).filter(Boolean));
-    ys.add(curFY);
-    const arr = [...ys].sort((a, b) => b - a);
-    $('fySel').innerHTML = arr.map((y) => `<option value="${y}"${y === curFY ? ' selected' : ''}>${y}년도</option>`).join('');
-  }
-
-  $('fySel').onchange = async () => { curFY = Number($('fySel').value); await reload(); };
-
-  async function reload() {
-    const r = fyRange(curFY);
-    $('rangeTxt').textContent = `${r.from} ~ ${r.to}`;
-    $('xlsBtn').disabled = true;
-    $('body').innerHTML = '<div class="loading">불러오는 중…</div>';
-    try {
-      // 문서에는 fy 가 저장되지 않는다. 날짜 범위로 조회한다.
-      const [a, b] = await Promise.all([
-        getDocs(query(collection(db, 'offerings'), where('date', '>=', r.from), where('date', '<=', r.to))),
-        getDocs(query(collection(db, 'expenses'), where('date', '>=', r.from), where('date', '<=', r.to)))
-      ]);
-      incDocs = a.docs.map((d) => d.data());
-      expDocs = b.docs.map((d) => d.data());
-      agg = aggregate();
-      renderAll();
-      $('xlsBtn').disabled = false;
-    } catch (e) {
-      console.error(e);
-      $('body').innerHTML = '<div class="loading">조회에 실패했습니다.</div>';
-    }
-  }
-
-  // ---- 집계 ----
-  // 문서는 항목 노드를 참조하지 않고 이름·코드를 '복사'해 저장한다(스냅샷).
-  // 따라서 이름 경로(catPath)로 노드를 되찾는다. code 는 재채번으로 바뀔 수 있어 믿지 않는다.
-  function aggregate() {
-    const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
-
-    const build = (kind, docs) => {
-      const list = scope(kind);
-      const keyMap = {};                       // catKey → node
-      list.forEach((n) => { keyMap[catKey(pathOf(n, byId))] = n; });
-
-      const actual = {};                       // nodeId → 결산 합계
-      const months = {};                       // nodeId → [12개월]
-      let unmatchedCnt = 0, unmatchedAmt = 0;  // 항목을 못 찾은 기록
-      let nonLeafCnt = 0, nonLeafAmt = 0;      // 하위항목이 생겨 표에 자리가 없는 기록
-      docs.forEach((d) => {
-        const amt = Number(d.amount || 0);
-        const p = d.catPath || [d.c1, d.c2, d.c3].filter(Boolean).join(' › ');
-        const n = keyMap[catKey(p)];
-        if (!n) { unmatchedCnt++; unmatchedAmt += amt; return; }
-        if (!isLeaf(kind, n.id)) { nonLeafCnt++; nonLeafAmt += amt; return; }
-        actual[n.id] = (actual[n.id] || 0) + amt;
-        const mi = monthIdx(curFY, d.date);
-        if (mi >= 0) {
-          if (!months[n.id]) months[n.id] = new Array(12).fill(0);
-          months[n.id][mi] += amt;
-        }
-      });
-
-      // 트리 순서대로 리프를 뽑는다 (엑셀 행 순서와 같다)
-      const leaves = [];
-      const walk = (pid) => {
-        childrenOf(kind, pid).forEach((c) => {
-          if (isLeaf(kind, c.id)) leaves.push(c); else walk(c.id);
-        });
-      };
-      walk(null);
-
-      const rows = leaves.map((n) => {
-        const root = rootOf(n, byId);
-        return {
-          id: n.id, code: n.code || '',
-          c1: root ? String(root.name || '') : '',
-          name: String(n.name || ''),
-          path: pathOf(n, byId),
-          fund: fundOf(n, byId),
-          carry: root && String(root.name || '').trim() === CARRY_C1,
-          budget: Number(n.budget || 0),
-          actual: Number(actual[n.id] || 0),
-          months: months[n.id] || new Array(12).fill(0)
-        };
-      });
-      return { rows, unmatchedCnt, unmatchedAmt, nonLeafCnt, nonLeafAmt };
-    };
-
-    const inc = build('income', incDocs);
-    const exp = build('expense', expDocs);
-
-    // 수입 3분류:
-    //   이월    = 대분류가 '이월'          (수입부총계에 넣지 않는다)
-    //   경상    = 기금 '일반' & 이월 아님   → 수입부총계
-    //   목적기금 = 기금 '일반' 아님 & 이월 아님 → 특별헌금 블록
-    const carry   = inc.rows.filter((r) => r.carry);
-    const normal  = inc.rows.filter((r) => !r.carry && r.fund === DEFAULT_FUND);
-    const special = inc.rows.filter((r) => !r.carry && r.fund !== DEFAULT_FUND);
-
-    return {
-      inc, exp,
-      carry, normal, special,
-      expRows: exp.rows
-    };
-  }
-
-  // c1 단위로 묶는다 (엑셀의 세로병합 + 소계 구조)
-  function groupByC1(rows) {
-    const out = [], idx = {};
-    rows.forEach((r) => {
-      if (!(r.c1 in idx)) { idx[r.c1] = out.length; out.push({ c1: r.c1, rows: [] }); }
-      out[idx[r.c1]].rows.push(r);
-    });
-    out.forEach((g) => {
-      g.budget = g.rows.reduce((s, r) => s + r.budget, 0);
-      g.actual = g.rows.reduce((s, r) => s + r.actual, 0);
-    });
-    return out;
-  }
-  const sumB = (rows) => rows.reduce((s, r) => s + r.budget, 0);
-  const sumA = (rows) => rows.reduce((s, r) => s + r.actual, 0);
-
-  // ---- 렌더 ----
-  function renderAll() {
-    renderWarn();
-    const html = [];
-    html.push(tableHtml('수입부', '기금 · 일반재정', groupByC1(agg.normal), '수입부 총계'));
-    if (agg.special.length) html.push(tableHtml('특별헌금', '목적기금 · 수입부 총계에 포함되지 않는다', groupByC1(agg.special), '특별헌금 소계'));
-    if (agg.carry.length) html.push(tableHtml('이월', '전 회기에서 넘어온 잔액 · 수입이 아니다', groupByC1(agg.carry), '이월 합계'));
-    html.push(tableHtml('지출부', '', groupByC1(agg.expRows), '지출 총계'));
-    html.push(balanceHtml());
-    html.push(monthlyHtml('수입내역 (월별)', agg.normal.concat(agg.special)));
-    html.push(monthlyHtml('지출내역 (월별)', agg.expRows));
-    $('body').innerHTML = html.join('');
-  }
-
-  function renderWarn() {
-    const w = [];
-    const add = (label, o) => {
-      if (o.unmatchedCnt) w.push(`<b>${label} ${o.unmatchedCnt}건(${fmt(o.unmatchedAmt)}원)</b> 이 항목설정에 없는 이름으로 저장되어 있어 <b>표에서 빠졌습니다.</b> 항목명이 바뀌었는지 확인하세요.`);
-      if (o.nonLeafCnt) w.push(`<b>${label} ${o.nonLeafCnt}건(${fmt(o.nonLeafAmt)}원)</b> 이 하위항목을 가진 항목에 저장되어 있어 표에서 빠졌습니다.`);
-    };
-    add('수입', agg.inc);
-    add('지출', agg.exp);
-    const box = $('warnBox');
-    box.classList.toggle('on', w.length > 0);
-    box.innerHTML = w.join('<br>');
-  }
-
-  function tableHtml(title, sub, groups, totLabel) {
-    const b = sumB(groups.flatMap((g) => g.rows));
-    const a = sumA(groups.flatMap((g) => g.rows));
-    const rows = [];
-    groups.forEach((g) => {
-      g.rows.forEach((r, i) => {
-        rows.push(`<tr>
-          <td class="g">${i === 0 ? esc(g.c1) : ''}</td>
-          <td class="n">${esc(r.name)}</td>
-          <td class="m">${r.budget ? fmt(r.budget) : ''}</td>
-          <td class="m">${r.actual ? fmt(r.actual) : ''}</td>
-          <td class="m${r.actual - r.budget < 0 ? ' neg' : ''}">${diff(r.budget, r.actual)}</td>
-        </tr>`);
-      });
-      // 대분류가 하나뿐이면 소계 = 총계라 중복이다. 2개 이상일 때만 소계를 낸다.
-      if (groups.length > 1) {
-        rows.push(`<tr class="sub">
-          <td class="g"></td><td class="n">소계</td>
-          <td class="m">${fmt(g.budget)}</td><td class="m">${fmt(g.actual)}</td>
-          <td class="m${g.actual - g.budget < 0 ? ' neg' : ''}">${diff(g.budget, g.actual)}</td>
-        </tr>`);
-      }
-    });
-    rows.push(`<tr class="tot">
-      <td class="g"></td><td class="n">${esc(totLabel)}</td>
-      <td class="m">${fmt(b)}</td><td class="m">${fmt(a)}</td>
-      <td class="m${a - b < 0 ? ' neg' : ''}">${diff(b, a)}</td>
-    </tr>`);
-    return `<div class="sect">
-      <div class="sh">${esc(title)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</div>
-      <table class="t">
-        <colgroup><col class="c-g"><col class="c-n"><col class="c-m"><col class="c-m"><col class="c-m"></colgroup>
-        <thead><tr><th>항목</th><th>소항목</th><th>예산</th><th>결산</th><th>차액</th></tr></thead>
-        <tbody>${rows.join('')}</tbody>
-      </table>
-    </div>`;
-  }
-
-  // 차액 = 결산 − 예산 (예산이 0이면 비교 의미가 없어 비워 둔다)
-  function diff(budget, actual) {
-    if (!budget) return '';
-    const d = actual - budget;
-    return (d > 0 ? '+' : '') + fmt(d);
-  }
-
-  // ---- 기금별 잔액 ----
-  // 통장은 하나지만 주머니는 5개다. 합산하면 일반재정 잔액이 부풀려진다.
-  // ※ 목적기금 지출은 앱에 입력되어 있지 않다(엑셀에서 수기 입력). 여기서는 0으로 나온다.
-  function fundBalance() {
-    const out = FUNDS.map((f) => ({
-      fund: f,
-      carry: sumA(agg.carry.filter((r) => r.fund === f)),
-      income: sumA(agg.normal.concat(agg.special).filter((r) => r.fund === f)),
-      expense: sumA(agg.expRows.filter((r) => r.fund === f))
-    }));
-    out.forEach((o) => { o.bal = o.carry + o.income - o.expense; });
-    return out.filter((o) => o.fund === DEFAULT_FUND || o.carry || o.income || o.expense);
-  }
-
-  function balanceHtml() {
-    const list = fundBalance();
-    const t = { carry: 0, income: 0, expense: 0, bal: 0 };
-    list.forEach((o) => { t.carry += o.carry; t.income += o.income; t.expense += o.expense; t.bal += o.bal; });
-    const rows = list.map((o) => `<tr>
-      <td class="n" style="padding-left:10px;">${esc(o.fund === DEFAULT_FUND ? '일반재정' : o.fund)}</td>
-      <td class="m">${fmt(o.carry)}</td>
-      <td class="m">${fmt(o.income)}</td>
-      <td class="m">${fmt(o.expense)}</td>
-      <td class="m" style="font-weight:700;">${fmt(o.bal)}</td>
-    </tr>`).join('');
-    return `<div class="sect">
-      <div class="sh">기금별 잔액<span class="sub">이월 + 수입 − 지출 = 잔액</span></div>
-      <div class="lead">목적기금 지출은 앱에 입력되어 있지 않아 0으로 나옵니다. 엑셀에서 직접 채우세요.</div>
-      <table class="t" style="margin-top:8px;">
-        <colgroup><col><col class="c-m"><col class="c-m"><col class="c-m"><col class="c-m"></colgroup>
-        <thead><tr><th>기금</th><th>이월금</th><th>수입</th><th>지출</th><th>잔액</th></tr></thead>
-        <tbody>${rows}
-          <tr class="tot">
-            <td class="n" style="padding-left:10px;">합계</td>
-            <td class="m">${fmt(t.carry)}</td><td class="m">${fmt(t.income)}</td>
-            <td class="m">${fmt(t.expense)}</td><td class="m">${fmt(t.bal)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>`;
-  }
-
-  // ---- 월별 내역 (12개월 가로표) ----
-  // 이월은 넣지 않는다. 수입이 아니고, 12월 한 칸에 뭉쳐 표를 왜곡한다.
-  function monthlyHtml(title, rows) {
-    if (!rows.length) return '';
-    const labels = monthLabels(curFY);
-    const groups = groupByC1(rows);
-    const cell = (v) => v ? fmt(v) : '';
-    const line = (cls, g, nm, ms, tot) => `<tr class="${cls}">
-      <td class="g fix1">${esc(g)}</td>
-      <td class="n fix2">${esc(nm)}</td>
-      ${ms.map((v) => `<td>${cell(v)}</td>`).join('')}
-      <td class="sumcol">${fmt(tot)}</td>
-    </tr>`;
-
-    const body = [];
-    const totM = new Array(12).fill(0);
-    groups.forEach((g) => {
-      const gm = new Array(12).fill(0);
-      g.rows.forEach((r, i) => {
-        r.months.forEach((v, k) => { gm[k] += v; totM[k] += v; });
-        body.push(line('', i === 0 ? g.c1 : '', r.name, r.months, r.actual));
-      });
-      if (groups.length > 1) body.push(line('sub', '', '소계', gm, g.actual));
-    });
-    body.push(line('tot', '', '합계', totM, sumA(rows)));
-
-    return `<div class="sect">
-      <div class="sh">${esc(title)}<span class="sub">가로로 밀어서 보세요</span></div>
-      <div class="scrollx">
-        <table class="m">
-          <thead><tr>
-            <th class="fix1">항목</th><th class="fix2">소항목</th>
-            ${labels.map((l) => `<th>${l}</th>`).join('')}
-            <th>합계</th>
-          </tr></thead>
-          <tbody>${body.join('')}</tbody>
-        </table>
-      </div>
-    </div>`;
-  }
-
-  // ======================= 엑셀 내보내기 =======================
-  // 앱 데이터는 건드리지 않는다. 출력 시점에만 이름을 갈아끼운다.
-  const XL_NAME = {
-    '일반재정': '헌금',            // 예결산표 대분류 이름
-    '주일헌금': '주일', '감사헌금': '감사',
-    '신년감사': '신년', '부활절감사': '부활', '맥추감사': '맥추',
-    '성탄감사': '성탄', '추수감사': '추수',
-    '신년감사헌금': '신년', '부활절감사헌금': '부활', '맥추감사헌금': '맥추',
-    '성탄감사헌금': '성탄', '추수감사헌금': '추수',
-    '선교헌금': '선교', '장학헌금': '장학', '건축헌금': '건축',
-    '차량헌금': '차량', '차량구입': '차량'
-  };
-  const xn = (s) => XL_NAME[String(s || '').trim()] || String(s || '');
-  // 기금별 잔액표에서만 쓰는 이름 (예결산표의 '헌금'과 다르다)
-  const XL_FUND = { '일반': '경상비', '선교': '선교헌금', '장학': '장학헌금', '건축': '건축헌금', '차량': '차량구입' };
-  const ETC_C1 = '기타';           // 예결산표에서 한 줄로 접는 대분류 (A안)
-
-  const SHEETJS_CDN = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-  function loadSheetJS() {
-    if (window.XLSX) return Promise.resolve();
-    return new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = SHEETJS_CDN;
-      s.onload = () => res();
-      s.onerror = () => rej(new Error('SheetJS 로드 실패'));
-      document.head.appendChild(s);
-    });
-  }
-
-  // 차년(회기+1) 예산: 이름 경로로 매칭한다. code 는 회기마다 달라질 수 있다.
-  function nextBudgetMap(kind) {
-    const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
-    const m = {};
-    nodes.filter((n) => Number(n.fy) === curFY + 1 && n.kind === kind)
-      .forEach((n) => { m[catKey(pathOf(n, byId))] = Number(n.budget || 0); });
-    return m;
-  }
-
-  const cellNum = (v) => (v ? v : '');          // 0 은 빈칸으로 (엑셀 원본과 동일)
-  const mg = (r1, c1, r2, c2) => ({ s: { r: r1, c: c1 }, e: { r: r2, c: c2 } });
-
-  // ---- 시트1: 예결산표 (좌 수입부 / 우 지출부) ----
-  // 열: A항목 B소항목 C예산 D결산 E차년예산 | F공백 | G항목 H소항목 I예산 J결산 K차년예산
-  function sheetBudgetActual() {
-    const nbInc = nextBudgetMap('income');
-    const nbExp = nextBudgetMap('expense');
-    const nb = (map, r) => Number(map[catKey(r.path)] || 0);
-
-    // 한쪽(수입 또는 지출)의 5열 블록을 만든다. merges 는 블록 내부 0-based 행번호로 기록.
-    const block = (groups, totalLabel, nbMap, opt) => {
-      const rows = [], merges = [];
-      const etc = (opt && opt.etc) || null;   // '기타' 한 줄 (A안)
-      groups.forEach((g) => {
-        const s = rows.length;
-        const gNext = g.rows.reduce((a, r) => a + nb(nbMap, r), 0);
-        g.rows.forEach((r, i) => rows.push([
-          i === 0 ? xn(g.c1) : '', xn(r.name),
-          cellNum(r.budget), cellNum(r.actual), cellNum(nb(nbMap, r))
-        ]));
-        rows.push(['', '소계', cellNum(g.budget), cellNum(g.actual), cellNum(gNext)]);
-        if (rows.length - 1 > s) merges.push([s, rows.length - 1, 0]);   // A열 세로병합
-      });
-      let tB = groups.reduce((a, g) => a + g.budget, 0);
-      let tA = groups.reduce((a, g) => a + g.actual, 0);
-      let tN = groups.reduce((a, g) => a + g.rows.reduce((x, r) => x + nb(nbMap, r), 0), 0);
-      if (etc) {   // '기타'는 하위를 접어 한 줄로 (상세는 아래 소표에서)
-        rows.push([xn(ETC_C1), '', cellNum(etc.budget), cellNum(etc.actual), cellNum(etc.next)]);
-        tB += etc.budget; tA += etc.actual; tN += etc.next;
-      }
-      const tr = rows.length;
-      rows.push([totalLabel, '', cellNum(tB), cellNum(tA), cellNum(tN)]);
-      merges.push([tr, tr, 1]);   // 총계행: A:B 가로병합
-      return { rows, merges };
-    };
-
-    // 수입부: '기타' 대분류는 한 줄로 접는다
-    const normalG = groupByC1(agg.normal).filter((g) => g.c1 !== ETC_C1);
-    const etcRows = agg.normal.filter((r) => r.c1 === ETC_C1);
-    const etcBlock = etcRows.length ? {
-      budget: sumB(etcRows), actual: sumA(etcRows),
-      next: etcRows.reduce((a, r) => a + nb(nbInc, r), 0)
-    } : null;
-    const L = block(normalG, '수입부총계', nbInc, { etc: etcBlock });
-    const R = block(groupByC1(agg.expRows), '총계', nbExp, null);
-
-    // 특별헌금 블록 (수입부 아래, 한 줄 띄우고)
-    const spG = groupByC1(agg.special);
-    if (spG.length) {
-      L.rows.push(['', '', '', '', '']);
-      spG.forEach((g) => {
-        const s = L.rows.length;
-        g.rows.forEach((r, i) => L.rows.push([
-          i === 0 ? xn(g.c1) : '', xn(r.name),
-          cellNum(r.budget), cellNum(r.actual), cellNum(nb(nbInc, r))
-        ]));
-        L.rows.push(['', '소계', cellNum(g.budget), cellNum(g.actual),
-          cellNum(g.rows.reduce((a, r) => a + nb(nbInc, r), 0))]);
-        if (L.rows.length - 1 > s) L.merges.push([s, L.rows.length - 1, 0]);
-      });
-    }
-
-    // *기타수입내역 소표 (기타의 하위 내역)
-    if (etcRows.length) {
-      L.rows.push(['', '', '', '', '']);
-      const t = L.rows.length;
-      L.rows.push(['*기타수입내역', '', '', '', '']);
-      L.merges.push([t, t, 1]);
-      L.rows.push(['항목', '', '', '금액', '비고']);
-      L.merges.push([L.rows.length - 1, L.rows.length - 1, 1]);
-      etcRows.forEach((r) => {
-        L.rows.push([xn(r.name), '', '', cellNum(r.actual), '']);
-        L.merges.push([L.rows.length - 1, L.rows.length - 1, 1]);
-      });
-      L.rows.push(['총수입', '', '', cellNum(sumA(etcRows)), '']);
-      L.merges.push([L.rows.length - 1, L.rows.length - 1, 1]);
-    }
-
-    // ---- 두 블록을 나란히 합친다 ----
-    const HDR = 3;                                  // 0-based: 4행이 헤더
-    const aoa = [
-      [`${curFY}~${curFY + 1} 예결산`],
-      [],
-      ['수입부', '', '', '', '', '', '지출부'],
-      ['항목', '소항목', `${curFY}년 예산`, `${curFY}년 결산`, `${curFY + 1}년 예산`, '',
-       '항목', '소항목', `${curFY}년 예산`, `${curFY}년 결산`, `${curFY + 1}년 예산`]
-    ];
-    const n = Math.max(L.rows.length, R.rows.length);
-    for (let i = 0; i < n; i++) {
-      const l = L.rows[i] || ['', '', '', '', ''];
-      const r = R.rows[i] || ['', '', '', '', ''];
-      aoa.push([...l, '', ...r]);
-    }
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const merges = [mg(0, 0, 0, 10), mg(2, 0, 2, 4), mg(2, 6, 2, 10)];
-    L.merges.forEach(([a, b, kind]) => {
-      merges.push(kind === 0 ? mg(HDR + 1 + a, 0, HDR + 1 + b, 0) : mg(HDR + 1 + a, 0, HDR + 1 + a, 1));
-    });
-    R.merges.forEach(([a, b, kind]) => {
-      merges.push(kind === 0 ? mg(HDR + 1 + a, 6, HDR + 1 + b, 6) : mg(HDR + 1 + a, 6, HDR + 1 + a, 7));
-    });
-    ws['!merges'] = merges;
-    ws['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 },
-                   { wch: 2 },
-                   { wch: 10 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }];
-    styleNums(ws);
-    return ws;
-  }
-
-  // ---- 시트2/3: 월별 내역 ----
-  // 열: A항목 B소항목 C~N 12개월 O합계
-  function sheetMonthly(kind, rows, title) {
-    const labels = monthLabels(curFY);
-    const groups = groupByC1(rows);
-    const aoa = [[title], [], ['항목', '소항목', ...labels, '합계']];
-    const merges = [mg(0, 0, 0, 14)];
-    const HDR = 2;                                   // 0-based: 3행이 헤더
-
-    const totM = new Array(12).fill(0);
-    groups.forEach((g) => {
-      const s = aoa.length;
-      const gm = new Array(12).fill(0);
-      g.rows.forEach((r, i) => {
-        r.months.forEach((v, k) => { gm[k] += v; totM[k] += v; });
-        aoa.push([i === 0 ? xn(g.c1) : '', xn(r.name), ...r.months.map(cellNum), cellNum(r.actual)]);
-      });
-      aoa.push(['', '소계', ...gm.map(cellNum), cellNum(g.actual)]);
-      if (aoa.length - 1 > s) merges.push(mg(s, 0, aoa.length - 1, 0));
-    });
-    const tr = aoa.length;
-    aoa.push(['총계', '', ...totM.map(cellNum), cellNum(sumA(rows))]);
-    merges.push(mg(tr, 0, tr, 1));
-
-    // 수입 시트에만 기금별 잔액표를 덧붙인다 (엑셀 원본과 같은 위치)
-    let fundInfo = null;
-    if (kind === 'income') fundInfo = appendFundTable(aoa, merges);
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!merges'] = merges;
-    ws['!cols'] = [{ wch: 10 }, { wch: 12 }, ...labels.map(() => ({ wch: 11 })), { wch: 13 }];
-    if (fundInfo) applyFundFormulas(ws, fundInfo);
-    styleNums(ws);
-    void HDR;
-    return ws;
-  }
-
-  // ---- 기금별 잔액표 (수입내역 시트 하단) ----
-  // 합계·잔액을 '숫자'가 아니라 '엑셀 수식'으로 넣는다.
-  // → 아이삭이 목적기금 지출(G열)만 채우면 합계·잔액이 자동으로 다시 계산된다.
-  function appendFundTable(aoa, merges) {
-    aoa.push([]);
-    const hr = aoa.length;                            // 헤더 행 (0-based)
-    aoa.push(['', '', '이월금', '총수입', '기타', '합계', '지출', '잔액', '비고']);
-    merges.push(mg(hr, 8, hr, 9));
-
-    const etcRows = agg.normal.filter((r) => r.c1 === ETC_C1);
-    const start = aoa.length;
-    const list = [];
-    FUNDS.forEach((f) => {
-      const carry = sumA(agg.carry.filter((r) => r.fund === f));
-      let income, etc;
-      if (f === DEFAULT_FUND) {
-        income = sumA(agg.normal.filter((r) => r.c1 !== ETC_C1));   // 헌금 소계
-        etc = sumA(etcRows);                                        // 기타(이자·후원 등)
-      } else {
-        income = sumA(agg.special.filter((r) => r.fund === f));
-        etc = 0;                                                    // 기금별 이자는 앱에 없다 → 빈칸
-      }
-      const expense = sumA(agg.expRows.filter((r) => r.fund === f));
-      if (f !== DEFAULT_FUND && !carry && !income && !expense) return;   // 안 쓰는 기금은 생략
-      const r = aoa.length;
-      aoa.push([XL_FUND[f] || f, '', cellNum(carry), cellNum(income), cellNum(etc), '', cellNum(expense), '', '']);
-      merges.push(mg(r, 0, r, 1));
-      merges.push(mg(r, 8, r, 9));
-      list.push(r);
-    });
-    void start;
-    return { rows: list };
-  }
-
-  function applyFundFormulas(ws, info) {
-    info.rows.forEach((r) => {
-      const n = r + 1;                                // 엑셀 행번호 (1-based)
-      ws[`F${n}`] = { t: 'n', f: `C${n}+D${n}+E${n}`, z: '#,##0' };   // 합계 = 이월+총수입+기타
-      ws[`H${n}`] = { t: 'n', f: `F${n}-G${n}`, z: '#,##0' };         // 잔액 = 합계-지출
-    });
-  }
-
-  // 숫자 셀에 천단위 서식
-  function styleNums(ws) {
-    const ref = ws['!ref']; if (!ref) return;
-    const R = XLSX.utils.decode_range(ref);
-    for (let r = R.s.r; r <= R.e.r; r++) {
-      for (let c = R.s.c; c <= R.e.c; c++) {
-        const cell = ws[XLSX.utils.encode_cell({ r, c })];
-        if (cell && (cell.t === 'n' || cell.f)) cell.z = '#,##0';
-      }
-    }
-  }
-
-  // ---- 내보내기 ----
-  $('xlsBtn').onclick = async () => {
-    if (!agg) return;
-    const btn = $('xlsBtn');
-    const old = btn.textContent;
-    btn.disabled = true; btn.textContent = '만드는 중…';
-    try {
-      await loadSheetJS();
-      const r = fyRange(curFY);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, sheetBudgetActual(), '예결산표');
-      XLSX.utils.book_append_sheet(wb,
-        sheetMonthly('income', agg.normal.concat(agg.special), `${curFY}년 수입내역(${r.from.slice(0, 7).replace('-', '.')}~${r.to.slice(0, 7).replace('-', '.')})`),
-        '수입내역');
-      XLSX.utils.book_append_sheet(wb,
-        sheetMonthly('expense', agg.expRows, `${curFY}년 지출내역(${r.from.slice(0, 7).replace('-', '.')}~${r.to.slice(0, 7).replace('-', '.')})`),
-        '지출내역');
-      XLSX.writeFile(wb, `${curFY}년_회계_예결산.xlsx`);
-    } catch (e) {
-      console.error(e);
-      alert('엑셀을 만들지 못했습니다. 인터넷 연결을 확인해 주세요.');
-    } finally {
-      btn.disabled = false; btn.textContent = old;
-    }
-  };
 </script>
 </body>
 </html>
