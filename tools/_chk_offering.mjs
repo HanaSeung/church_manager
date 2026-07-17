@@ -5,6 +5,11 @@
     collection, addDoc, getDoc, getDocs, doc, deleteDoc, setDoc, updateDoc,
     query, where, writeBatch, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  // 변경 로그: 재정 데이터의 모든 변경을 기록한다. 본체와 '같은 배치'로 커밋해야 한다.
+  import { addLog, logBulk } from "./changelog.js";
+  // 로컬 사본: 수입·지출 목록도 Firestore 를 읽지 않는다. 로컬에서 읽는다 → 읽기 0.
+  //   저장·수정·삭제는 서버 커밋이 성공한 뒤 로컬에도 즉시 반영한다(방금 넣은 것이 바로 보여야 한다).
+  import { sync, resetAll, localRange, localPut, localDelete, lastSyncAt } from "./finstore.js";
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => (s || '').replace(/[&<>"']/g, (c) =>
@@ -104,6 +109,9 @@
       me = { uid: user.uid, level: lv };
       await loadConfig();
       await loadMembers();
+      // ★ 로컬 사본을 최신으로 맞춘다. 여기서만 Firestore 를 크게 읽는다(변경 없으면 0).
+      //   이후 목록·조회는 전부 로컬에서 읽는다. (report.html 과 같은 방식)
+      await sync();
       initUI();
     } catch (e) {
       alert('정보를 불러오지 못했습니다. 다시 시도해 주세요.');
@@ -397,10 +405,11 @@
   }
   // ----- 저장 -----
   function showMsg(t) { const m = $('formMsg'); m.textContent = t; m.style.display = 'block'; setTimeout(() => { m.style.display = 'none'; }, 4000); }
-  async function nextSeq(coll) {
-    try { const qs = await getDocs(collection(db, coll)); let mx = 0; qs.forEach((d) => { const n = Number(d.data().no); if (Number.isFinite(n) && n > mx) mx = n; }); return mx + 1; }
-    catch (e) { return Date.now(); }
-  }
+  // ※ nextSeq() 제거됨. 저장 때마다 컬렉션 전체를 읽어 max(no)를 찾던 함수였다.
+  //   문서 1,000건이면 저장 1회에 읽기 1,000건 — 기록이 쌓일수록 악화되는 구조라 걷어냈다.
+  //   no 필드는 어디에서도 쓰이지 않았다(성도별 집계의 no 는 memberNo 로 별개다).
+  //   동점 정렬은 문서 id 로 갈음한다.
+  const idCmp = (a, b) => String(a.id || '').localeCompare(String(b.id || ''));
   let editId = null;   // null=신규 추가, 값 있으면 해당 offerings 문서 수정 모드
   function exitEditMode() {
     editId = null;
@@ -448,10 +457,21 @@
           amount, memo
         };
         if (editId) {
-          // 수정: no·createdAt·createdBy 보존, updatedAt만 추가
-          await updateDoc(doc(db, 'offerings', editId), { ...payload, updatedAt: serverTimestamp(), updatedBy: me.uid });
+          // 수정: createdAt·createdBy 보존, updatedAt만 추가
+          const b = writeBatch(db);
+          b.update(doc(db, 'offerings', editId), { ...payload, updatedAt: serverTimestamp(), updatedBy: me.uid });
+          addLog(b, { coll: 'offerings', docId: editId, op: 'update', by: me.uid });
+          await b.commit();
+          // 서버 성공 후 로컬에도 반영(순서 중요). serverTimestamp 필드는 넣지 않는다.
+          await localPut('offerings', { id: editId, ...payload });
         } else {
-          await addDoc(collection(db, 'offerings'), { ...payload, no: await nextSeq('offerings'), createdAt: serverTimestamp(), createdBy: me.uid });
+          // addDoc 대신 doc() 로 ID를 미리 받는다 — 로그에 적어야 하므로.
+          const ref = doc(collection(db, 'offerings'));
+          const b = writeBatch(db);
+          b.set(ref, { ...payload, createdAt: serverTimestamp(), createdBy: me.uid });
+          addLog(b, { coll: 'offerings', docId: ref.id, op: 'add', by: me.uid });
+          await b.commit();
+          await localPut('offerings', { id: ref.id, ...payload });
         }
       } else {
         const it = config.expense[+$('expCat').value];
@@ -466,10 +486,19 @@
           amount, memo
         };
         if (editId) {
-          // 수정: no·createdAt·createdBy 보존, updatedAt만 추가
-          await updateDoc(doc(db, 'expenses', editId), { ...payload, updatedAt: serverTimestamp(), updatedBy: me.uid });
+          // 수정: createdAt·createdBy 보존, updatedAt만 추가
+          const b = writeBatch(db);
+          b.update(doc(db, 'expenses', editId), { ...payload, updatedAt: serverTimestamp(), updatedBy: me.uid });
+          addLog(b, { coll: 'expenses', docId: editId, op: 'update', by: me.uid });
+          await b.commit();
+          await localPut('expenses', { id: editId, ...payload });
         } else {
-          await addDoc(collection(db, 'expenses'), { ...payload, no: await nextSeq('expenses'), createdAt: serverTimestamp(), createdBy: me.uid });
+          const ref = doc(collection(db, 'expenses'));
+          const b = writeBatch(db);
+          b.set(ref, { ...payload, createdAt: serverTimestamp(), createdBy: me.uid });
+          addLog(b, { coll: 'expenses', docId: ref.id, op: 'add', by: me.uid });
+          await b.commit();
+          await localPut('expenses', { id: ref.id, ...payload });
         }
       }
       resetForm();
@@ -557,7 +586,10 @@
   const SVG_NOTE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>';
   function incTable(rows) {
     rows = sortInc(rows.slice());
-    const body = rows.map((r) => {
+    // No. = 화면 행번호. 항상 위에서부터 1,2,3… 이다 (report.html 성도별 집계와 같은 규칙).
+    // 정렬을 바꾸면 '어느 기록이 몇 번인지'가 바뀔 뿐, 열은 언제나 1,2,3… 으로 읽힌다.
+    // 문서에 저장하지 않으므로 읽기 비용이 없다.
+    const body = rows.map((r, i) => {
       const item = esc(r.c3 || r.c2 || r.c1 || '');
       const ymd = esc((r.date || '').replace(/-/g, ''));
       const fy = fiscalYearOf(r.date);
@@ -565,7 +597,7 @@
       const sp = r.spouseName ? esc(r.spouseName) : '–';
       const wkm = (r.week || '').match(/(\d+)\s*주/); const wkNo = wkm ? wkm[1] : '';
       return `<tr>
-        <td>${r.no || ''}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
+        <td>${i + 1}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
         <td>${item}</td><td>${esc(idno)}</td><td>${esc(r.memberName || '')}</td>
         <td class="ra amt">${wonFmt(r.amount)}</td><td>${sp}</td>
         <td class="ce">${r.memo ? `<button class="iact i-note" data-note="${r.id}" aria-label="비고 보기">${SVG_NOTE}</button>` : '–'}</td>
@@ -575,7 +607,7 @@
     const sar = (k) => incSortKey === k ? `<span class="sar">${incSortDir === 'asc' ? '▲' : '▼'}</span>` : '';
     const th = (k, label) => `<th class="sortable" data-sk="${k}">${label}${sar(k)}</th>`;
     return `<div class="itblwrap"><table class="itbl">
-      <thead><tr>${th('no', 'No.')}${th('fy', '회계년도')}${th('week', '주')}${th('date', '날짜')}${th('item', '항목')}${th('id', 'id')}${th('name', '이름')}${th('amt', '금액')}${th('spouse', '배우자')}<th class="ce">비고</th><th class="ce">수정·삭제</th></tr></thead>
+      <thead><tr><th>No.</th>${th('fy', '회계년도')}${th('week', '주')}${th('date', '날짜')}${th('item', '항목')}${th('id', 'id')}${th('name', '이름')}${th('amt', '금액')}${th('spouse', '배우자')}<th class="ce">비고</th><th class="ce">수정·삭제</th></tr></thead>
       <tbody>${body}</tbody></table></div><div id="incMemoBar" class="imemo"></div>`;
   }
   function incGroupTable(rows) {
@@ -642,7 +674,6 @@
   let incSortKey = 'date', incSortDir = 'desc';
   function incSortVal(r, k) {
     switch (k) {
-      case 'no': return Number(r.no) || 0;
       case 'fy': return fiscalYearOf(r.date);
       case 'week': { const m = (r.week || '').match(/(\d+)\s*주/); return m ? Number(m[1]) : 0; }
       case 'date': return r.date || '';
@@ -660,7 +691,7 @@
     return rows.sort((a, b) => {
       const x = incSortVal(a, k), y = incSortVal(b, k);
       let c = strKey ? String(x).localeCompare(String(y), 'ko') : (x - y);
-      if (c === 0) c = (Number(a.no) || 0) - (Number(b.no) || 0);
+      if (c === 0) c = idCmp(a, b);   // 동점은 문서 id 로 고정 (순서가 흔들리지 않게)
       return sign * c;
     });
   }
@@ -704,7 +735,6 @@
   let expSortKey = 'date', expSortDir = 'desc';
   function expSortVal(r, k) {
     switch (k) {
-      case 'no': return Number(r.no) || 0;
       case 'fy': return fiscalYearOf(r.date);
       case 'week': { const m = (r.week || '').match(/(\d+)\s*주/); return m ? Number(m[1]) : 0; }
       case 'date': return r.date || '';
@@ -722,7 +752,7 @@
     return rows.sort((a, b) => {
       const x = expSortVal(a, k), y = expSortVal(b, k);
       let c = strKey ? String(x).localeCompare(String(y), 'ko') : (x - y);
-      if (c === 0) c = (Number(a.no) || 0) - (Number(b.no) || 0);
+      if (c === 0) c = idCmp(a, b);   // 동점은 문서 id 로 고정
       return sign * c;
     });
   }
@@ -733,7 +763,8 @@
   }
   function expTable(rows) {
     rows = sortExp(rows.slice());
-    const body = rows.map((r) => {
+    // No. = 화면 행번호 (수입 표와 같은 규칙). 저장하지 않는다.
+    const body = rows.map((r, i) => {
       const item = esc(r.c3 || r.c2 || r.c1 || '');
       const ymd = esc((r.date || '').replace(/-/g, ''));
       const fy = fiscalYearOf(r.date);
@@ -741,7 +772,7 @@
       const payee = r.payee ? esc(r.payee) : '–';
       const wkm = (r.week || '').match(/(\d+)\s*주/); const wkNo = wkm ? wkm[1] : '';
       return `<tr>
-        <td>${r.no || ''}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
+        <td>${i + 1}</td><td>${fy}</td><td>${wkNo}</td><td>${ymd}</td>
         <td>${item}</td><td>${esc(idno)}</td><td>${esc(r.claimantName || '')}</td>
         <td class="ra amt">${wonFmt(r.amount)}</td><td>${payee}</td>
         <td class="ce">${r.memo ? `<button class="iact i-note" data-note="${r.id}" aria-label="적요 보기">${SVG_NOTE}</button>` : '–'}</td>
@@ -751,7 +782,7 @@
     const sar = (k) => expSortKey === k ? `<span class="sar">${expSortDir === 'asc' ? '▲' : '▼'}</span>` : '';
     const th = (k, label) => `<th class="sortable" data-sk="${k}">${label}${sar(k)}</th>`;
     return `<div class="itblwrap"><table class="itbl">
-      <thead><tr>${th('no', 'No.')}${th('fy', '회계년도')}${th('week', '주')}${th('date', '날짜')}${th('item', '항목')}${th('id', 'id')}${th('claim', '청구인')}${th('amt', '금액')}${th('payee', '수령인')}<th class="ce">적요</th><th class="ce">수정·삭제</th></tr></thead>
+      <thead><tr><th>No.</th>${th('fy', '회계년도')}${th('week', '주')}${th('date', '날짜')}${th('item', '항목')}${th('id', 'id')}${th('claim', '청구인')}${th('amt', '금액')}${th('payee', '수령인')}<th class="ce">적요</th><th class="ce">수정·삭제</th></tr></thead>
       <tbody>${body}</tbody></table></div><div id="expMemoBar" class="imemo"></div>`;
   }
   function renderExpList(rows) {
@@ -869,9 +900,11 @@
     $('segView').classList.toggle('hide', curTab !== 'inc');
     const box = $('listRows'); box.innerHTML = '<div class="empty">불러오는 중…</div>';
     try {
-      const qs = await getDocs(query(collection(db, coll), where('date', '>=', from), where('date', '<=', to)));
-      let rows = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
-      rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : ((b.no || 0) - (a.no || 0))));
+      // ★ 로컬에서 읽는다. Firestore 를 건드리지 않는다 → 읽기 0.
+      //   2025년 전체처럼 넓게 잡아도, 몇 번을 다시 조회해도 비용이 없다.
+      //   (문서에 fy 는 없다. 예전 where('date',…) 쿼리와 똑같이 날짜 범위로 거른다.)
+      let rows = await localRange(coll, from, to);
+      rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : -idCmp(a, b)));
       const sum = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
       $('listSum').textContent = `${rows.length}건 · ${wonFmt(sum)}원`;
       if (!rows.length) { box.innerHTML = '<div class="empty">이 기간에 기록이 없습니다.</div>'; return; }
@@ -886,8 +919,42 @@
   }
   async function delRec(coll, id) {
     if (!confirm('이 기록을 삭제할까요?')) return;
-    try { await deleteDoc(doc(db, coll, id)); await loadList(); }
+    try {
+      // 삭제도 반드시 로그를 남긴다. 문서가 사라지면 '무엇이 사라졌는지' 알 방법이 없다.
+      const b = writeBatch(db);
+      b.delete(doc(db, coll, id));
+      addLog(b, { coll, docId: id, op: 'delete', by: me.uid });
+      await b.commit();
+      // 서버 삭제 성공 후 로컬에서도 지운다. 안 하면 지운 기록이 목록에 남는다.
+      await localDelete(coll, id);
+      await loadList();
+    }
     catch (e) { alert('삭제 실패: ' + (e.code || e.message)); }
+  }
+
+  // ----- 로컬 동기화 상태 표시 + 탈출구 (설치 탭) -----
+  // 지금 보는 목록이 '언제 기준 자료'인지 알려준다. 콘솔 직접 수정 등은 로그를 안 남기므로
+  // 로컬이 어긋날 수 있다 — 그때 [다시 읽기]로 서버에서 통째로 다시 받는다. (report.html 과 같은 장치)
+  async function showSyncSat() {
+    const el = $('syncSat'); if (!el) return;
+    const d = await lastSyncAt();
+    el.textContent = d
+      ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())} 기준 자료`
+      : '아직 동기화 전';
+  }
+  async function doResync() {
+    const b = $('resyncBtn');
+    if (!confirm('로컬 사본을 버리고 서버에서 재정 자료를 전부 다시 받습니다. 진행할까요?')) return;
+    b.disabled = true; b.textContent = '다시 읽는 중…';
+    try {
+      await resetAll();
+      await loadList();
+      await showSyncSat();
+    } catch (e) {
+      alert('다시 읽지 못했습니다: ' + (e.code || e.message));
+    } finally {
+      b.disabled = false; b.textContent = '다시 읽기';
+    }
   }
 
   // ----- 설치: 항목 편집 -----
@@ -1200,23 +1267,27 @@
     btn.disabled = true; $('impPreviewBtn').disabled = true;
     const importId = 'imp_' + toYMD(new Date()).replace(/-/g, '') + '_' + String(Date.now()).slice(-6);
     try {
-      let seq = await nextSeq(M.coll);
       const CH = 400;
       for (let i = 0; i < impRows.length; i += CH) {
         const batch = writeBatch(db);
         impRows.slice(i, i + CH).forEach((p) => {
           batch.set(doc(collection(db, M.coll)),
-            { ...p, importId, no: seq++, createdAt: serverTimestamp(), createdBy: me.uid });
+            { ...p, importId, createdAt: serverTimestamp(), createdBy: me.uid });
         });
         await batch.commit();
         btn.textContent = `등록 중… ${Math.min(i + CH, impRows.length)}/${impRows.length}`;
       }
+      // 대량 등록: 로그를 건별로 남기면 1,114건이면 로그도 1,114건이다. 낭비다.
+      // 'bulk' 한 건만 남기고, 받는 쪽(로컬)은 이걸 보면 전체 재적재한다.
+      await logBulk(M.coll, me.uid);
       const n = impRows.length;
       await addImportHistory({ importId, file: impFileName, count: n, coll: M.coll, label: M.label, at: new Date().toISOString() });
       impRows = null; $('impFile').value = '';
       btn.textContent = '등록'; btn.disabled = true;
       box.innerHTML = `<div class="ok">${M.label} ${n}건을 등록했습니다. (임포트 번호 ${esc(importId)})</div>`;
       await loadImportHistory();
+      // 대량 등록은 bulk 로그를 남겼다 → sync 가 이걸 보고 로컬을 전체 재적재한다.
+      await sync();
       await loadList();
     } catch (e) {
       box.innerHTML = `<div class="err">등록 실패: ${esc(e.code || e.message)}<br>`
@@ -1270,10 +1341,14 @@
         ds.slice(i, i + 400).forEach((d) => b.delete(d.ref));
         await b.commit();
       }
+      // 대량 삭제도 'bulk' 한 건. 받는 쪽은 전체 재적재한다.
+      await logBulk(coll, me.uid);
       const list = (await getImportHistory()).filter((r) => r.importId !== importId);
       await setDoc(doc(db, 'finConfig', 'imports'), { list }, { merge: true });
       box.innerHTML = `<div class="ok">${ds.length}건을 삭제했습니다.</div>`;
       await loadImportHistory();
+      // 대량 삭제도 bulk 로그를 남겼다 → sync 로 로컬을 전체 재적재한다.
+      await sync();
       await loadList();
     } catch (e) { box.innerHTML = `<div class="err">삭제 실패: ${esc(e.code || e.message)}</div>`; }
   }
@@ -1354,6 +1429,8 @@
     $('setIncBtn').onclick = () => { location.href = 'income.html'; };
     $('setExpBtn').onclick = () => { location.href = 'expense.html'; };
     $('setBudgetBtn').onclick = () => { location.href = 'budget.html'; };
+    $('resyncBtn').onclick = doResync;
+    showSyncSat();
     $('setCloseBtn').onclick = openCloseMonth;
     $('cmCancel').onclick = closeCloseMonth;
     $('cmSave').onclick = saveCloseMonth;

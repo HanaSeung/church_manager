@@ -2,8 +2,13 @@
   import { auth, db } from "./firebase-config.js";
   import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
   import {
-    collection, query, where, getDocs, doc, getDoc, deleteDoc, updateDoc, serverTimestamp
+    collection, query, where, getDocs, doc, getDoc, deleteDoc, updateDoc, serverTimestamp, writeBatch
   } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+  // 변경 로그: 재정 데이터의 모든 변경을 기록한다. 본체와 '같은 배치'로 커밋해야 한다.
+  import { addLog } from "./changelog.js";
+  // 로컬 사본: 리포트는 Firestore 를 읽지 않는다. 로컬에서 읽는다 → 읽기 0.
+  // resetAll(전체 다시 읽기)은 offering.html 설치 탭으로 옮겼다. 여기선 읽기·시각표시만.
+  import { sync, localNodes, localRange, lastSyncAt } from "./finstore.js";
 
   const $ = (id) => document.getElementById(id);
   const MIN_LEVEL = 3;
@@ -19,7 +24,7 @@
     bs:      { title: '예결산표',         ctrl: ['xls'] },
     monthly: { title: '년간 월별 집계표', ctrl: ['kind'] },
     weekly:  { title: '월간 주별 집계표', ctrl: ['mo', 'kind'] },
-    range:   { title: '기간 단위 검색',   ctrl: ['kind', 'cat', 'period'] },
+    range:   { title: '기간 단위 검색',   ctrl: ['kind', 'cat', 'period', 'xls'] },
     member:  { title: '성도별 헌금 집계', ctrl: ['q'] }
   };
   const P = new URLSearchParams(location.search);
@@ -38,6 +43,7 @@
   let curCat = '';                  // range: 선택한 항목의 이름경로 ('' = 전체)
   let ppFy = null, ppSel = null;    // 기간선택 모달 상태
   let nodes = [];                   // finConfig 전체 노드
+  let members = [];                 // 성도 명부(56명). 일괄수정에서 이름→번호 매칭에 쓴다.
   let incDocs = [], expDocs = [];   // 조회된 문서
   let agg = null;                   // 집계 결과
   let memQ = '';                    // 성도별: '적용된' 이름 검색어 (입력칸 값과 별개다)
@@ -48,6 +54,9 @@
   let selIds = new Set();           // 기간검색: 일괄 수정으로 고른 문서 id
   let bulkOpen = false;             // 일괄 수정 패널이 열려 있나
   let bulkInit = null;              // 패널을 열 때의 '시작값'. 저장 시 지금 값과 비교해 달라진 칸만 덮는다.
+  // 이름 일괄수정: 명부 매칭으로 '확정된' 성도. null=미확정/안 바꿈. {no, name} 확정 시에만 저장한다.
+  //   자유 텍스트를 그대로 믿지 않는다 — 반드시 명부에서 찾아 번호까지 맞춘 것만 patch 한다.
+  let bulkName = null;
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -184,9 +193,16 @@
       // 통계는 숫자가 곧 결과물이라, 조용히 기본값으로 계산하지 않고 '멈춘다'.
       if (!(await loadCloseMonth())) { blockNoSettings(); return; }
 
+      // ★ 로컬 사본을 최신으로 맞춘다. 여기서만 Firestore 를 읽는다.
+      //   변경이 없으면 읽기 0. 있으면 바뀐 것만. 첫 설치·30일 초과·대량변경이면 전량.
+      $('body').innerHTML = '<div class="loading">자료를 맞추는 중…</div>';
+      await sync();
+
       await loadNodes();
+      await loadMembers();
       buildControls();
       await reload();
+      showSyncAt();
     } catch (e) {
       console.error(e);
       $('body').innerHTML = '<div class="loading">불러오지 못했습니다.</div>';
@@ -227,17 +243,31 @@
     $('goSetBtn').onclick = () => { location.href = 'offering.html?tab=set'; };
   }
 
+  // 항목 노드를 '로컬'에서 읽는다. Firestore 를 건드리지 않는다.
+  // (회기 목록도 여기서 뽑는다 — 그래서 회기 필터를 걸 수 없었다. 로컬이면 전량이어도 공짜다.)
   async function loadNodes() {
-    const qs = await getDocs(collection(db, COL));
-    nodes = qs.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .filter((c) => c.kind === 'income' || c.kind === 'expense');
+    const all = await localNodes();
+    nodes = all.filter((c) => c.kind === 'income' || c.kind === 'expense');
     const ys = [...new Set(nodes.map((c) => Number(c.fy)).filter(Boolean))];
     if (curFY == null || !ys.length) curFY = ys.length ? Math.max(...ys) : fiscalYearOf(new Date());
   }
 
+  // 성도 명부(56명)를 읽는다. 일괄수정에서 '이름 → 번호' 매칭에만 쓴다.
+  //   56건이라 읽기 부담이 없어 로컬화하지 않고 그냥 읽는다(offering.html 과 같은 방식).
+  //   권한이 없으면(rules) 조용히 빈 배열로 둔다 — 일괄수정 이름칸에서 안내한다.
+  async function loadMembers() {
+    try {
+      const qs = await getDocs(collection(db, 'members'));
+      members = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn('명부를 읽지 못했습니다(이름 일괄수정 비활성):', e.code || e.message);
+      members = [];
+    }
+  }
+
   // 일괄 수정 선택 해제. 구분·항목·기간이 바뀌면 이전 선택은 의미가 없다.
   // (수입 문서를 골라 놓고 지출로 넘어가면, 그 id 로 expenses 를 고치려 든다)
-  const clearSel = () => { selIds.clear(); bulkOpen = false; bulkInit = null; };
+  const clearSel = () => { selIds.clear(); bulkOpen = false; bulkInit = null; bulkName = null; };
 
   // ---- 상단 컨트롤 (보고서 종류마다 다르다) ----
   function buildControls() {
@@ -294,7 +324,16 @@
       $('qBtn').onclick = doSearch;
       $('qName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
     }
-    if (CTRL.includes('xls')) $('xlsBtn').hidden = false;
+    if (CTRL.includes('xls')) {
+      $('xlsBtn').hidden = false;
+      // 기간검색: 버튼을 둘째 줄 '전체 항목'(catSel) 옆에 붙인다.
+      //   row2 에는 이미 구분·항목이 담겨 있어 그 뒤로 이어 붙는다. push(오른쪽 밀기)는 뗀다.
+      //   예결산표(period 없음)는 그대로 바 오른쪽 정렬(push)로 남긴다.
+      if (CTRL.includes('period')) {
+        $('xlsBtn').classList.remove('push');
+        $('row2').appendChild($('xlsBtn'));
+      }
+    }
     syncControls();
   }
 
@@ -481,14 +520,15 @@
     $('xlsBtn').disabled = true;
     $('body').innerHTML = '<div class="loading">불러오는 중…</div>';
     try {
-      // 문서에는 fy 가 저장되지 않는다. 날짜 범위로 조회한다.
+      // ★ 로컬에서 읽는다. Firestore 를 건드리지 않는다 → 읽기 0.
+      //   회기·월·기간을 아무리 바꿔도, 통계를 몇 번을 열어도 비용이 없다.
+      //   (문서에는 fy 가 없다. 예전과 똑같이 날짜 범위로 거른다.)
       const [a, b] = await Promise.all([
-        getDocs(query(collection(db, 'offerings'), where('date', '>=', r.from), where('date', '<=', r.to))),
-        getDocs(query(collection(db, 'expenses'), where('date', '>=', r.from), where('date', '<=', r.to)))
+        localRange('offerings', r.from, r.to),
+        localRange('expenses', r.from, r.to)
       ]);
-      // 문서 id 를 남긴다. 기간검색의 명세 목록에서 수정·삭제에 쓴다.
-      incDocs = a.docs.map((d) => ({ id: d.id, ...d.data() }));
-      expDocs = b.docs.map((d) => ({ id: d.id, ...d.data() }));
+      incDocs = a;
+      expDocs = b;
       agg = aggregate();
       renderAll();
       $('xlsBtn').disabled = false;
@@ -623,6 +663,19 @@
     if (hit) hit.scrollIntoView({ block: 'center' });
   }
 
+  // ---- 동기화 상태 표시 + 탈출구 ----
+  // 사용자가 지금 보는 숫자가 '언제 것인지' 몰라선 안 된다 → 기준 시각만 표시한다.
+  // [전체 다시 읽기]는 offering.html 의 설치 탭으로 옮겼다(탈출구를 한곳에 모은다).
+  async function showSyncAt() {
+    const d = await lastSyncAt();
+    const el = $('syncBar');
+    if (!el) return;
+    const t = d
+      ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+      : '없음';
+    el.innerHTML = `<span class="sat">${t} 기준 자료</span>`;
+  }
+
   // ---- 표 헤더 고정: 상단 블록의 실제 높이를 재서 --topH 에 넣는다 ----
   // 창마다 컨트롤 줄 수가 다르고(기간검색은 2줄), 폭이 좁으면 flex-wrap 으로 더 늘어난다.
   // 하드코딩하면 헤더가 상단 바에 가리거나 틈이 생긴다.
@@ -718,9 +771,12 @@
     const vAmt = commonVal(picked, (d) => String(d.amount || ''));
     const vMemo = commonVal(picked, (d) => d.memo || '');
     const vPayee = isInc ? '' : commonVal(picked, (d) => d.payee || '');
+    // 성도 이름: 수입에만. 시작값은 화면 표시용(=현재 공통 이름 또는 MIXED)이다.
+    //   실제 저장은 이름을 '다시 타이핑해 명부 매칭한' 경우에만 일어난다(bulkName 로 확정).
+    const vName = isInc ? commonVal(picked, (d) => d.memberName || '') : '';
 
     // 패널을 여는 지금이 '시작값'이다. 저장 시 이것과 비교한다.
-    bulkInit = { date: vDate, path: vPath, amount: vAmt, memo: vMemo, payee: vPayee };
+    bulkInit = { date: vDate, path: vPath, amount: vAmt, memo: vMemo, payee: vPayee, name: vName };
 
     // 항목: 값이 제각각(MIXED)이거나 트리에서 못 찾으면 '-' 를 골라 둔다.
     // 못 찾았는데 첫 항목이 자동 선택되면, 손대지 않아도 엉뚱한 항목으로 덮어써진다.
@@ -734,11 +790,27 @@
       <div class="fld${mx(vPayee)}"><span class="lab">수령인</span>
         <input id="bPayee" type="text" value="${val(vPayee)}"${ph(vPayee)}></div>`;
 
+    // 이름 행(수입 전용). 비우면 '안 바꿈'. 타이핑하면 명부 매칭 후에만 확정된다.
+    //   #번호 칸과 상태줄로 '지금 누구로 확정됐는지'를 보여준다 — 잘못된 성도로 덮어쓰는 사고를 막는다.
+    const nameRow = !isInc ? '' : `
+      <div class="fld${mx(vName)}"><span class="lab">이름</span>
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span id="bMemNo" style="flex:0 0 auto; min-width:34px; text-align:center; font-size:12px;
+              color:var(--hint); border:1px solid var(--line); border-radius:6px; padding:2px 4px;">–</span>
+            <input id="bName" type="text" value="${val(vName)}"${ph(vName)}
+              placeholder="${vName === MIXED ? '제각각 — 바꾸려면 이름 입력' : '안 바꾸려면 그대로'}"
+              style="flex:1; min-width:0;">
+          </div>
+          <div id="bNameMsg" style="font-size:12px; margin-top:3px;"></div>
+        </div></div>`;
+
     return `<div class="bulk">
       <div class="bh"><span>일괄 수정</span><span class="cnt">${picked.length}건 선택</span>
         <button class="bx" id="bClose" aria-label="닫기">✕</button></div>
       <div class="fld${mx(vDate)}"><span class="lab">날짜</span>
         <input id="bDate" type="date" value="${val(vDate)}"></div>
+      ${nameRow}
       <div class="fld${mx(vPath)}"><span class="lab">항목</span>
         <div class="selwrap">
           <div class="selface"><span id="bCatFace">${esc(leafName(selId) || '-')}</span></div>
@@ -760,6 +832,48 @@
   // 날짜가 mixed 라 빈칸으로 열렸을 때, 사용자가 안 건드렸으면 빈칸 그대로다 → 안 바뀐 것.
   // 시작값도 MIXED(=화면상 빈칸)였으므로 '' !== MIXED 가 되어 오탐이 난다. 그래서 따로 판정한다.
   const changed = (now, init) => (init === MIXED ? now !== '' : now !== init);
+
+  // 이름 입력칸(#bName)을 명부와 대조해 '한 성도'로 확정한다(bulkName).
+  //   offering.html 의 doNameSearch 와 같은 규칙: 정확히 1명이면 연동, 동명이인이면 고르게,
+  //   없으면 저장을 막는다(A안). 확정돼야만 bulkSave 가 번호+이름을 patch 한다.
+  function bulkNameMatch() {
+    const inp = $('bName'); if (!inp) return;
+    const box = $('bNameMsg'); const noEl = $('bMemNo');
+    const val = inp.value.trim();
+    bulkName = null; if (noEl) noEl.textContent = '–';
+    const set = (html) => { if (box) box.innerHTML = html; };
+
+    // 비웠거나 시작값 그대로면 '안 바꿈' — 조용히 둔다.
+    if (!val || val === bulkInit.name) { set(''); return; }
+    if (!members.length) { set('<span style="color:var(--danger)">명부를 불러오지 못해 이름을 바꿀 수 없습니다.</span>'); return; }
+
+    const exact = members.filter((m) => (m.name || '').trim() === val);
+    if (exact.length === 1) { setBulkName(exact[0]); return; }
+    if (exact.length > 1) {
+      set('<span style="color:var(--muted)">동명이인입니다. 선택하세요:</span> '
+        + '<span id="bNamePick"></span>');
+      const pk = $('bNamePick');
+      exact.forEach((m) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = `${m.name}${m.memberNo ? ' #' + m.memberNo : ''}`;
+        b.style.cssText = 'margin:2px 4px 0 0; padding:2px 8px; border:1px solid var(--green);'
+          + 'background:#fff; color:var(--green); border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;';
+        b.onclick = () => setBulkName(m);
+        pk.appendChild(b);
+      });
+      return;
+    }
+    // 명부에 없음 → A안: 막는다. (일괄수정에서 새 성도 등록은 하지 않는다.)
+    set('<span style="color:var(--danger)">명부에 없는 이름입니다. 정확한 이름을 입력하세요.</span>');
+  }
+  function setBulkName(m) {
+    bulkName = { no: Number(m.memberNo) || 0, name: m.name };
+    const inp = $('bName'); if (inp) inp.value = m.name;
+    const noEl = $('bMemNo'); if (noEl) noEl.textContent = bulkName.no || '0';
+    const box = $('bNameMsg');
+    if (box) box.innerHTML = `<span style="color:var(--green)">✓ ${esc(m.name)} 성도로 확정${bulkName.no ? ' · #' + bulkName.no : ''}</span>`;
+  }
 
   async function bulkSave() {
     const recs = catFilterDocs(curKind === 'income' ? incDocs : expDocs);
@@ -802,20 +916,47 @@
     if (changed(nMemo, bulkInit.memo)) patch.memo = nMemo;
     if (!isInc && changed(nPayee, bulkInit.payee)) patch.payee = nPayee;
 
+    // 이름(수입 전용): 입력칸이 시작값과 달라졌으면 '바꾸려는 것'이다.
+    //   단, 명부에서 확정(bulkName)되지 않았으면 저장하지 않는다 — 번호 없는 이름은 집계를 깨뜨린다.
+    if (isInc) {
+      const nName = $('bName') ? $('bName').value.trim() : '';
+      if (changed(nName, bulkInit.name)) {
+        if (!nName) return msg('이름을 비울 수는 없습니다. 바꾸지 않으려면 원래 이름 그대로 두세요.');
+        if (!bulkName || bulkName.name !== nName) {
+          return msg('이름을 명부에서 확정하세요. (이름을 입력한 뒤 Enter 또는 조회)');
+        }
+        patch.memberNo = bulkName.no;
+        patch.memberName = bulkName.name;
+      }
+    }
+
     const keys = Object.keys(patch);
     if (!keys.length) return msg('바뀐 칸이 없습니다.');
-    if (!confirm(`${picked.length}건의 [${keys.filter((k) => k !== 'week').join(', ')}] 을(를) 바꿉니다. 진행할까요?`)) return;
+    // week(날짜 부산물)·memberNo(이름 부산물)·항목 세부키는 확인 문구에서 숨긴다 — 실제로 고른 칸만 보인다.
+    const hide = new Set(['week', 'memberNo', 'c1', 'c2', 'c3', 'catPath', 'code']);
+    const label = { date: '날짜', memberName: '이름', amount: '금액', memo: '비고', payee: '수령인' };
+    const disp = keys.filter((k) => !hide.has(k)).map((k) => label[k] || k);
+    if (patch.catPath !== undefined) disp.push('항목');
+    if (!confirm(`${picked.length}건의 [${disp.join(', ')}] 을(를) 바꿉니다. 진행할까요?`)) return;
 
     const btn = $('bSave'); btn.disabled = true; btn.textContent = '저장 중…';
     try {
       const coll = isInc ? 'offerings' : 'expenses';
       // 56명 규모라 건수가 많지 않다. 순차 저장으로 충분하고, 실패 지점을 알기 쉽다.
+      // 각 건마다 본체+로그를 한 배치로 묶는다 — 따로 쓰면 로그가 빠져 로컬이 영영 낡는다.
       for (const r of picked) {
-        await updateDoc(doc(db, coll, r.id), { ...patch, updatedAt: serverTimestamp(), updatedBy: me.uid });
+        const b = writeBatch(db);
+        b.update(doc(db, coll, r.id), { ...patch, updatedAt: serverTimestamp(), updatedBy: me.uid });
+        addLog(b, { coll, docId: r.id, op: 'update', by: me.uid });
+        await b.commit();
       }
       bulkOpen = false;
       selIds.clear();
+      // 내가 바꾼 것을 로컬에도 반영해야 한다. 안 하면 화면이 옛 숫자를 보여준다.
+      // (내가 남긴 로그를 내가 읽어 따라잡는다 — 몇 건이라 싸다.)
+      await sync();
       await reload();
+      await showSyncAt();
     } catch (e) {
       btn.disabled = false; btn.textContent = `${picked.length}건 일괄 수정 저장`;
       msg('저장 실패: ' + (e.code || e.message));
@@ -844,10 +985,13 @@
   let recSort = { key: 'date', dir: 'desc' };
   const wkNo = (r) => { const m = (r.week || '').match(/(\d+)\s*주/); return m ? m[1] : ''; };
 
+  // 문서의 no 필드는 폐기됐다(저장 때마다 컬렉션 전체를 읽던 nextSeq 를 걷어냈다).
+  // 동점 처리는 문서 id 로 갈음한다. 성도별 집계의 no 는 memberNo 라 무관하다.
+  const idCmp = (a, b) => String(a.id || '').localeCompare(String(b.id || ''));
+
   function recSortVal(r, k) {
     switch (k) {
-      // 'no' 는 없다. 그 열 자리에 체크박스가 들어가 헤더가 사라졌다.
-      // (문서의 no 필드는 그대로 있고, 동점 처리에는 여전히 쓴다)
+      // 'no' 는 없다. 그 열 자리에 체크박스가 들어간다.
       case 'fy': return fiscalYearOf(parseYMD(r.date));
       case 'week': return Number(wkNo(r)) || 0;
       case 'date': return r.date || '';
@@ -865,7 +1009,7 @@
     return rows.sort((a, b) => {
       const x = recSortVal(a, k), y = recSortVal(b, k);
       let c = strKey ? String(x).localeCompare(String(y), 'ko') : (x - y);
-      if (c === 0) c = (Number(a.no) || 0) - (Number(b.no) || 0);
+      if (c === 0) c = idCmp(a, b);   // 동점은 문서 id 로 고정
       return sign * c;
     });
   }
@@ -922,6 +1066,8 @@
     if (TYPE !== 'range' || !agg) return;
     // 항목을 고르면 닫힌 칸(.selface)에 '이름만' 다시 찍는다. 패널은 다시 그리지 않는다.
     if (e.target.id === 'bCat') { updateBCatFace(); return; }
+    // 이름칸에서 포커스가 빠지면(change) 명부와 대조해 확정한다. 패널은 다시 그리지 않는다.
+    if (e.target.id === 'bName') { bulkNameMatch(); return; }
     const recs = catFilterDocs(curKind === 'income' ? incDocs : expDocs);
     if (e.target.id === 'ckAll') {
       // 지금 화면에 보이는 것만 토글한다. 항목 필터로 걸러진 건 건드리지 않는다.
@@ -941,6 +1087,20 @@
       ck.closest('tr').classList.toggle('sel', ck.checked);
       bulkOpen = selIds.size > 0;   // 한 건이라도 고르면 패널이 열린다. 다 풀면 닫힌다.
       refreshBulk();
+    }
+  });
+
+  // 이름칸: Enter 로 즉시 매칭. 다시 타이핑하면(input) 이전 확정을 풀어 오확정 저장을 막는다.
+  $('body').addEventListener('keydown', (e) => {
+    if (e.target.id === 'bName' && e.key === 'Enter') { e.preventDefault(); bulkNameMatch(); }
+  });
+  $('body').addEventListener('input', (e) => {
+    if (e.target.id !== 'bName') return;
+    // 확정된 이름과 지금 글자가 달라졌으면 확정을 해제한다(다시 매칭해야 저장된다).
+    if (bulkName && e.target.value.trim() !== bulkName.name) {
+      bulkName = null;
+      const noEl = $('bMemNo'); if (noEl) noEl.textContent = '–';
+      const box = $('bNameMsg'); if (box) box.innerHTML = '';
     }
   });
 
@@ -981,8 +1141,17 @@
     if (del) {
       if (!confirm('이 기록을 삭제할까요?')) return;
       try {
-        await deleteDoc(doc(db, curKind === 'income' ? 'offerings' : 'expenses', del.dataset.del));
+        const coll = curKind === 'income' ? 'offerings' : 'expenses';
+        const id = del.dataset.del;
+        // 삭제도 로그를 남긴다. 문서가 사라지면 '무엇이 사라졌는지' 알 방법이 없다.
+        const b = writeBatch(db);
+        b.delete(doc(db, coll, id));
+        addLog(b, { coll, docId: id, op: 'delete', by: me.uid });
+        await b.commit();
+        // 내가 지운 것을 로컬에도 반영한다. 안 하면 지운 기록이 화면에 계속 남는다.
+        await sync();
         await reload();
+        await showSyncAt();
       } catch (err) { alert('삭제 실패: ' + (err.code || err.message)); }
     }
   });
@@ -1001,6 +1170,8 @@
   }
 
   function tableHtml(title, sub, groups, totLabel) {
+    // 지출부는 '예산 − 결산'(덜 쓰면 +). title 로 부문을 판별해 diff 부호를 맞춘다.
+    _diffExpense = (title && title.indexOf('지출') !== -1);
     const b = sumB(groups.flatMap((g) => g.rows));
     const a = sumA(groups.flatMap((g) => g.rows));
     const rows = [];
@@ -1011,7 +1182,7 @@
           <td class="n">${esc(r.name)}</td>
           <td class="m">${r.budget ? fmt(r.budget) : ''}</td>
           <td class="m">${r.actual ? fmt(r.actual) : ''}</td>
-          <td class="m${r.actual - r.budget < 0 ? ' neg' : ''}">${diff(r.budget, r.actual)}</td>
+          <td class="m${diffVal(r.budget, r.actual) < 0 ? ' neg' : ''}">${diff(r.budget, r.actual)}</td>
         </tr>`);
       });
       // 대분류가 하나뿐이면 소계 = 총계라 중복이다. 2개 이상일 때만 소계를 낸다.
@@ -1019,14 +1190,14 @@
         rows.push(`<tr class="sub">
           <td class="g"></td><td class="n">소계</td>
           <td class="m">${fmt(g.budget)}</td><td class="m">${fmt(g.actual)}</td>
-          <td class="m${g.actual - g.budget < 0 ? ' neg' : ''}">${diff(g.budget, g.actual)}</td>
+          <td class="m${diffVal(g.budget, g.actual) < 0 ? ' neg' : ''}">${diff(g.budget, g.actual)}</td>
         </tr>`);
       }
     });
     rows.push(`<tr class="tot">
       <td class="g"></td><td class="n">${esc(totLabel)}</td>
       <td class="m">${fmt(b)}</td><td class="m">${fmt(a)}</td>
-      <td class="m${a - b < 0 ? ' neg' : ''}">${diff(b, a)}</td>
+      <td class="m${diffVal(b, a) < 0 ? ' neg' : ''}">${diff(b, a)}</td>
     </tr>`);
     return `<div class="sect">
       <div class="sh">${esc(title)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</div>
@@ -1038,10 +1209,14 @@
     </div>`;
   }
 
-  // 차액 = 결산 − 예산 (예산이 0이면 비교 의미가 없어 비워 둔다)
+  // 차액 = 수입부: 결산 − 예산 / 지출부: 예산 − 결산 (예산이 0이면 비교 의미가 없어 비워 둔다)
+  //   부문마다 '유리하면 +'가 되도록 부호를 맞춘다. 수입은 더 걷히면 +, 지출은 덜 쓰면 +.
+  //   _diffExpense 는 tableHtml 이 지출부를 그리는 동안만 true 로 세운다.
+  let _diffExpense = false;
+  const diffVal = (budget, actual) => (_diffExpense ? budget - actual : actual - budget);
   function diff(budget, actual) {
     if (!budget) return '';
-    const d = actual - budget;
+    const d = diffVal(budget, actual);
     return (d > 0 ? '+' : '') + fmt(d);
   }
 
@@ -1504,6 +1679,39 @@
     }
   }
 
+  // ---- 기간검색 명세 시트 ----
+  // 화면 표(incTable/expTable)와 동일하게 만든다: 정렬(sortRecs)·항목필터(catFilterDocs) 그대로.
+  //   비고/적요는 화면에선 아이콘이지만 엑셀엔 메모 원문을 넣는다.
+  function sheetRange() {
+    const isInc = curKind === 'income';
+    const recs = sortRecs(catFilterDocs(isInc ? incDocs : expDocs).slice());
+    const head = isInc
+      ? ['회계년도', '주', '날짜', '항목', 'id', '이름', '금액', '배우자', '비고']
+      : ['회계년도', '주', '날짜', '항목', 'id', '청구인', '금액', '수령인', '적요'];
+    const aoa = [head];
+    recs.forEach((r) => {
+      const item = r.c3 || r.c2 || r.c1 || '';
+      const idno = isInc ? (r.memberNo ? '#' + r.memberNo : '') : (r.claimantNo ? '#' + r.claimantNo : '');
+      const who = isInc ? (r.memberName || '') : (r.claimantName || '');
+      const sub = isInc ? (r.spouseName || '') : (r.payee || '');
+      aoa.push([
+        fiscalYearOf(parseYMD(r.date)), wkNo(r), r.date || '', item, idno, who,
+        Number(r.amount) || 0, sub, r.memo || ''
+      ]);
+    });
+    const sum = recs.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    aoa.push(['합계', '', '', '', '', '', sum, '', '']);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // 금액 열(G)만 천단위 서식. 회계년도·주에 서식을 주면 '2,026' 이 되므로 건드리지 않는다.
+    for (let i = 1; i < aoa.length; i++) {
+      const c = ws['G' + (i + 1)];
+      if (c && c.t === 'n') c.z = '#,##0';
+    }
+    ws['!cols'] = [{ wch: 9 }, { wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 6 },
+                   { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
+    return { ws, isInc };
+  }
+
   // ---- 내보내기 ----
   $('xlsBtn').onclick = async () => {
     if (!agg) return;
@@ -1512,6 +1720,16 @@
     btn.disabled = true; btn.textContent = '만드는 중…';
     try {
       await loadSheetJS();
+      // 기간 단위 검색: 지금 보고 있는 명세(수입|지출)를 그대로 한 시트로 내보낸다.
+      if (TYPE === 'range') {
+        const { ws, isInc } = sheetRange();
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, isInc ? '수입명세' : '지출명세');
+        const f = $('fromD').value || String(curFY);
+        const t = $('toD').value || '';
+        XLSX.writeFile(wb, `기간검색_${isInc ? '수입' : '지출'}_${f}~${t}.xlsx`);
+        return;
+      }
       const r = fyRange(curFY);
       const mm = (s) => s.slice(0, 7).replace('-', '.');
       const wb = XLSX.utils.book_new();

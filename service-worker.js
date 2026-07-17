@@ -1,10 +1,12 @@
-const CACHE = 'church-manager-v209';
+const CACHE = 'church-manager-v218';
 const ASSETS = [
   'index.html',
   'manifest.json',
   'icon-192.png',
   'icon-512.png',
   'firebase-config.js',
+  'changelog.js',
+  'finstore.js',
   'bible.html',
   'hymn.html',
   'responsive.html',

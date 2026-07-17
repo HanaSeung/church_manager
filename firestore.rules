@@ -170,6 +170,17 @@ service cloud.firestore {
     // 성도 생성 시 트랜잭션으로 lastNo 증가. 성도 생성 권한(재정담당 3단계)과 동일.
     match /counters/{docId} { allow read, write: if isFinance(); }
 
+    // ===== 변경 로그 =====
+    // 재정 데이터(offerings/expenses)의 변경 내역. 로컬 사본을 증분 동기화하는 데 쓴다.
+    // 읽기: 재정담당이 '내 마지막 동기화 이후'만 조회한다.
+    // 생성: 본체 변경과 같은 배치로 커밋된다. 재정담당만.
+    // 수정·삭제 금지: 로그는 append-only 다. 고칠 수 있으면 감사 기록이 아니다.
+    //   (오래된 로그는 expireAt 필드 + 콘솔 TTL 정책으로 자동 삭제 — 규칙과 무관하게 서버가 지운다)
+    match /changes/{id} {
+      allow read, create: if isFinance();
+      allow update, delete: if false;
+    }
+
     // ===== 그 외 모든 문서 =====
     // 기본 차단. (헌금·성도 등 상위 단계 데이터는 만들 때 단계별 규칙을 여기에 추가)
     match /{document=**} {
