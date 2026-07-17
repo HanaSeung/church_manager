@@ -40,6 +40,7 @@
   let curMo = 0;                    // weekly: 회기 내 월 순번 0~11
   let curKind = 'income';           // monthly/weekly/range: 구분 라디오 (수입 | 지출)
   let showSp = false;               // monthly/weekly: 특별헌금 블록을 낼지. 기본은 꺼짐(수입만).
+  let showEtc = false;              // monthly/weekly: '기타' 대분류 블록을 낼지. 기본 꺼짐 → 일반재정+소계만.
   let curCat = '';                  // range: 선택한 항목의 이름경로 ('' = 전체)
   let ppFy = null, ppSel = null;    // 기간선택 모달 상태
   let nodes = [];                   // finConfig 전체 노드
@@ -283,19 +284,21 @@
       // 기간검색에는 특별헌금 체크박스를 두지 않는다. 거기는 항목 select 로 직접 고른다.
       const useSp = (TYPE === 'monthly' || TYPE === 'weekly');
       $('spLab').hidden = $('ksep').hidden = !useSp;
+      $('etcLab').hidden = !useSp;
       if (useSp) $('spChk').onchange = () => { showSp = $('spChk').checked; if (agg) renderAll(); };
+      if (useSp) $('etcChk').onchange = () => { showEtc = $('etcChk').checked; if (agg) renderAll(); };
       document.querySelectorAll('input[name="kind"]').forEach((el) => {
         el.onchange = () => {
           curKind = el.value;
           // 수입·지출 문서는 이미 둘 다 읽어 뒀다. 재조회하지 않고 그리기만 다시 한다.
-          if (useSp) syncSpChk();
+          if (useSp) { syncSpChk(); syncEtcChk(); }
           // 항목 목록은 구분마다 다른 트리라 다시 채운다 (선택은 '전체'로 초기화).
           if (CTRL.includes('cat')) { curCat = ''; fillCats(); }
           clearSel();
           if (agg) renderAll();
         };
       });
-      if (useSp) syncSpChk();
+      if (useSp) { syncSpChk(); syncEtcChk(); }
     }
     if (CTRL.includes('cat')) {
       $('catSel').hidden = false;
@@ -388,6 +391,14 @@
     $('spChk').disabled = !on;
     $('spLab').classList.toggle('off', !on);
     $('spLab').title = on ? '' : '지출에는 특별헌금이 없습니다';
+  }
+
+  // 기타 체크도 특별헌금과 같게 — 지출에선 비활성(잠금). 숨기지 않아 바 폭이 안 출렁인다.
+  function syncEtcChk() {
+    const on = (curKind === 'income');
+    $('etcChk').disabled = !on;
+    $('etcLab').classList.toggle('off', !on);
+    $('etcLab').title = on ? '' : '지출에는 기타 구분이 없습니다';
   }
 
   // 회기가 바뀌면 월 목록과 기간 기본값도 그 회기에 맞춰 다시 채운다.
@@ -646,11 +657,11 @@
       // 구분 라디오로 하나만 낸다. 12개월 × 항목 15개짜리 표를 둘 다 쌓으면
       // 지출을 보려고 수입표를 통째로 지나쳐야 한다.
       // 특별헌금 체크를 끄면 tail 을 빈 배열로 넘긴다 → 합계(헌금+기타)만 남는다.
-      if (curKind === 'income') html.push(gridHtml('수입내역 (월별)', agg.normal, showSp ? agg.special : []));
+      if (curKind === 'income') html.push(incGrid('수입내역 (월별)'));
       else html.push(gridHtml('지출내역 (월별)', agg.expRows));
     } else if (TYPE === 'weekly') {
       if (!BK.n) html.push('<div class="loading">해당 월에 주일이 없습니다.</div>');
-      if (curKind === 'income') html.push(gridHtml('수입내역 (주별)', agg.normal, showSp ? agg.special : []));
+      if (curKind === 'income') html.push(incGrid('수입내역 (주별)'));
       else html.push(gridHtml('지출내역 (주별)', agg.expRows));
     } else if (TYPE === 'member') {
       html.push(memberHtml());
@@ -1182,7 +1193,7 @@
           <td class="n">${esc(r.name)}</td>
           <td class="m">${r.budget ? fmt(r.budget) : ''}</td>
           <td class="m">${r.actual ? fmt(r.actual) : ''}</td>
-          <td class="m${diffVal(r.budget, r.actual) < 0 ? ' neg' : ''}">${diff(r.budget, r.actual)}</td>
+          <td class="m${diffCls(r.budget, r.actual)}">${diff(r.budget, r.actual)}</td>
         </tr>`);
       });
       // 대분류가 하나뿐이면 소계 = 총계라 중복이다. 2개 이상일 때만 소계를 낸다.
@@ -1190,19 +1201,19 @@
         rows.push(`<tr class="sub">
           <td class="g"></td><td class="n">소계</td>
           <td class="m">${fmt(g.budget)}</td><td class="m">${fmt(g.actual)}</td>
-          <td class="m${diffVal(g.budget, g.actual) < 0 ? ' neg' : ''}">${diff(g.budget, g.actual)}</td>
+          <td class="m${diffCls(g.budget, g.actual)}">${diff(g.budget, g.actual)}</td>
         </tr>`);
       }
     });
     rows.push(`<tr class="tot">
       <td class="g"></td><td class="n">${esc(totLabel)}</td>
       <td class="m">${fmt(b)}</td><td class="m">${fmt(a)}</td>
-      <td class="m${diffVal(b, a) < 0 ? ' neg' : ''}">${diff(b, a)}</td>
+      <td class="m${diffCls(b, a)}">${diff(b, a)}</td>
     </tr>`);
     return `<div class="sect">
       <div class="sh">${esc(title)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</div>
       <table class="t">
-        <colgroup><col class="c-g"><col class="c-n"><col class="c-m"><col class="c-m"><col class="c-m"></colgroup>
+        <colgroup><col class="c-g"><col class="c-n"><col class="c-m"><col class="c-m"><col class="c-d"></colgroup>
         <thead><tr><th class="hl">항목</th><th class="hn">소항목</th><th class="hr">예산</th><th class="hr">결산</th><th class="hr">차액</th></tr></thead>
         <tbody>${rows.join('')}</tbody>
       </table>
@@ -1214,10 +1225,17 @@
   //   _diffExpense 는 tableHtml 이 지출부를 그리는 동안만 true 로 세운다.
   let _diffExpense = false;
   const diffVal = (budget, actual) => (_diffExpense ? budget - actual : actual - budget);
+  // 차액 셀 색: 유리(+)=파랑 pos / 불리(−)=빨강 neg / 예산0(빈칸)·동일=색없음
+  const diffCls = (budget, actual) => {
+    if (!budget) return '';
+    const d = diffVal(budget, actual);
+    return d < 0 ? ' neg' : (d > 0 ? ' pos' : '');
+  };
   function diff(budget, actual) {
     if (!budget) return '';
     const d = diffVal(budget, actual);
-    return (d > 0 ? '+' : '') + fmt(d);
+    const rate = ((actual || 0) / budget * 100).toFixed(1);   // 달성률 = 결산÷예산
+    return `<span class="dn">${(d > 0 ? '+' : '') + fmt(d)}</span><span class="rt">(${rate}%)</span>`;
   }
 
   // ---- 기금별 잔액 ----
@@ -1262,11 +1280,21 @@
     </div>`;
   }
 
+  // 수입 월별/주별 그리드. 상단바 '기타' 체크에 따라 '기타' 대분류를 넣거나 뺀다.
+  //   끔(기본): 일반재정만 + 소계(합계 줄 없음) / 켬: 일반재정+기타 + 합계(지금까지의 기본 모습).
+  function incGrid(title) {
+    const tail = showSp ? agg.special : [];
+    if (showEtc) return gridHtml(title, agg.normal, tail);
+    const gen = agg.normal.filter((r) => r.c1 !== '기타');
+    return gridHtml(title, gen, tail, { forceSub: true, noTotal: true });
+  }
+
   // ---- 가로표 (년간 12개월 / 월간 주차 공용) ----
   // 이월은 넣지 않는다. 수입이 아니고, 한 칸에 뭉쳐 표를 왜곡한다.
   // tailRows(특별헌금)는 목적기금이라 합계에 넣지 않는다. 합계 '아래'에 별도 블록으로 붙인다.
   //   헌금 › 기타 › [합계 = 헌금+기타] › 특별헌금
-  function gridHtml(title, rows, tailRows) {
+  function gridHtml(title, rows, tailRows, opts) {
+    opts = opts || {};   // forceSub: 대분류 1개여도 소계를 냄 / noTotal: 맨 아래 합계 줄 생략
     const tail = tailRows || [];
     if (!rows.length && !tail.length) return '';
     const labels = BK.labels;
@@ -1294,8 +1322,8 @@
     const totM = new Array(BK.n).fill(0);
     rows.forEach((r) => r.months.forEach((v, k) => { totM[k] += v; }));
 
-    const body = block(groupByC1(rows), false);
-    body.push(line('tot', '', '합계', totM, sumA(rows)));   // 헌금 + 기타 (특별헌금 제외)
+    const body = block(groupByC1(rows), opts.forceSub || false);
+    if (!opts.noTotal) body.push(line('tot', '', '합계', totM, sumA(rows)));   // 헌금 + 기타 (특별헌금 제외)
     if (tail.length) {
       // 합계와 특별헌금 사이에 빈 줄 하나 (엑셀 출력과 같은 모양)
       body.push(`<tr class="spc"><td class="g fix1"></td><td class="n fix2"></td>${'<td></td>'.repeat(BK.n)}<td class="sumcol"></td></tr>`);

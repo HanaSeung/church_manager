@@ -115,6 +115,7 @@
     import {
       collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, writeBatch, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+    import { logBulk } from "./changelog.js";   // finConfig 변경 → 통계 로컬 사본이 따라잡도록 bulk 로그
 
     const $ = (id) => document.getElementById(id);
     const COL = 'finConfig';   // 재정 설정 공용 컬렉션 (수입/지출 항목)
@@ -195,6 +196,7 @@
                 legacy.slice(i, i + 400).forEach((c) => batch.update(doc(db, COL, c.id), { fy: 2025 }));
                 await batch.commit();
               }
+              await logBulk('finConfig', me.uid);
             } catch (e) { console.error(e); }
             return; // 이전 후 스냅샷이 다시 들어옴
           }
@@ -283,6 +285,7 @@
           if (level === 1) { lastL1 = ref.id; lastL2 = null; }
           else if (level === 2) { lastL2 = ref.id; }
         }
+        await logBulk('finConfig', me.uid);
       } catch (e) {
         console.error(e); alert('기본 항목 불러오기에 실패했습니다.');
         if (btn) { btn.disabled = false; btn.textContent = '기본 항목 불러오기'; }
@@ -319,6 +322,7 @@
           });
           await batch.commit();
         }
+        await logBulk('finConfig', me.uid);
       } catch (e) {
         console.error(e); alert('복사에 실패했습니다.');
         if (btn) { btn.disabled = false; btn.textContent = '다른 해 복사'; }
@@ -339,6 +343,7 @@
           ids.slice(i, i + 400).forEach((id) => batch.delete(doc(db, COL, id)));
           await batch.commit();
         }
+        await logBulk('finConfig', me.uid);
       } catch (e) {
         console.error(e); alert('전체 삭제에 실패했습니다.');
       } finally {
@@ -367,6 +372,7 @@
           updates.slice(i, i + 400).forEach((u) => batch.update(doc(db, COL, u.id), { code: u.code, updatedAt: serverTimestamp() }));
           await batch.commit();
         }
+        if (updates.length) await logBulk('finConfig', me.uid);
       } catch (e) {
         console.error(e); alert('자동번호 처리에 실패했습니다.');
       } finally {
@@ -513,6 +519,7 @@
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           });
         }
+        await logBulk('finConfig', me.uid);
         closeModal();
       } catch (e) {
         console.error(e); alert('저장에 실패했습니다. 다시 시도해 주세요.');
@@ -529,7 +536,7 @@
         return;
       }
       if (!confirm(`‘${c.name}’ 항목을 삭제할까요?`)) return;
-      try { await deleteDoc(doc(db, COL, id)); }
+      try { await deleteDoc(doc(db, COL, id)); await logBulk('finConfig', me.uid); }
       catch (e) { console.error(e); alert('삭제에 실패했습니다.'); }
     }
 

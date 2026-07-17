@@ -93,6 +93,7 @@
     import {
       collection, onSnapshot, doc, getDoc, writeBatch, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+    import { logBulk } from "./changelog.js";   // finConfig(예산) 변경 → 통계 로컬 사본이 따라잡도록 bulk 로그
 
     const $ = (id) => document.getElementById(id);
     const COL = 'finConfig';   // 수입/지출 항목 노드 공용 컬렉션
@@ -362,6 +363,7 @@
           });
           await batch.commit();
         }
+        await logBulk('finConfig', auth.currentUser?.uid);
         const n = ids.length;
         edited = {};
         showMsg(`<span class="ok">${n}개 항목의 예산을 저장했습니다.</span>`);
