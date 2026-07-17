@@ -83,6 +83,13 @@
   #ppFySel{width:100%; height:38px; border:1px solid var(--line); border-radius:8px;
     padding:0 10px; font-size:14px; font-family:inherit; background:var(--card); color:var(--text);}
   #catSel{max-width:220px;}
+  /* 년간 월별: 표 추가 플로팅 버튼 (우하단 고정) — 이미지 시안의 원형 초록 버튼 */
+  .fab{position:fixed; right:22px; bottom:22px; width:56px; height:56px; border-radius:50%;
+    background:var(--green); color:#fff; border:none; font-size:30px; line-height:1; cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.28); z-index:100;
+    display:flex; align-items:center; justify-content:center; font-family:inherit;}
+  .fab:hover{background:var(--green-deep);}
+  .fab:active{transform:scale(.94);}
 </style>
 <style>
   .warnbox{margin:0 14px 12px; padding:10px 12px; border-radius:9px; font-size:12.5px;
@@ -92,6 +99,14 @@
   .sect{margin:0 0 18px;}
   .sh{display:flex; align-items:baseline; gap:8px; padding:4px 14px 7px; font-size:14px; font-weight:700; color:var(--green-deep);}
   .sh .sub{font-size:11.5px; font-weight:400; color:var(--muted);}
+  /* 년간 월별 회기 비교: 제목줄 우측의 회기 select + 삭제(×) 버튼 */
+  .sh .rt{margin-left:auto; align-self:center; display:flex; align-items:center; gap:6px;}
+  .sh .fyin{height:30px; padding:0 8px; border:1px solid var(--line); border-radius:7px;
+    font-size:13px; font-family:inherit; background:var(--card); color:var(--green-deep); font-weight:600;}
+  .sh .delx{width:30px; height:30px; border:1px solid var(--line); background:var(--card);
+    color:var(--hint); border-radius:7px; font-size:14px; cursor:pointer; line-height:1;
+    display:flex; align-items:center; justify-content:center; font-family:inherit;}
+  .sh .delx:hover{border-color:var(--danger); color:var(--danger);}
   table.t{width:100%; max-width:880px; border-collapse:collapse; background:var(--card); table-layout:fixed;}
   table.t th{background:var(--green-soft); color:var(--green-deep); font-size:11.5px; font-weight:600;
     padding:7px 6px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); text-align:center;}
@@ -126,6 +141,8 @@
   /* 가로표(월별·주별·성도별): 왼쪽 열을 고정한다 */
   .scrollx{overflow-x:auto; -webkit-overflow-scrolling:touch; border-top:1px solid var(--line);}
   table.m{border-collapse:separate; border-spacing:0; background:var(--card); min-width:100%;}
+  /* 년간 월별 회기 비교: 고정 격자 — 모든 회기 표가 같은 열 폭을 써 세로로 정렬된다 */
+  table.m.fixw{table-layout:fixed;}
   table.m th{background:var(--green-soft); color:var(--green-deep); font-size:11px; font-weight:600;
     padding:6px 8px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap;}
   table.m td{font-size:11.5px; padding:6px 8px; border-bottom:1px solid var(--line);
@@ -325,6 +342,8 @@
       </div>
     </div>
   </div>
+  <!-- 년간 월별 회기 비교: 표 추가 플로팅 버튼 (monthly 에서만 표시) -->
+  <button class="fab" id="addFyBtn" hidden aria-label="표 추가">＋</button>
 </div>
 <script type="module">
   import { auth, db } from "./firebase-config.js";
@@ -370,6 +389,10 @@
   let showSp = false;               // monthly/weekly: 특별헌금 블록을 낼지. 기본은 꺼짐(수입만).
   let showEtc = false;              // monthly/weekly: '기타' 대분류 블록을 낼지. 기본 꺼짐 → 일반재정+소계만.
   let curCat = '';                  // range: 선택한 항목의 이름경로 ('' = 전체)
+  // 년간 월별 회기 비교: 표를 세로로 쌓는다. 각 원소가 표 하나의 회기(연도)다.
+  //   구분·특별헌금·기타(curKind/showSp/showEtc)는 전역이라 모든 표에 함께 걸린다. 회기만 표마다 다르다.
+  let monFys = [];                  // monthly: 비교할 회기 목록 (첫 진입은 [curFY])
+  let docsByFy = {};                // monthly: 회기별 { inc, exp } 로컬 조회 결과 (읽기 0)
   let ppFy = null, ppSel = null;    // 기간선택 모달 상태
   let nodes = [];                   // finConfig 전체 노드
   let members = [];                 // 성도 명부(56명). 일괄수정에서 이름→번호 매칭에 쓴다.
@@ -665,6 +688,13 @@
         $('row2').appendChild($('xlsBtn'));
       }
     }
+    // 년간 월별: 회기를 표마다 각자 고른다 → 상단바 회기 select 는 숨기고 '＋ 표 추가'를 낸다.
+    if (TYPE === 'monthly') {
+      if (!monFys.length) monFys = [curFY];
+      $('fySel').hidden = true;
+      $('addFyBtn').hidden = false;
+      $('addFyBtn').onclick = () => { monFys.push(monFys[0] != null ? monFys[0] : curFY); reload(); };
+    }
     syncControls();
   }
 
@@ -673,6 +703,21 @@
     memQ = String($('qName').value || '').trim();
     if (agg) renderAll();
   }
+
+  // ---- 년간 월별 회기 비교: 표별 회기 변경 · 삭제 위임 ----
+  // 표는 renderAll 마다 새로 그려지므로 #body 에 한 번만 위임한다.
+  $('body').addEventListener('change', (e) => {
+    const s = e.target.closest('select[data-fy]');
+    if (!s) return;
+    monFys[Number(s.dataset.fy)] = Number(s.value);
+    reload();
+  });
+  $('body').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-delfy]');
+    if (!del) return;
+    monFys.splice(Number(del.dataset.delfy), 1);
+    reload();
+  });
 
   // ---- 성도별 정렬 ----
   // 헤더는 매번 새로 그려지므로 개별 바인딩 대신 #body 에 한 번만 위임한다.
@@ -850,6 +895,37 @@
     setBucket();
     // 조회 대상이 바뀌면 이전 선택은 무효다. 안 지우면 화면에 없는 문서를 일괄 수정하게 된다.
     clearSel();
+
+    // 년간 월별 회기 비교: 표마다 회기가 다르다. 회기별로 로컬에서 읽어 docsByFy 에 모은다.
+    //   전부 로컬(IndexedDB)이라 회기가 몇 개든 Firestore 읽기 0. 구분 전환도 재조회 없이 다시 그린다.
+    if (TYPE === 'monthly') {
+      $('rangeTxt').textContent = '';
+      $('body').innerHTML = '<div class="loading">불러오는 중…</div>';
+      try {
+        docsByFy = {};
+        await Promise.all([...new Set(monFys)].map(async (fy) => {
+          const rr = fyRange(fy);
+          const [ic, ex] = await Promise.all([
+            localRange('offerings', rr.from, rr.to),
+            localRange('expenses', rr.from, rr.to)
+          ]);
+          docsByFy[fy] = { inc: ic, exp: ex };
+        }));
+        // renderWarn 등이 전역 agg 를 참조하므로, 렌더 전에 대표 회기(monFys[0])로 미리 맞춰 둔다.
+        const rep = monFys[0];
+        if (rep != null && docsByFy[rep]) {
+          curFY = rep; setBucket();
+          incDocs = docsByFy[rep].inc; expDocs = docsByFy[rep].exp;
+          agg = aggregate();
+        }
+        renderAll();
+      } catch (e) {
+        console.error(e);
+        $('body').innerHTML = '<div class="loading">조회에 실패했습니다.</div>';
+      }
+      return;
+    }
+
     const r = qRange();
     // range 는 기간을 .period 섹션에 크게 띄우므로 바에는 건수만 나중에 채운다.
     const shown = (TYPE === 'weekly')
@@ -982,11 +1058,24 @@
     } else if (TYPE === 'range') {
       html.push(rangeHtml());
     } else if (TYPE === 'monthly') {
-      // 구분 라디오로 하나만 낸다. 12개월 × 항목 15개짜리 표를 둘 다 쌓으면
-      // 지출을 보려고 수입표를 통째로 지나쳐야 한다.
-      // 특별헌금 체크를 끄면 tail 을 빈 배열로 넘긴다 → 합계(헌금+기타)만 남는다.
-      if (curKind === 'income') html.push(incGrid('수입내역 (월별)'));
-      else html.push(gridHtml('지출내역 (월별)', agg.expRows));
+      // 회기 비교(B안): 전역(curFY·BK·incDocs·expDocs·agg)을 회기마다 잠깐 갈아끼우며 표를 하나씩 뽑는다.
+      //   회기는 표마다 다르지만 구분·특별헌금·기타는 전역이라 모든 표에 똑같이 걸린다.
+      //   합계·소계 규칙은 단일 표와 같다(기타 체크 시에만 합계). 끝나면 대표 회기로 반드시 원복한다.
+      const keepFy = curFY;
+      const title = (curKind === 'income') ? '수입내역 (월별)' : '지출내역 (월별)';
+      monFys.forEach((fy, idx) => {
+        curFY = fy; setBucket();
+        const d = docsByFy[fy] || { inc: [], exp: [] };
+        incDocs = d.inc; expDocs = d.exp; agg = aggregate();
+        const head = fyHeadCtrl(fy, idx);
+        html.push(curKind === 'income'
+          ? incGrid(title, head, true)
+          : gridHtml(title, agg.expRows, null, { fixed: true }, head));
+      });
+      // 원복: 이후 상단바 조작이 대표 회기 기준으로 돌게 전역을 되돌린다.
+      curFY = keepFy; setBucket();
+      const d0 = docsByFy[keepFy] || { inc: [], exp: [] };
+      incDocs = d0.inc; expDocs = d0.exp; agg = aggregate();
     } else if (TYPE === 'weekly') {
       if (!BK.n) html.push('<div class="loading">해당 월에 주일이 없습니다.</div>');
       if (curKind === 'income') html.push(incGrid('수입내역 (주별)'));
@@ -1496,6 +1585,9 @@
   });
 
   function renderWarn() {
+    const box = $('warnBox');
+    // 년간 월별 첫 렌더 등 agg 가 아직 없을 때 참조하면 터진다 → 경고를 숨기고 조용히 빠진다.
+    if (!agg) { box.classList.remove('on'); box.innerHTML = ''; return; }
     const w = [];
     const add = (label, o) => {
       if (o.unmatchedCnt) w.push(`<b>${label} ${o.unmatchedCnt}건(${fmt(o.unmatchedAmt)}원)</b> 이 항목설정에 없는 이름으로 저장되어 있어 <b>표에서 빠졌습니다.</b> 항목명이 바뀌었는지 확인하세요.`);
@@ -1503,7 +1595,6 @@
     };
     add('수입', agg.inc);
     add('지출', agg.exp);
-    const box = $('warnBox');
     box.classList.toggle('on', w.length > 0);
     box.innerHTML = w.join('<br>');
   }
@@ -1608,20 +1699,33 @@
     </div>`;
   }
 
+  // 년간 월별 회기 비교: 표 제목줄 우측의 회기 select + 삭제(×) 버튼 HTML.
+  //   표가 2개 이상일 때만 ×를 낸다 — 최소 한 개는 남긴다.
+  function fyHeadCtrl(fy, idx) {
+    const ys = [...new Set(nodes.map((c) => Number(c.fy)).filter(Boolean))];
+    if (!ys.includes(fy)) ys.push(fy);
+    ys.sort((a, b) => b - a);
+    const opts = ys.map((y) => `<option value="${y}"${y === fy ? ' selected' : ''}>${y}년도</option>`).join('');
+    const del = (monFys.length > 1)
+      ? `<button class="delx" data-delfy="${idx}" title="이 표 삭제" aria-label="이 표 삭제">✕</button>` : '';
+    return `<span class="rt"><select class="fyin" data-fy="${idx}">${opts}</select>${del}</span>`;
+  }
+
   // 수입 월별/주별 그리드. 상단바 '기타' 체크에 따라 '기타' 대분류를 넣거나 뺀다.
-  //   끔(기본): 일반재정만 + 소계(합계 줄 없음) / 켬: 일반재정+기타 + 합계(지금까지의 기본 모습).
-  function incGrid(title) {
+  //   끔(기본): 일반재정만 + 소계(합계 줄 없음 — 소계가 곧 총액) / 켬: 일반재정+기타 + 합계.
+  //   headCtrl 은 제목줄 우측 컨트롤. fixed 는 회기 비교의 고정 격자 여부.
+  function incGrid(title, headCtrl, fixed) {
     const tail = showSp ? agg.special : [];
-    if (showEtc) return gridHtml(title, agg.normal, tail);
+    if (showEtc) return gridHtml(title, agg.normal, tail, { fixed }, headCtrl);
     const gen = agg.normal.filter((r) => r.c1 !== '기타');
-    return gridHtml(title, gen, tail, { forceSub: true, noTotal: true });
+    return gridHtml(title, gen, tail, { forceSub: true, noTotal: true, fixed }, headCtrl);
   }
 
   // ---- 가로표 (년간 12개월 / 월간 주차 공용) ----
   // 이월은 넣지 않는다. 수입이 아니고, 한 칸에 뭉쳐 표를 왜곡한다.
   // tailRows(특별헌금)는 목적기금이라 합계에 넣지 않는다. 합계 '아래'에 별도 블록으로 붙인다.
   //   헌금 › 기타 › [합계 = 헌금+기타] › 특별헌금
-  function gridHtml(title, rows, tailRows, opts) {
+  function gridHtml(title, rows, tailRows, opts, headCtrl) {
     opts = opts || {};   // forceSub: 대분류 1개여도 소계를 냄 / noTotal: 맨 아래 합계 줄 생략
     const tail = tailRows || [];
     if (!rows.length && !tail.length) return '';
@@ -1658,10 +1762,16 @@
       block(groupByC1(tail), true).forEach((s) => body.push(s));
     }
 
+    // 회기 비교(fixed): 모든 표가 같은 col 폭을 써야 세로로 정렬된다.
+    //   폭은 최대 금액(억대 합계)이 안 잘리게 넉넉히 — 월 84px, 합계 98px.
+    const colg = opts.fixed
+      ? `<colgroup><col style="width:66px"><col style="width:88px">${'<col style="width:84px">'.repeat(BK.n)}<col style="width:98px"></colgroup>`
+      : '';
     return `<div class="sect">
-      <div class="sh">${esc(title)}<span class="sub">가로로 밀어서 보세요</span></div>
+      <div class="sh">${esc(title)}<span class="sub">가로로 밀어서 보세요</span>${headCtrl || ''}</div>
       <div class="scrollx">
-        <table class="m">
+        <table class="m${opts.fixed ? ' fixw' : ''}">
+          ${colg}
           <thead><tr>
             <th class="fix1">항목</th><th class="fix2">소항목</th>
             ${labels.map((l) => `<th>${esc(l)}</th>`).join('')}
