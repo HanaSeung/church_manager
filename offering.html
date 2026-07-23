@@ -673,6 +673,11 @@
       : ($('expCat').options[0] ? $('expCat').options[0].textContent : '–');
   }
 
+  // 연동 성도의 등록 배우자 이름을 배우자칸에 채움(배우자 미등록이면 비움 → 직접 입력)
+  function fillSpouseName(mem) {
+    const sp = mem && mem.spouseId ? members.find((x) => x.id === mem.spouseId) : null;
+    $('spouseName').value = sp ? (sp.name || '') : '';
+  }
   // ----- 이름 검색 / 연동 / 간편등록 -----
   function setLinked(m) {
     linked = { id: m.id, no: Number(m.memberNo) || 0, name: m.name };
@@ -680,10 +685,7 @@
     $('incMemberNo').textContent = linked.no || '–';
     $('nameStatus').innerHTML = `<div class="status st-ok">✓ ${esc(m.name)} 성도로 연동됨${linked.no ? (' · #' + linked.no) : ''}</div>`;
     // 배우자 체크 시: 등록된 배우자 이름 자동입력(덮어쓰기). 없으면 비움(직접 입력 가능).
-    if ($('spouseChk').checked) {
-      const sp = m.spouseId ? members.find((x) => x.id === m.spouseId) : null;
-      $('spouseName').value = sp ? (sp.name || '') : '';
-    }
+    if ($('spouseChk').checked) fillSpouseName(m);
   }
   function onNameEdit() {
     // 이름을 고치면 연동 해제 (다시 Enter로 검색)
@@ -776,8 +778,10 @@
   function toggleSpouse() {
     const on = $('spouseChk').checked;
     $('spouseName').disabled = !on;
-    if (!on) $('spouseName').value = '';
-    else $('spouseName').focus();
+    if (!on) { $('spouseName').value = ''; return; }
+    // 체크하는 즉시: 이미 연동된 성도가 있으면 그 배우자 이름을 자동입력(재검색 불필요)
+    if (linked) fillSpouseName(members.find((x) => x.id === linked.id));
+    $('spouseName').focus();
   }
   // ----- 저장 -----
   function showMsg(t) { const m = $('formMsg'); m.textContent = t; m.style.display = 'block'; setTimeout(() => { m.style.display = 'none'; }, 4000); }
@@ -877,7 +881,9 @@
           await localPut('expenses', { id: ref.id, ...payload });
         }
       }
+      const keepSpouse = curTab === 'inc' && $('spouseChk').checked;   // 2-A: 저장 후 배우자 체크 상태만 유지(이름은 초기화)
       resetForm();
+      if (keepSpouse) { $('spouseChk').checked = true; $('spouseName').disabled = false; }
       await loadList();
       return true;
     } catch (e) { showMsg('저장 실패: ' + (e.code || e.message)); }
@@ -1777,6 +1783,8 @@
     $('inAmount').addEventListener('keydown', async (e) => { if (e.key === 'Enter') { e.preventDefault(); if (await save()) { if (curTab === 'inc') $('incName').focus(); } } });
     $('spouseChk').addEventListener('change', toggleSpouse);
     $('inAmount').addEventListener('input', () => { const n = onlyNum($('inAmount').value); $('inAmount').value = n ? wonFmt(n) : ''; });
+    // PC(데스크톱): inputmode="numeric"가 크롬에서 IME를 영문으로 꺼, 금액칸을 거친 뒤 이름칸 한글 입력이 깨짐 → 데스크톱에선 제거(모바일 숫자패드는 유지)
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) $('inAmount').removeAttribute('inputmode');
     $('qaSubmit').onclick = submitQuickAdd;
     $('qaCancel').onclick = closeQuickAdd;
     $('saveBtn').onclick = save;
