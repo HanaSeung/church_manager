@@ -1088,8 +1088,22 @@
     $('viewGroup').classList.toggle('on', v === 'group');
     renderIncList(lastIncRows);
   }
+  // 날짜순 뷰 필터: 입력 폼의 '헌금 항목' 선택으로 조회기간 내 기록을 거른다.
+  // (항목별 뷰는 전체 유지. 매칭은 저장 문서의 code → 이름경로(catPath) 순으로 판별)
+  function incDateFilter(rows) {
+    const it = config.income[+$('incCat').value];
+    if (!it) return rows;
+    const code = it.code || '', want = catKey(pathOf(it));
+    return rows.filter((r) => (code && (r.code || '') === code) ||
+      catKey(r.catPath || [r.c1, r.c2, r.c3].filter(Boolean).join(' › ')) === want);
+  }
   function renderIncList(rows) {
     const box = $('listRows');
+    if (incView !== 'group') rows = incDateFilter(rows);
+    // 합계는 화면에 보이는 행 기준 (날짜순=선택 항목만, 항목별=전체)
+    const sum = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    $('listSum').textContent = `${rows.length}건 · ${wonFmt(sum)}원`;
+    if (!rows.length) { box.innerHTML = '<div class="empty">이 기간에 선택한 항목의 기록이 없습니다.</div>'; return; }
     box.innerHTML = incView === 'group' ? incGroupTable(rows) : incTable(rows);
     box.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => startEditInc(b.getAttribute('data-edit')); });
     const memoMap = {}; rows.forEach((r) => { if (r.memo) memoMap[r.id] = r.memo; });
@@ -1771,8 +1785,8 @@
 
     document.querySelectorAll('.tab').forEach((el) => { el.onclick = () => setTab(el.dataset.tab); });
     $('backBtn').onclick = () => { location.href = 'index.html'; };
-    $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); refreshExpenseCats(); });
-    $('incCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateIncFace(); });
+    $('inDate').addEventListener('change', () => { $('weekBadge').textContent = $('inDate').value ? weekLabel($('inDate').value) : '–'; refreshIncomeCats(); refreshExpenseCats(); if (curTab === 'inc' && incView !== 'group' && lastIncRows.length) renderIncList(lastIncRows); });
+    $('incCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateIncFace(); if (curTab === 'inc' && incView !== 'group') renderIncList(lastIncRows); });
     $('expCat').addEventListener('change', () => { setCatMiss(false); updateCode(); updateExpFace(); });
     $('incName').addEventListener('input', onNameEdit);
     $('incName').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doNameSearch(); if (linked) $('inAmount').focus(); } });
