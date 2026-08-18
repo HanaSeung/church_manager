@@ -75,6 +75,45 @@
     .pray-full { padding:2px 11px 11px 40px; font-size:13px; color:var(--muted); line-height:1.6; white-space:pre-wrap; }
     .family { background:var(--green-soft); border-radius:9px; padding:11px 12px; margin-bottom:12px; }
     .family > .lbl { font-size:13px; color:var(--muted); margin-bottom:7px; }
+    /* ── 가족관계: 자녀 한 줄 목록 ── */
+    .famlist { border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--card); }
+    .famlist:empty { display:none; }
+    .famrow { display:flex; align-items:center; gap:8px; padding:10px 12px; font-size:13.5px; flex-wrap:wrap; }
+    .famrow + .famrow, .fam-edit + .famrow { border-top:1px solid var(--line); }
+    .famrow.freg { cursor:pointer; }
+    .famrow.freg:hover { background:var(--green-soft); }
+    .famrow .fnm { font-weight:700; color:var(--text); }
+    .famrow.freg .fnm { color:var(--green); text-decoration:underline; text-underline-offset:3px; }
+    .famrow .fmeta { color:var(--muted); }
+    .famrow .fsep { color:var(--line); }
+    .famchip { font-size:11.5px; padding:2.5px 9px; border-radius:10px; font-weight:600; white-space:nowrap; }
+    .famchip.own { background:var(--green-soft); color:var(--green); }
+    .famchip.oth { background:#e3edf7; color:#3a6ea8; }
+    .famchip.non { background:var(--bg); color:var(--muted); }
+    .famrow .fright { margin-left:auto; display:flex; align-items:center; gap:6px; }
+    .fam-mini {
+      width:28px; height:28px; border:1px solid var(--line); background:var(--card); color:var(--muted);
+      border-radius:6px; font-size:13px; cursor:pointer; flex-shrink:0; padding:0;
+    }
+    .fam-mini.edit { color:var(--green); border-color:var(--green-soft); }
+    .fam-mini.del { color:var(--danger); }
+    .famno {
+      height:22px; display:inline-flex; align-items:center; background:var(--green-soft); color:var(--green);
+      font-size:11px; font-weight:700; border-radius:6px; flex-shrink:0; padding:0 6px;
+    }
+    .fam-edit { display:none; padding:10px 12px 12px; background:var(--bg); border-top:1px dashed var(--line); }
+    .fam-edit.show { display:block; }
+    .fam-grid { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; }
+    .fam-grid:last-child { margin-bottom:0; }
+    .fam-grid .fg { display:flex; flex-direction:column; }
+    .fam-grid .fg > span { font-size:11px; color:var(--muted); margin-bottom:3px; }
+    .fam-grid input, .fam-grid select { height:34px; font-size:13px; padding:0 9px; }
+    .fam-add {
+      width:100%; height:40px; border:1.5px dashed var(--green); color:var(--green); background:var(--card);
+      border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-top:8px; font-family:inherit;
+    }
+    .fam-add:hover { background:var(--green-soft); }
+    .widowbox { background:var(--amber-soft, #fdf6f0); border:1px solid var(--line); border-radius:8px; padding:11px 13px; margin-top:14px; }
     .agebox { width:62px; flex-shrink:0; height:42px; background:var(--bg); border-radius:8px;
       display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; }
     .acc { border:1px solid var(--line); border-radius:10px; margin-bottom:10px; overflow:hidden; }
@@ -275,6 +314,22 @@
             <input id="fAddress" type="text" placeholder="도로명 주소" readonly style="margin-bottom:7px; background:var(--bg);">
             <input id="fAddressDetail" type="text" placeholder="상세주소 (동·호수)">
           </div>
+          <div class="field" style="margin-top:14px; margin-bottom:0;">
+            <label>고향</label>
+            <div style="display:flex; gap:7px;">
+              <select id="fHomeSido" style="width:132px; flex-shrink:0; padding:0 8px;">
+                <option value="">시/도 선택</option>
+                <option>서울특별시</option><option>부산광역시</option><option>대구광역시</option>
+                <option>인천광역시</option><option>광주광역시</option><option>대전광역시</option>
+                <option>울산광역시</option><option>세종특별자치시</option>
+                <option>경기도</option><option>강원특별자치도</option><option>충청북도</option>
+                <option>충청남도</option><option>전북특별자치도</option><option>전라남도</option>
+                <option>경상남도</option><option>경상북도</option>
+                <option>제주특별자치도</option><option>이북(북한)</option><option>해외</option>
+              </select>
+              <input id="fHomeCity" type="text" placeholder="시/군/구 (예: 함안군)" style="flex:1; min-width:0;">
+            </div>
+          </div>
         </div>
       </div>
 
@@ -395,6 +450,22 @@
               <button class="btn-line" id="spouseBtn">검색</button>
             </div>
           </div>
+          <div class="widowbox" id="rowWidowed" style="display:none;">
+            <div class="field" style="margin-bottom:0;"><label>사별일</label>
+              <div style="display:flex; gap:6px; align-items:center; position:relative; max-width:300px;">
+                <input id="fWidowed" type="text" inputmode="numeric" placeholder="YYYY-MM-DD" style="flex:1; min-width:0;">
+                <button type="button" class="btn-line" id="fWidowedCal" style="padding:0 9px; display:flex; align-items:center; color:var(--green); flex-shrink:0;"></button>
+                <input id="fWidowedPick" type="date" style="position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;">
+              </div>
+              <div class="ferr" id="eWidowedErr">날짜가 올바르지 않습니다.</div>
+              <div class="hint" id="widowHint"></div>
+            </div>
+          </div>
+          <div style="border-top:1px dashed var(--line); margin:16px 0 12px;"></div>
+          <div style="font-size:13px; color:var(--green); font-weight:600; margin-bottom:4px;">👨‍👧‍👦 자녀</div>
+          <div class="hint" style="margin:0 0 9px;">세대주 관계로 등록된 성도는 자동 표시 · 이름 클릭 시 성도정보로 이동</div>
+          <div class="famlist" id="childList"></div>
+          <button type="button" class="fam-add" id="childAddBtn">＋ 가족 추가</button>
         </div>
       </div>
 
@@ -642,7 +713,7 @@
 
     // ── 일괄 가져오기 (일회용, 관리자) ──
     let importParsed = null;
-    const IMPORT_FIELDS = ['name', 'gender', 'birth', 'birthCal', 'phone', 'phoneHome', 'zipcode', 'address', 'addressDetail', 'email', 'regDate', 'regType', 'guide', 'prevChurch', 'grade', 'gradeDate', 'gradeChurch', 'officiant', 'roleCat', 'role', 'memberType', 'status', 'marriage', 'wedDate', 'spouseName', 'memo'];
+    const IMPORT_FIELDS = ['name', 'gender', 'birth', 'birthCal', 'phone', 'phoneHome', 'zipcode', 'address', 'addressDetail', 'hometownSido', 'hometownCity', 'email', 'regDate', 'regType', 'guide', 'prevChurch', 'grade', 'gradeDate', 'gradeChurch', 'officiant', 'roleCat', 'role', 'memberType', 'status', 'marriage', 'wedDate', 'widowedDate', 'spouseName', 'memo'];
     function importLog(msg, color) {
       $('importLog').innerHTML += `<div${color ? ` style="color:var(--${color});"` : ''}>${esc(msg)}</div>`;
     }
@@ -979,7 +1050,7 @@
     function marriageTxt(m) {
       if (!m || !m.marriage) return '';
       if (m.marriage === '사별') {
-        const d = spouseDeathDate(m);
+        const d = spouseDeathDate(m) || m.widowedDate;
         return d ? `사별 · ${dot(d)}` : '사별';
       }
       return m.marriage;
@@ -996,6 +1067,7 @@
       ];
       const extra = [
         ['phone', '집전화', m.phoneHome], ['mail', '이메일', m.email],
+        ['map', '고향', [m.hometownSido, m.hometownCity].filter(Boolean).join(' ')],
         ['church', '이전교회', m.prevChurch], ['church', '옮긴교회', m.movedChurch], ['guide', '인도자', m.guide],
         ['church', '신급교회', m.gradeChurch], ['user', '집례자', m.officiant],
         ['calendar', '임명일', dot(m.roleDate)], ['church', '임직교회', m.roleChurch],
@@ -1048,6 +1120,30 @@
             <span style="font-size:12px; color:var(--muted);">${esc(relTxt)}</span></div>`;
         }).join('')}</div>`;
     }
+    function dUnregChildren(m) {
+      if (!Array.isArray(m.children) || !m.children.length) return '';
+      const rows = m.children.map((c, i) => {
+        const y = parseInt(c.birthYear, 10);
+        const a = (y > 1900 && y < 2100) ? (new Date().getFullYear() - y) : null;
+        const meta = [c.relation, (a != null ? a + '세' : ''), c.marriage || ''].filter(Boolean).join(' · ');
+        let chip = '';
+        if (c.religion === '기독교' || c.religion === '천주교') {
+          const t = [c.church, c.attend].filter(Boolean).join(' · ');
+          if (t) chip = `<span class="famchip ${/^본\s*교회$|^본교$/.test((c.church || '').trim()) ? 'own' : 'oth'}">${esc(t)}</span>`;
+        } else if (c.religion) chip = `<span class="famchip non">${esc(c.religion)}</span>`;
+        const sub = [
+          c.phone ? `<a href="tel:${esc((c.phone || '').replace(/[^0-9+]/g, ''))}" style="color:var(--green); text-decoration:none;">${esc(c.phone)}</a>` : '',
+          c.address ? esc(c.address) : '',
+        ].filter(Boolean).join(' · ');
+        return `<div class="famrow"${i ? ' style="border-top:1px solid var(--line);"' : ''}>
+            <span class="fnm">${esc(c.name)}</span>
+            <span class="fmeta">${esc(meta)}</span>
+            ${chip ? `<span class="fsep">|</span>${chip}` : ''}
+            ${sub ? `<span style="flex-basis:100%; font-size:12px; color:var(--muted); margin-top:3px;">${sub}</span>` : ''}
+          </div>`;
+      }).join('');
+      return `<div class="dsec">미등록 가족</div><div class="famlist">${rows}</div>`;
+    }
     function dColsBody(m) {
       const age = ageOf(m);
       const birthTxt = m.birth ? (esc(m.birth) + (m.birthCal === 'lunar' ? ' (음)' : (m.birthCal === 'solar' ? ' (양)' : '')) + (age != null ? ` · ${ageLabel(m)} ${age}세` : '')) : '';
@@ -1057,6 +1153,7 @@
          ${drow('생일', birthTxt)}
          ${drow('이메일', esc(m.email))}
          ${drow('주소', esc([m.zipcode ? '(' + m.zipcode + ')' : '', m.address, m.addressDetail].filter(Boolean).join(' ')))}
+         ${drow('고향', esc([m.hometownSido, m.hometownCity].filter(Boolean).join(' ')))}
          <div class="dsec">등록</div>
          ${drow('등록일', esc(dot(m.regDate)))}
          ${drow('등록배경', esc(m.regType))}
@@ -1074,7 +1171,8 @@
          ${drow('결혼관계', esc(marriageTxt(m)))}
          ${drow('결혼일', esc(dot(m.wedDate)))}
          ${drow('배우자', esc(m.spouseName))}
-         ${dFamilyChips(m)}`;
+         ${dFamilyChips(m)}
+         ${dUnregChildren(m)}`;
     }
     function dMemoPrayers(m) {
       return `${m.memo ? `<div class="dsec">메모</div><div style="font-size:14px; color:var(--text); white-space:pre-wrap; padding-top:6px;">${esc(m.memo)}</div>` : ''}
@@ -1091,9 +1189,9 @@
     }
     function renderDetailBody(m) {
       const L = getLayout();
-      if (L === '2') return dIdentityGreen(m) + dSummaryTiles(m) + dIconCard(m) + dFamilyCard(m);
-      if (L === '3') return dIdentity(m) + dIconCard(m) + dFamilyCard(m);
-      if (L === '4') return dIdentity(m) + dActions(m, true) + dIconCard(m) + dFamilyCard(m);
+      if (L === '2') return dIdentityGreen(m) + dSummaryTiles(m) + dIconCard(m) + dFamilyCard(m) + dUnregChildren(m);
+      if (L === '3') return dIdentity(m) + dIconCard(m) + dFamilyCard(m) + dUnregChildren(m);
+      if (L === '4') return dIdentity(m) + dActions(m, true) + dIconCard(m) + dFamilyCard(m) + dUnregChildren(m);
       return dIdentity(m) + dActions(m, false) + dColsBody(m);
     }
 
@@ -1163,6 +1261,8 @@
       $('fZip').value = m?.zipcode || '';
       $('fAddress').value = m?.address || '';
       $('fAddressDetail').value = m?.addressDetail || '';
+      $('fHomeSido').value = m?.hometownSido || '';
+      $('fHomeCity').value = m?.hometownCity || '';
       setEmailFields(m?.email || '');
       // 신규 등록일 때만 오늘 날짜를 기본값으로. 기존 성도는 빈 값을 그대로 유지한다.
       // (m?.regDate || today) 로 하면 등록일을 지운 성도가 다시 열 때 오늘 날짜로 되살아난다.
@@ -1204,6 +1304,11 @@
       pickGuideId = m?.guideId || null;
       const _guideM = m?.guideId ? allMembers.find((x) => x.id === m.guideId) : null;
       setGuideBadge(_guideM ? _guideM.memberNo : null);
+      $('fWidowed').value = m?.widowedDate || '';
+      $('fWidowed').classList.remove('invalid'); $('eWidowedErr').classList.remove('show');
+      syncWidowRow();
+      childrenEdit = Array.isArray(m?.children) ? m.children.map((c) => ({ ...c, _open: false })) : [];
+      renderChildList();
       $('dupHint').className = 'hint'; $('dupHint').textContent = '';
       $('editMsg').style.display = 'none';
       updateAge();
@@ -1320,6 +1425,134 @@
     // 신급일·결혼일: 연(1985) / 연월(1985-03) / 연월일(1985-03-15) 모두 허용 — 아는 만큼만 입력
     const applyGradeDate = setupDateInput('fGradeDate', 'eGradeDateErr', 'fGradeDateCal', 'fGradeDatePick', 'partial');
     const applyWedDate = setupDateInput('fWed', 'eWedErr', 'fWedCal', 'fWedPick', 'partial');
+    const applyWidowDate = setupDateInput('fWidowed', 'eWidowedErr', 'fWidowedCal', 'fWidowedPick', 'partial');
+
+    // ── 결혼관계=사별 → 사별일 칸 표시 ──
+    function syncWidowRow() {
+      const on = $('fMarriage').value === '사별';
+      $('rowWidowed').style.display = on ? '' : 'none';
+      if (!on) { $('fWidowed').value = ''; $('fWidowed').classList.remove('invalid'); $('eWidowedErr').classList.remove('show'); }
+      else {
+        // 등록된 배우자에게 별세일이 있으면 안내 (그 값이 우선 표시됨)
+        const spd = pickSpouseId ? ((allMembers.find((x) => x.id === pickSpouseId) || {}).deceasedDate || '') : '';
+        $('widowHint').textContent = spd ? `등록된 배우자의 별세일(${spd})이 있어 비워두면 그 날짜가 표시됩니다.` : '';
+      }
+    }
+    $('fMarriage').addEventListener('change', syncWidowRow);
+
+    // ── 자녀 (미등록 가족은 성도 문서의 children 배열에 저장) ──
+    let childrenEdit = [];
+    const REL_CHILD = /^(아들|딸)/;
+    function childAge(c) {
+      const y = parseInt(c.birthYear, 10);
+      if (!(y > 1900 && y < 2100)) return null;
+      return new Date().getFullYear() - y;
+    }
+    function childFaithChip(c) {
+      if (c.religion === '기독교' || c.religion === '천주교') {
+        const t = [c.church, c.attend].filter(Boolean).join(' · ');
+        if (!t) return '';
+        const own = /^본\s*교회$|^본교$/.test((c.church || '').trim());
+        return `<span class="famchip ${own ? 'own' : 'oth'}">${esc(t)}</span>`;
+      }
+      return c.religion ? `<span class="famchip non">${esc(c.religion)}</span>` : '';
+    }
+    function childLineMeta(c) {
+      const a = childAge(c);
+      return [c.relation, (a != null ? a + '세' : ''), c.marriage || ''].filter(Boolean).join(' · ');
+    }
+    function regChildRow(x) {
+      const a = ageOf(x);
+      const rel = relLabel(x.relation).replace(/\d+$/, '');
+      const meta = [rel, (a != null ? a + '세' : '')].filter(Boolean).join(' · ');
+      const chip = `<span class="famchip own">본교회${x.status ? ' · ' + esc(x.status) : ''}</span>`;
+      return `<div class="famrow freg" data-openid="${x.id}">
+          <span class="famno">#${esc(x.memberNo != null ? String(x.memberNo).padStart(3, '0') : '')}</span>
+          <span class="fnm">${esc(x.name)}</span>
+          <span class="fmeta">${esc(meta)}</span>
+          <span class="fsep">|</span>${chip}
+          <span class="fright" style="color:var(--muted);">›</span>
+        </div>`;
+    }
+    function unregChildRow(c, i) {
+      const relSel = (v) => ['아들', '딸'].map((r) => `<option${r === v ? ' selected' : ''}>${r}</option>`).join('');
+      const faithOn = (c.religion === '기독교' || c.religion === '천주교');
+      return `<div class="famrow" data-cidx="${i}">
+          <span class="fnm">${esc(c.name || '(이름 없음)')}</span>
+          <span class="fmeta">${esc(childLineMeta(c))}</span>
+          <span class="fchipwrap" style="display:contents;">${childFaithChip(c) ? `<span class="fsep">|</span>${childFaithChip(c)}` : ''}</span>
+          <span class="fright">
+            <button type="button" class="fam-mini edit" data-cedit="${i}">✎</button>
+            <button type="button" class="fam-mini del" data-cdel="${i}">×</button>
+          </span>
+        </div>
+        <div class="fam-edit${c._open ? ' show' : ''}" data-cpanel="${i}">
+          <div class="fam-grid">
+            <div class="fg" style="flex:1.2; min-width:110px;"><span>이름</span><input data-cf="name" value="${esc(c.name || '')}" placeholder="자녀 이름"></div>
+            <div class="fg" style="width:70px;"><span>관계</span><select data-cf="relation">${relSel(c.relation || '아들')}</select></div>
+            <div class="fg" style="width:82px;"><span>출생년</span><input data-cf="birthYear" inputmode="numeric" value="${esc(c.birthYear || '')}" placeholder="YYYY"></div>
+            <div class="fg" style="width:84px;"><span>결혼여부</span><select data-cf="marriage"><option value="">선택</option>${['미혼', '기혼', '이혼', '사별', '재혼', '별거'].map((r) => `<option${r === c.marriage ? ' selected' : ''}>${r}</option>`).join('')}</select></div>
+            <div class="fg" style="flex:1; min-width:140px;"><span>연락처</span><input data-cf="phone" type="tel" inputmode="numeric" value="${esc(c.phone || '')}" placeholder="010-0000-0000"></div>
+          </div>
+          <div class="fam-grid">
+            <div class="fg" style="width:92px;"><span>종교</span><select data-cf="religion"><option value="">선택</option>${['기독교', '천주교', '불교', '무교', '기타'].map((r) => `<option${r === c.religion ? ' selected' : ''}>${r}</option>`).join('')}</select></div>
+            <div class="fg" style="flex:1; min-width:120px;"><span>교회</span><input data-cf="church" value="${esc(c.church || '')}" placeholder="다니는 교회"${faithOn ? '' : ' disabled style="background:var(--bg);"'}></div>
+            <div class="fg" style="width:92px;"><span>출석</span><select data-cf="attend"${faithOn ? '' : ' disabled style="background:var(--bg);"'}><option value="">선택</option>${['정기출석', '가끔출석', '미출석'].map((r) => `<option${r === c.attend ? ' selected' : ''}>${r}</option>`).join('')}</select></div>
+            <div class="fg" style="flex:1.4; min-width:170px;"><span>주소</span><input data-cf="address" value="${esc(c.address || '')}" placeholder="예: 서울 강서구 ○○동"></div>
+          </div>
+        </div>`;
+    }
+    function renderChildList() {
+      const box = $('childList');
+      let regHtml = '';
+      if (editingId) {
+        const m = allMembers.find((x) => x.id === editingId);
+        // 부모 세대(본인·남편·처)일 때만 세대의 아들·딸을 자녀로 자동 표시
+        const relSelf = ((m && m.relation) || '').replace('(세대주)', '');
+        if (m && (relSelf === '' || relSelf === '본인' || relSelf === '남편' || relSelf === '처')) {
+          regHtml = householdMembers(m)
+            .filter((x) => x.id !== m.id && REL_CHILD.test((x.relation || '').replace('(세대주)', '')))
+            .map(regChildRow).join('');
+        }
+      }
+      box.innerHTML = regHtml + childrenEdit.map(unregChildRow).join('');
+      box.querySelectorAll('.famrow.freg').forEach((el) =>
+        el.addEventListener('click', () => openDetail(el.dataset.openid)));
+      box.querySelectorAll('[data-cedit]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const i = +b.dataset.cedit;
+          childrenEdit[i]._open = !childrenEdit[i]._open;
+          box.querySelector(`[data-cpanel="${i}"]`).classList.toggle('show', childrenEdit[i]._open);
+        }));
+      box.querySelectorAll('[data-cdel]').forEach((b) =>
+        b.addEventListener('click', () => { childrenEdit.splice(+b.dataset.cdel, 1); renderChildList(); }));
+      box.querySelectorAll('[data-cpanel]').forEach((panel) => {
+        const i = +panel.dataset.cpanel;
+        panel.querySelectorAll('[data-cf]').forEach((inp) => {
+          inp.addEventListener('input', () => {
+            if (inp.dataset.cf === 'phone') inp.value = fmtPhone(inp.value);
+            childrenEdit[i][inp.dataset.cf] = inp.value.trim();
+            if (inp.dataset.cf === 'religion') {
+              const on = (inp.value === '기독교' || inp.value === '천주교');
+              const ch = panel.querySelector('[data-cf="church"]'), at = panel.querySelector('[data-cf="attend"]');
+              [ch, at].forEach((el) => { el.disabled = !on; el.style.background = on ? '' : 'var(--bg)'; if (!on) { el.value = ''; childrenEdit[i][el.dataset.cf] = ''; } });
+            }
+            // 요약 줄 갱신 (입력란 포커스 유지 위해 해당 줄만)
+            const row = panel.previousElementSibling;
+            row.querySelector('.fnm').textContent = childrenEdit[i].name || '(이름 없음)';
+            row.querySelector('.fmeta').textContent = childLineMeta(childrenEdit[i]);
+            const chip = childFaithChip(childrenEdit[i]);
+            row.querySelector('.fchipwrap').innerHTML = chip ? `<span class="fsep">|</span>${chip}` : '';
+          });
+        });
+      });
+    }
+    $('childAddBtn').addEventListener('click', () => {
+      childrenEdit.push({ name: '', relation: '아들', birthYear: '', marriage: '', phone: '', religion: '', church: '', attend: '', address: '', _open: true });
+      renderChildList();
+      const last = $('childList').querySelector(`[data-cpanel="${childrenEdit.length - 1}"] [data-cf="name"]`);
+      if (last) last.focus();
+    });
     const applyPrayDate = setupDateInput('fPrayDate', 'ePrayDateErr', 'prayDateCal', 'prayDatePick', 'date');
     const applyDeceased = setupDateInput('fDeceased', 'eDeceasedErr', 'fDeceasedCal', 'fDeceasedPick', 'date');
 
@@ -1653,6 +1886,7 @@
       applyRegDate();
       applyGradeDate();
       applyWedDate();
+      applyWidowDate();
       applyDeceased();
       const base = {
         name,
@@ -1664,6 +1898,8 @@
         zipcode: $('fZip').value.trim(),
         address: $('fAddress').value.trim(),
         addressDetail: $('fAddressDetail').value.trim(),
+        hometownSido: $('fHomeSido').value,
+        hometownCity: $('fHomeCity').value.trim(),
         email: emailVal,
         regDate: $('fRegDate').value,
         regType: $('fRegType').value,
@@ -1685,6 +1921,10 @@
         attendChurch: $('fType').value === '타교인' ? $('fAttendChurch').value.trim() : '',
         marriage: $('fMarriage').value,
         wedDate: $('fWed').value,
+        widowedDate: $('fMarriage').value === '사별' ? $('fWidowed').value.trim() : '',
+        children: childrenEdit
+          .map(({ _open, ...c }) => c)
+          .filter((c) => (c.name || '').trim()),
         spouseId: pickSpouseId || null,
         spouseName: $('fSpouse').value.trim(),
         memo: $('fMemo').value.trim(),
