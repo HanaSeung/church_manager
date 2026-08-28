@@ -11,3 +11,9 @@ _*.txt
 
 # 작업 기록 (개인용 — push 제외)
 worklog/
+
+# 원어(스트롱) 개인용 사전 — 공개 저장소 제외 (저작권/사적이용)
+data/bible/*.dct
+data/bible/*.dct-journal
+data/bible/*.sdb
+data/bible/lexicon_ko.json
