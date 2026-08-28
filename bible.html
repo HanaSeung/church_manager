@@ -49,7 +49,7 @@
           <button id="locBtn" class="locbox" title="책·장·절 선택">
             <span id="locBook" class="loc-book">창</span><span id="locCV" class="loc-cv">1:1</span>
           </button>
-          <button id="stronBtn" class="stronbtn" title="원어(스트롱) 보기">원어</button>
+          <button id="stronBtn" class="stronbtn disabled" title="원어(스트롱) 보기">원어</button>
         </div>
         <div class="grp btns">
           <button id="prevBtn" class="navb ic" title="이전 장">◀</button>
@@ -99,6 +99,7 @@
     <div id="shBody" class="sh-body"></div>
   </div>
   <input type="file" id="lexFile" accept=".json,application/json" style="display:none;">
+  <div id="toast" class="toast"></div>
 
   <div class="wrap">
     <div id="status" class="status">데이터를 불러오는 중…</div>
@@ -183,8 +184,14 @@
     /* 원어(스트롱) 기능 */
     .stronbtn { flex:0 0 auto; padding:5px 10px; font-size:13px; font-weight:500;
       border:1px solid var(--line); background:#fff; border-radius:8px; color:var(--muted);
-      cursor:pointer; white-space:nowrap; display:none; }
+      cursor:pointer; white-space:nowrap; }
     .stronbtn.on { background:var(--green); color:#fff; border-color:var(--green); }
+    .stronbtn.disabled { opacity:.45; }
+    .toast { position:fixed; left:50%; bottom:80px; transform:translateX(-50%) translateY(10px);
+      background:rgba(31,36,33,.92); color:#fff; font-size:14px; padding:10px 16px;
+      border-radius:20px; z-index:80; opacity:0; pointer-events:none; transition:.25s;
+      white-space:nowrap; max-width:90vw; text-align:center; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
     body.stron .vtext .w.has { border-bottom:1.5px dotted var(--green); color:var(--green-d); cursor:pointer; }
     body.stron .vtext .w.has:active { background:var(--green-soft); }
     .sheet-mask { position:fixed; inset:0; background:rgba(0,0,0,.35); opacity:0;
@@ -565,13 +572,44 @@
       return html;
     }
 
-    // 현재 버전이 스트롱 코드를 가졌는지 감지 → 원어 버튼 노출/숨김
+    // 토스트 (비침습 알림)
+    var toastEl = document.getElementById('toast');
+    var toastTimer = null;
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+    }
+
+    var PENDING_STRON = false;
+
+    // 원어 모드 켜기 (사전 없으면 임포트 유도)
+    function enableStron() {
+      lexCount(function (n) {
+        if (n === 0) {
+          if (confirm('원어사전이 필요합니다.\n사전 파일(lexicon_ko.json)을 불러올까요?')) lexFile.click();
+          return;
+        }
+        document.body.classList.add('stron');
+        stronBtn.classList.add('on');
+        try { localStorage.setItem('bibleStron', '1'); } catch (e) {}
+      });
+    }
+
+    // 현재 버전이 스트롱 코드를 가졌는지 감지 → 원어 버튼 활성/비활성
     function detectCodes() {
       HAS_CODES = false;
       try { HAS_CODES = (BIBLE.books[0].chapters[0][0] || '').indexOf('<W') !== -1; } catch (e) {}
-      stronBtn.style.display = HAS_CODES ? 'inline-block' : 'none';
+      stronBtn.classList.toggle('disabled', !HAS_CODES);
       if (!HAS_CODES) {
-        document.body.classList.remove('stron'); stronBtn.classList.remove('on');
+        document.body.classList.remove('stron');
+        stronBtn.classList.remove('on');
+        return;
+      }
+      if (PENDING_STRON) {
+        PENDING_STRON = false;
+        enableStron();
       } else if (localStorage.getItem('bibleStron') === '1') {
         lexCount(function (n) {
           if (n > 0) { document.body.classList.add('stron'); stronBtn.classList.add('on'); }
@@ -579,17 +617,22 @@
       }
     }
 
-    // 원어 토글 (사전 없으면 임포트 유도)
+    // 원어 버튼: 개역개정S면 토글 / 다른 번역본이면 개역개정S로 자동 전환 후 켜기
     stronBtn.addEventListener('click', function () {
-      lexCount(function (n) {
-        if (n === 0) {
-          if (confirm('원어사전이 필요합니다.\n사전 파일(lexicon_ko.json)을 불러올까요?')) lexFile.click();
-          return;
-        }
-        var on = document.body.classList.toggle('stron');
-        stronBtn.classList.toggle('on', on);
-        try { localStorage.setItem('bibleStron', on ? '1' : '0'); } catch (e) {}
-      });
+      if (!HAS_CODES) {
+        if (VERSIONS.indexOf('개역개정S') === -1) { toast('개역개정S 번역본이 없습니다'); return; }
+        PENDING_STRON = true;
+        toast('개역개정S(원어)로 전환했습니다');
+        loadVersion('개역개정S', curBook, curChap);
+        return;
+      }
+      if (document.body.classList.contains('stron')) {
+        document.body.classList.remove('stron');
+        stronBtn.classList.remove('on');
+        try { localStorage.setItem('bibleStron', '0'); } catch (e) {}
+      } else {
+        enableStron();
+      }
     });
 
     // 사전 파일 임포트 (1회 — IndexedDB에 저장)
