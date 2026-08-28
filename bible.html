@@ -49,6 +49,7 @@
           <button id="locBtn" class="locbox" title="책·장·절 선택">
             <span id="locBook" class="loc-book">창</span><span id="locCV" class="loc-cv">1:1</span>
           </button>
+          <button id="stronBtn" class="stronbtn" title="원어(스트롱) 보기">원어</button>
         </div>
         <div class="grp btns">
           <button id="prevBtn" class="navb ic" title="이전 장">◀</button>
@@ -86,6 +87,18 @@
       <div id="verList" class="picker-col" style="max-height:60vh;"></div>
     </div>
   </div>
+
+  <div id="sheetMask" class="sheet-mask"></div>
+  <div id="lexSheet" class="sheet">
+    <div class="grip"></div>
+    <div class="sh-head">
+      <span id="shCode" class="sh-code"></span>
+      <span id="shWord" class="sh-word"></span>
+      <button id="shX" class="sh-x">×</button>
+    </div>
+    <div id="shBody" class="sh-body"></div>
+  </div>
+  <input type="file" id="lexFile" accept=".json,application/json" style="display:none;">
 
   <div class="wrap">
     <div id="status" class="status">데이터를 불러오는 중…</div>
@@ -167,6 +180,32 @@
     .sr-head { display:flex; justify-content:space-between; align-items:center;
       padding:6px 12px 12px; color:var(--muted); font-size:13px; }
     .sr-close { cursor:pointer; color:var(--green); font-weight:700; }
+    /* 원어(스트롱) 기능 */
+    .stronbtn { flex:0 0 auto; padding:5px 10px; font-size:13px; font-weight:500;
+      border:1px solid var(--line); background:#fff; border-radius:8px; color:var(--muted);
+      cursor:pointer; white-space:nowrap; display:none; }
+    .stronbtn.on { background:var(--green); color:#fff; border-color:var(--green); }
+    body.stron .vtext .w.has { border-bottom:1.5px dotted var(--green); color:var(--green-d); cursor:pointer; }
+    body.stron .vtext .w.has:active { background:var(--green-soft); }
+    .sheet-mask { position:fixed; inset:0; background:rgba(0,0,0,.35); opacity:0;
+      pointer-events:none; transition:.2s; z-index:60; }
+    .sheet-mask.show { opacity:1; pointer-events:auto; }
+    .sheet { position:fixed; left:0; right:0; bottom:0; z-index:70; background:#fff;
+      border-radius:16px 16px 0 0; max-height:74vh; transform:translateY(100%);
+      transition:transform .25s; display:flex; flex-direction:column;
+      box-shadow:0 -4px 20px rgba(0,0,0,.15); }
+    .sheet.show { transform:translateY(0); }
+    .sheet .grip { width:38px; height:4px; border-radius:2px; background:#d7dbd7; margin:8px auto 0; }
+    .sheet .sh-head { display:flex; align-items:center; gap:10px; padding:12px 16px 10px;
+      border-bottom:1px solid var(--line); }
+    .sheet .sh-code { background:var(--green-soft); color:var(--green-d); font-weight:700;
+      font-size:13px; padding:3px 9px; border-radius:6px; }
+    .sheet .sh-word { font-size:15px; color:var(--muted); flex:1; }
+    .sheet .sh-x { border:none; background:none; font-size:22px; color:var(--muted);
+      cursor:pointer; line-height:1; padding:0 4px; }
+    .sheet .sh-body { overflow-y:auto; padding:14px 18px 26px; font-size:15px; line-height:1.75; }
+    .sheet .sh-body num { color:#2f6fd6; font-weight:600; }
+    .sheet .noentry { color:var(--muted); font-size:14px; }
   </style>
 
   <script>
@@ -242,6 +281,7 @@
           curVersion = version;
           verBtn.textContent = version;
           buildVersionOptions();
+          detectCodes();
           statusEl.style.display = 'none';
           showChapter(bookIdx || 0, chapIdx || 0);
           adjustHeadSpace();
@@ -283,7 +323,7 @@
       var html = '<div class="chap-title">' + book.name + ' ' + (chapIdx + 1) + '장</div>';
       verses.forEach(function (txt, i) {
         html += '<p class="verse" id="v' + (i + 1) + '"><span class="vnum">' + (i + 1) + '</span>' +
-          '<span class="vtext">' + escapeHtml(txt) + '</span></p>';
+          '<span class="vtext">' + renderVerseText(txt) + '</span></p>';
       });
       contentEl.innerHTML = html;
 
@@ -464,6 +504,139 @@
     document.getElementById('fsUp').addEventListener('click', function () { setFont(FS + 2); });
     document.getElementById('fsDown').addEventListener('click', function () { setFont(FS - 2); });
     setFont(FS);
+
+    // ===== 원어(스트롱) 기능 =====
+    var HAS_CODES = false;
+    var stronBtn = document.getElementById('stronBtn');
+    var sheetMask = document.getElementById('sheetMask');
+    var sheetEl = document.getElementById('lexSheet');
+    var lexFile = document.getElementById('lexFile');
+    var LEXDB = null;
+
+    // 사전 저장소 (IndexedDB — 개인 기기 내부, 서버 전송 없음)
+    (function openLexDB() {
+      try {
+        var req = indexedDB.open('bibleLex', 1);
+        req.onupgradeneeded = function (e) { e.target.result.createObjectStore('lex'); };
+        req.onsuccess = function (e) { LEXDB = e.target.result; };
+        req.onerror = function () { LEXDB = null; };
+      } catch (e) { LEXDB = null; }
+    })();
+
+    function lexGet(code, cb) {
+      if (!LEXDB) { cb(null); return; }
+      try {
+        var r = LEXDB.transaction('lex', 'readonly').objectStore('lex').get(code);
+        r.onsuccess = function () { cb(r.result || null); };
+        r.onerror = function () { cb(null); };
+      } catch (e) { cb(null); }
+    }
+    function lexCount(cb) {
+      if (!LEXDB) { cb(0); return; }
+      try {
+        var r = LEXDB.transaction('lex', 'readonly').objectStore('lex').count();
+        r.onsuccess = function () { cb(r.result || 0); };
+        r.onerror = function () { cb(0); };
+      } catch (e) { cb(0); }
+    }
+    function lexImport(obj, cb) {
+      if (!LEXDB) { cb(false); return; }
+      try {
+        var tx = LEXDB.transaction('lex', 'readwrite');
+        var store = tx.objectStore('lex');
+        Object.keys(obj).forEach(function (k) { store.put(obj[k], k); });
+        tx.oncomplete = function () { cb(true); };
+        tx.onerror = function () { cb(false); };
+      } catch (e) { cb(false); }
+    }
+
+    // 본문 렌더: <WH####>/<WG####> 코드는 숨기고 단어를 탭 가능하게
+    function renderVerseText(txt) {
+      if (!txt || txt.indexOf('<W') === -1) return escapeHtml(txt || '');
+      var html = '', re = /([^<]*)<W([HG]\d+[a-z]?)>/g, m, last = 0;
+      while ((m = re.exec(txt)) !== null) {
+        var seg = m[1], code = m[2];
+        var tappable = (code !== 'G0' && code !== 'H0');
+        html += '<span class="w' + (tappable ? ' has' : '') + '" data-code="' + code + '">' +
+          escapeHtml(seg) + '</span>';
+        last = re.lastIndex;
+      }
+      if (last < txt.length) html += escapeHtml(txt.slice(last));
+      return html;
+    }
+
+    // 현재 버전이 스트롱 코드를 가졌는지 감지 → 원어 버튼 노출/숨김
+    function detectCodes() {
+      HAS_CODES = false;
+      try { HAS_CODES = (BIBLE.books[0].chapters[0][0] || '').indexOf('<W') !== -1; } catch (e) {}
+      stronBtn.style.display = HAS_CODES ? 'inline-block' : 'none';
+      if (!HAS_CODES) {
+        document.body.classList.remove('stron'); stronBtn.classList.remove('on');
+      } else if (localStorage.getItem('bibleStron') === '1') {
+        lexCount(function (n) {
+          if (n > 0) { document.body.classList.add('stron'); stronBtn.classList.add('on'); }
+        });
+      }
+    }
+
+    // 원어 토글 (사전 없으면 임포트 유도)
+    stronBtn.addEventListener('click', function () {
+      lexCount(function (n) {
+        if (n === 0) {
+          if (confirm('원어사전이 필요합니다.\n사전 파일(lexicon_ko.json)을 불러올까요?')) lexFile.click();
+          return;
+        }
+        var on = document.body.classList.toggle('stron');
+        stronBtn.classList.toggle('on', on);
+        try { localStorage.setItem('bibleStron', on ? '1' : '0'); } catch (e) {}
+      });
+    });
+
+    // 사전 파일 임포트 (1회 — IndexedDB에 저장)
+    lexFile.addEventListener('change', function () {
+      var f = this.files[0]; if (!f) return;
+      statusEl.style.display = 'block';
+      statusEl.textContent = '사전을 불러오는 중…';
+      var reader = new FileReader();
+      reader.onload = function () {
+        var obj;
+        try { obj = JSON.parse(reader.result); }
+        catch (e) { statusEl.style.display = 'none'; alert('사전 파일을 읽지 못했습니다.'); return; }
+        lexImport(obj, function (ok) {
+          statusEl.style.display = 'none';
+          if (ok) {
+            document.body.classList.add('stron'); stronBtn.classList.add('on');
+            try { localStorage.setItem('bibleStron', '1'); } catch (e) {}
+            alert('원어사전 불러오기 완료 (' + Object.keys(obj).length + '개 항목)');
+          } else { alert('사전 저장에 실패했습니다.'); }
+        });
+      };
+      reader.readAsText(f);
+      this.value = '';
+    });
+
+    // 단어 탭 → 하단 시트
+    contentEl.addEventListener('click', function (e) {
+      if (!document.body.classList.contains('stron')) return;
+      var el = e.target.closest ? e.target.closest('.w.has') : null;
+      if (!el) return;
+      openSheet(el.getAttribute('data-code'), el.textContent.trim());
+    });
+
+    function openSheet(code, word) {
+      lexGet(code, function (txt) {
+        document.getElementById('shCode').textContent = code;
+        document.getElementById('shWord').textContent = word;
+        document.getElementById('shBody').innerHTML = txt
+          ? txt.replace('^', '<br>')
+          : '<span class="noentry">이 단어의 원어 뜻 정보가 없습니다.</span>';
+        sheetMask.classList.add('show');
+        sheetEl.classList.add('show');
+      });
+    }
+    function closeSheet() { sheetMask.classList.remove('show'); sheetEl.classList.remove('show'); }
+    document.getElementById('shX').addEventListener('click', closeSheet);
+    sheetMask.addEventListener('click', closeSheet);
   </script>
 </body>
 </html>
