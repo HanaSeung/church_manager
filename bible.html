@@ -256,8 +256,13 @@
     .comm-blk p { margin:0 0 7px; } .comm-blk p:last-child { margin-bottom:0; }
     .comm-blk strong { font-weight:700; }
     /* 옵션 화면 */
-    .opt-body { max-height:70vh; overflow-y:auto; padding:6px 0 16px; }
-    .opt-sec-t { font-size:13px; font-weight:700; color:var(--green-d); padding:14px 16px 6px; }
+    .opt-body { max-height:70vh; overflow-y:auto; padding:0 0 16px; }
+    .opt-sec-t { font-size:14px; font-weight:700; color:#fff; background:var(--green);
+      padding:10px 16px; letter-spacing:.02em; }
+    .opt-sec-t.sub { color:var(--green-d); background:var(--green-soft); font-size:12.5px; }
+    .opt-sec + .opt-sec { margin-top:14px; }
+    .opt-sec { border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:14px 12px 0; }
+    .opt-sec .opt-item:last-child { border-bottom:none; }
     .opt-item { display:flex; align-items:center; gap:10px; padding:11px 16px;
       border-bottom:1px solid var(--line); }
     .opt-item .oi-name { flex:1 1 auto; font-size:14.5px; }
@@ -1246,25 +1251,28 @@
       }
 
       function render() {
-        var h = '<div class="opt-sec-t">번역본 관리</div>';
+        var h = '<div class="opt-sec"><div class="opt-sec-t">번역본 관리</div>';
         if (!VERSIONS.length) h += '<div class="opt-empty">표시할 번역본이 없습니다.</div>';
         VERSIONS.forEach(function (v) {
           h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
             '<button class="opt-del" data-delv="' + v + '">삭제</button></div>';
         });
+        h += '</div>';
         if (REMOVED_DEPLOYED.length) {
-          h += '<div class="opt-sec-t">삭제한 번역본 복원</div>';
+          h += '<div class="opt-sec"><div class="opt-sec-t sub">삭제한 번역본 복원</div>';
           REMOVED_DEPLOYED.forEach(function (v) {
             h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
               '<button class="opt-restore" data-restv="' + v + '">복원</button></div>';
           });
+          h += '</div>';
         }
-        h += '<div class="opt-sec-t">주석 관리</div>';
+        h += '<div class="opt-sec"><div class="opt-sec-t">주석 관리</div>';
         if (!COMM_NAMES.length) h += '<div class="opt-empty">불러온 주석이 없습니다.</div>';
         COMM_NAMES.forEach(function (n) {
           h += '<div class="opt-item"><span class="oi-name">' + n + '</span>' +
             '<button class="opt-del" data-delc="' + n + '">삭제</button></div>';
         });
+        h += '</div>';
         optBody.innerHTML = h;
         optBody.querySelectorAll('[data-delv]').forEach(function (b) {
           b.onclick = function () {
