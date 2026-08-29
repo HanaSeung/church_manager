@@ -271,12 +271,19 @@
     }
     openLexDB(startApp);
 
-    // 배포 번역본 + 임포트 번역본 병합 → 목록 갱신
+    // 이름 정규화 (괄호·공백 제거, 소문자) — 중복 판별용. 예: "NIV(2011)"="NIV2011"
+    function normName(s) { return String(s).replace(/[()\s]/g, '').toLowerCase(); }
+
+    // 배포 번역본 + 임포트 번역본 병합 → 목록 갱신 (기본 제공과 중복은 숨김)
     function refreshVersions(cb) {
       getVersionKeys(function (keys) {
         IMPORTED_VERSIONS = keys || [];
         var merged = DEPLOYED_VERSIONS.slice();
-        IMPORTED_VERSIONS.forEach(function (k) { if (merged.indexOf(k) === -1) merged.push(k); });
+        var deployedNorm = DEPLOYED_VERSIONS.map(normName);
+        IMPORTED_VERSIONS.forEach(function (k) {
+          if (deployedNorm.indexOf(normName(k)) !== -1) return; // 기본 제공과 중복 → 숨김
+          if (merged.indexOf(k) === -1) merged.push(k);
+        });
         VERSIONS = merged;
         buildVersionOptions();
         cb && cb();
@@ -286,10 +293,9 @@
     function buildVersionOptions() {
       verList.innerHTML = '';
       VERSIONS.forEach(function (v) {
-        var mine = IMPORTED_VERSIONS.indexOf(v) !== -1;
         var el = document.createElement('div');
         el.className = 'pick-item' + (v === curVersion ? ' on' : '');
-        el.textContent = v + (mine ? '  · 내 파일' : '');
+        el.textContent = v;
         el.addEventListener('click', function () {
           verOverlay.style.display = 'none';
           if (v !== curVersion) loadVersion(v, curBook, curChap);
@@ -313,8 +319,8 @@
       statusEl.style.display = 'block';
       statusEl.textContent = version + ' 데이터를 불러오는 중…';
       contentEl.style.display = 'none';
-      if (IMPORTED_VERSIONS.indexOf(version) !== -1) {
-        // 개인 임포트 번역본 → IndexedDB에서 로드
+      if (IMPORTED_VERSIONS.indexOf(version) !== -1 && DEPLOYED_VERSIONS.indexOf(version) === -1) {
+        // 개인 임포트 번역본(기본 제공 아님) → IndexedDB에서 로드
         getVersion(version, function (data) {
           if (data && data.books) { applyBible(data, version, bookIdx, chapIdx); }
           else { statusEl.style.display = 'block'; statusEl.textContent = version + ' 데이터를 불러오지 못했습니다.'; }
@@ -705,7 +711,8 @@
 
     // 임포트 코어 — payloads: [{name, text}] (번역본/원어사전 자동 판별)
     function _importPayloads(payloads, done) {
-      var res = { added: [], lex: 0, errors: 0 };
+      var res = { added: [], lex: 0, errors: 0, skipped: 0 };
+      var deployedNorm = DEPLOYED_VERSIONS.map(normName);
       var i = 0;
       (function next() {
         if (i >= payloads.length) { done(res); return; }
@@ -713,9 +720,14 @@
         var obj;
         try { obj = JSON.parse(p.text); } catch (e) { res.errors++; return next(); }
         if (obj && obj.books) {
-          var name = obj.version || String(p.name || '번역본').replace(/\.json$/i, '');
+          var fbase = String(p.name || '').replace(/\.json$/i, '');
+          var name = obj.version || fbase || '번역본';
+          // 기본 제공 번역본과 중복이면 저장하지 않음 (웹에서 옴)
+          if (deployedNorm.indexOf(normName(name)) !== -1 || (fbase && deployedNorm.indexOf(normName(fbase)) !== -1)) {
+            res.skipped++; return next();
+          }
           obj.version = name;
-          putVersion(name, obj, function () { res.added.push(name); next(); });
+          putVersion(name, obj, function () { if (res.added.indexOf(name) === -1) res.added.push(name); next(); });
         } else if (obj && typeof obj === 'object') {
           var keys = Object.keys(obj);
           if (keys.length && /^[HG]\d/.test(keys[0])) {
@@ -753,6 +765,7 @@
         var msg = [];
         if (res.added.length) msg.push('번역본 ' + res.added.length + '개');
         if (res.lex) msg.push('원어사전');
+        if (res.skipped) msg.push('중복제외 ' + res.skipped);
         if (res.errors) msg.push('실패 ' + res.errors);
         toast(msg.length ? ('불러오기 완료: ' + msg.join(', ')) : '불러온 파일이 없습니다');
         refreshVersions();
@@ -805,6 +818,7 @@
               var msg = [];
               if (res.added.length) msg.push('번역본 ' + res.added.length + '개');
               if (res.lex) msg.push('원어사전');
+              if (res.skipped) msg.push('중복제외 ' + res.skipped);
               toast(msg.length ? ('공유 불러오기 완료: ' + msg.join(', ')) : '불러온 파일이 없습니다');
               refreshVersions();
             });
