@@ -57,6 +57,7 @@
           <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
           <span id="parBar" class="parbar" style="display:none;"></span>
         </div>
+        <span class="row-spacer"></span>
         <div class="grp btns">
           <button id="prevBtn" class="navb ic" title="이전 장">◀</button>
           <button id="nextBtn" class="navb ic" title="다음 장">▶</button>
@@ -148,9 +149,11 @@
     .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:8px; margin-bottom:14px; }
     .row { display:flex; gap:4px; align-items:center; }
-    .row.main { flex-wrap:nowrap; }
+    .row.main { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .row.main::-webkit-scrollbar { height:0; }
     .grp { display:flex; gap:4px; align-items:center; }
-    .grp.sels { flex:1 1 auto; min-width:0; }
+    .grp.sels { flex:0 0 auto; }
+    .row-spacer { flex:1 1 0; min-width:0; }
     .grp.btns { flex:0 0 auto; justify-content:flex-end; gap:0; }
     .sel { padding:10px 2px; font-size:14px; border:1px solid var(--line);
       border-radius:7px; background:#fff; color:var(--text); min-width:0; }
@@ -320,10 +323,8 @@
     #verList .sortable-ghost { opacity:.4; }
     #verList .sortable-chosen { background:var(--green-soft); }
     /* 병행 슬롯 바 */
-    .parbar { display:flex; gap:5px; align-items:center; flex:1 1 auto; min-width:0;
-      overflow-x:auto; -webkit-overflow-scrolling:touch;
+    .parbar { display:flex; gap:5px; align-items:center; flex:0 0 auto;
       border-left:3px solid #9aa39c; margin-left:4px; padding:0 2px 0 9px; }
-    .parbar::-webkit-scrollbar { height:0; }
     .parbar > * { flex:0 0 auto; }
     .parchip { display:flex; align-items:center; gap:5px; background:var(--green-soft);
       color:var(--green-d); border-radius:16px; padding:4px 5px 4px 11px; font-size:13px; font-weight:600; }
