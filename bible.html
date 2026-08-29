@@ -50,6 +50,7 @@
             <span id="locBook" class="loc-book">창</span><span id="locCV" class="loc-cv">1:1</span>
           </button>
           <button id="stronBtn" class="stronbtn disabled" title="원어(스트롱) 보기">원어</button>
+          <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
         </div>
         <div class="grp btns">
           <button id="prevBtn" class="navb ic" title="이전 장">◀</button>
@@ -59,6 +60,7 @@
         </div>
       </div>
     </div>
+    <div id="parBar" class="parbar" style="display:none;"></div>
   </div>
 
   <div id="pickerOverlay" class="picker-overlay" style="display:none;">
@@ -235,6 +237,28 @@
     #verList .pick-item.on .ver-handle { color:rgba(255,255,255,.7); }
     #verList .sortable-ghost { opacity:.4; }
     #verList .sortable-chosen { background:var(--green-soft); }
+    /* 병행 슬롯 바 */
+    .parbar { display:flex; gap:6px; flex-wrap:wrap; align-items:center;
+      padding:8px 12px; background:var(--bg); border-top:1px solid var(--line); }
+    .parchip { display:flex; align-items:center; gap:5px; background:var(--green-soft);
+      color:var(--green-d); border-radius:16px; padding:4px 5px 4px 11px; font-size:13px; font-weight:600; }
+    .parchip .pname { cursor:pointer; }
+    .parchip .parx { cursor:pointer; opacity:.55; font-size:12px; padding:0 4px; }
+    .parchip .parx:active { opacity:1; }
+    .paradd { border:1px dashed var(--line); color:var(--green); background:#fff;
+      border-radius:16px; padding:3px 13px; font-size:16px; font-weight:700; cursor:pointer; line-height:1.4; }
+    /* 병행 절 카드 (안1) */
+    body.par .pv { background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:12px 14px 12px 12px; margin-bottom:12px; display:flex; gap:10px; }
+    body.par .pv .pvnum { flex:0 0 auto; min-width:26px; height:26px; background:var(--green);
+      color:#fff; border-radius:8px; font-size:13px; font-weight:700; display:flex;
+      align-items:center; justify-content:center; }
+    body.par .pv .pvbody { flex:1; display:flex; flex-direction:column; gap:7px; min-width:0; }
+    body.par .pv .pvrow { display:flex; flex-direction:column; gap:1px; }
+    body.par .pv .plabel { font-size:11px; font-weight:700; color:var(--green-d);
+      background:var(--green-soft); align-self:flex-start; padding:1px 7px; border-radius:5px; }
+    body.par .pv .plabel.eng { color:#2f6fd6; background:#e8f0fb; }
+    body.par .pv .ptext { font-size:var(--fs); }
   </style>
 
   <script src="Sortable.min.js"></script>
@@ -348,6 +372,7 @@
         }
         el.addEventListener('click', function (e) {
           if (e.target.closest && e.target.closest('.ver-handle')) return; // 손잡이는 선택 아님
+          if (PAR_PICK_IDX >= 0) { pickParVersion(v); return; }             // 병행 슬롯 선택
           verOverlay.style.display = 'none';
           if (v !== curVersion) loadVersion(v, curBook, curChap);
         });
@@ -426,10 +451,11 @@
       verOverlay.style.display = 'flex';
     });
     document.getElementById('verBack').addEventListener('click', function () {
+      PAR_PICK_IDX = -1;
       verOverlay.style.display = 'none';
     });
     verOverlay.addEventListener('click', function (e) {
-      if (e.target === verOverlay) verOverlay.style.display = 'none';
+      if (e.target === verOverlay) { PAR_PICK_IDX = -1; verOverlay.style.display = 'none'; }
     });
 
     function updateLocBtn() {
@@ -445,6 +471,8 @@
       contentEl.dir = HEB ? 'rtl' : 'ltr'; // 히브리어는 오른쪽→왼쪽
 
       updateLocBtn();
+
+      if (PAR_ON) { contentEl.dir = 'ltr'; renderParallel(); return; } // 병행 보기
 
       var book = BIBLE.books[bookIdx];
       var verses = book.chapters[chapIdx];
@@ -964,6 +992,115 @@
     function closeSheet() { sheetMask.classList.remove('show'); sheetEl.classList.remove('show'); }
     document.getElementById('shX').addEventListener('click', closeSheet);
     sheetMask.addEventListener('click', closeSheet);
+
+    // ===== 병행 보기 =====
+    var parBtn = document.getElementById('parBtn');
+    var parBar = document.getElementById('parBar');
+    var PAR_ON = false, PAR_VERSIONS = [], PAR_CACHE = {}, PAR_PICK_IDX = -1;
+    try { PAR_VERSIONS = JSON.parse(localStorage.getItem('bibleParVersions') || '[]') || []; } catch (e) {}
+    if (PAR_VERSIONS.length > 3) PAR_VERSIONS = PAR_VERSIONS.slice(0, 3);
+
+    function savePar() { try { localStorage.setItem('bibleParVersions', JSON.stringify(PAR_VERSIONS)); } catch (e) {} }
+    function isEngVer(nm) { return /^(ESV|NIV|KJV|NASB|LXX|NKJV|NLT|NRSV|RSV|NET|AMP|CSB|GNT|MSG|YLT|MLV|Darby|NHEB)/.test(nm); }
+
+    function renderParBar() {
+      parBar.innerHTML = '';
+      PAR_VERSIONS.forEach(function (nm, idx) {
+        var chip = document.createElement('span'); chip.className = 'parchip';
+        var t = document.createElement('span'); t.className = 'pname'; t.textContent = nm;
+        t.addEventListener('click', function () { openParPick(idx); });
+        chip.appendChild(t);
+        var x = document.createElement('span'); x.className = 'parx'; x.textContent = '✕';
+        x.addEventListener('click', function () {
+          PAR_VERSIONS.splice(idx, 1); savePar(); renderParBar(); renderParallel();
+        });
+        chip.appendChild(x);
+        parBar.appendChild(chip);
+      });
+      if (PAR_VERSIONS.length < 3) {
+        var add = document.createElement('span'); add.className = 'paradd'; add.textContent = '＋';
+        add.title = '번역본 추가';
+        add.addEventListener('click', function () { openParPick(PAR_VERSIONS.length); });
+        parBar.appendChild(add);
+      }
+      adjustHeadSpace();
+    }
+
+    function openParPick(idx) { PAR_PICK_IDX = idx; buildVersionOptions(); verOverlay.style.display = 'flex'; }
+    function pickParVersion(v) {
+      var idx = PAR_PICK_IDX; PAR_PICK_IDX = -1;
+      verOverlay.style.display = 'none';
+      if (idx >= PAR_VERSIONS.length) PAR_VERSIONS.push(v); else PAR_VERSIONS[idx] = v;
+      PAR_VERSIONS = PAR_VERSIONS.filter(function (x, i, a) { return a.indexOf(x) === i; }); // 중복 제거
+      if (PAR_VERSIONS.length > 3) PAR_VERSIONS = PAR_VERSIONS.slice(0, 3);
+      savePar(); renderParBar(); renderParallel();
+    }
+
+    // 번역본 데이터 로드 (캐시) — 배포본은 fetch, 개인 임포트는 IndexedDB
+    function getVersionData(name, cb) {
+      if (PAR_CACHE[name]) { cb(PAR_CACHE[name]); return; }
+      if (IMPORTED_VERSIONS.indexOf(name) !== -1 && DEPLOYED_VERSIONS.indexOf(name) === -1) {
+        getVersion(name, function (d) { if (d) PAR_CACHE[name] = d; cb(d); });
+      } else {
+        fetch('data/bible/' + encodeURIComponent(name) + '.json')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) { if (d) PAR_CACHE[name] = d; cb(d); })
+          .catch(function () { cb(null); });
+      }
+    }
+
+    // 병행용 순수 텍스트 (원어 코드·각주 제거)
+    function parText(txt) {
+      if (!txt) return '';
+      txt = txt.replace(/<W[HG]\d+[a-z]?>/g, '');
+      txt = txt.split('▷')[0].replace(/<[^>]*>/g, '');
+      return escapeHtml(txt.replace(/\s+/g, ' ').trim());
+    }
+
+    function renderParallel() {
+      if (!PAR_ON) return;
+      if (!PAR_VERSIONS.length) { contentEl.innerHTML = '<div class="status">＋로 번역본을 추가하세요.</div>'; return; }
+      var datas = {}, pending = PAR_VERSIONS.length;
+      PAR_VERSIONS.forEach(function (nm) {
+        getVersionData(nm, function (d) { datas[nm] = d; if (--pending === 0) paintParallel(datas); });
+      });
+    }
+    function paintParallel(datas) {
+      var base = null, i;
+      for (i = 0; i < PAR_VERSIONS.length; i++) { if (datas[PAR_VERSIONS[i]]) { base = datas[PAR_VERSIONS[i]]; break; } }
+      if (!base) { contentEl.innerHTML = '<div class="status">번역본을 불러오지 못했습니다.</div>'; return; }
+      var book = base.books[curBook], verses = book.chapters[curChap];
+      var html = '<div class="chap-title">' + book.name + ' ' + (curChap + 1) + '장</div>';
+      for (var v = 0; v < verses.length; v++) {
+        html += '<div class="pv" id="v' + (v + 1) + '"><div class="pvnum">' + (v + 1) + '</div><div class="pvbody">';
+        for (i = 0; i < PAR_VERSIONS.length; i++) {
+          var nm = PAR_VERSIONS[i], txt = '';
+          try { txt = datas[nm].books[curBook].chapters[curChap][v] || ''; } catch (e) {}
+          html += '<div class="pvrow"><span class="plabel' + (isEngVer(nm) ? ' eng' : '') + '">' +
+            escapeHtml(nm) + '</span><span class="ptext">' + parText(txt) + '</span></div>';
+        }
+        html += '</div></div>';
+      }
+      contentEl.innerHTML = html;
+      window.scrollTo(0, 0);
+      adjustHeadSpace();
+    }
+
+    // 병행 토글
+    parBtn.addEventListener('click', function () {
+      if (PAR_ON) {
+        PAR_ON = false; parBtn.classList.remove('on');
+        parBar.style.display = 'none'; document.body.classList.remove('par');
+        adjustHeadSpace();
+        loadVersion(curVersion, curBook, curChap); // 단일 보기 복귀
+      } else {
+        PAR_ON = true; parBtn.classList.add('on');
+        parBar.style.display = 'flex'; document.body.classList.add('par');
+        renderParBar();
+        if (PAR_VERSIONS.length === 0) openParPick(0); // 첫 슬롯 → 번역본 선택창
+        else renderParallel();
+      }
+    });
 
     // 공유(Share Target)로 받은 파일 처리 — 서비스워커가 캐시에 담아두면 여기서 임포트
     function processSharedIfAny() {
