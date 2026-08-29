@@ -263,6 +263,7 @@
       background:var(--green-soft); align-self:flex-start; padding:1px 7px; border-radius:5px; }
     body.par .pv .plabel.eng { color:#2f6fd6; background:#e8f0fb; }
     body.par .pv .ptext { font-size:var(--fs); }
+    body.par .pv .ptext .w.has { border-bottom:1.5px dotted var(--green); color:var(--green-d); cursor:pointer; }
   </style>
 
   <script src="Sortable.min.js"></script>
@@ -767,13 +768,14 @@
     }
 
     // 주 본문 렌더 (이탤릭 + 각주 마커)
-    function renderMain(main, vnum) {
+    function renderMain(main, vnum, vkey) {
+      vkey = vkey || '';
       var out = '', re = /<i>([\s\S]*?)<\/i>|<sup>([\s\S]*?)<\/sup>|<[^>]*>|([^<]+)/g, m;
       while ((m = re.exec(main)) !== null) {
         if (m[1] !== undefined) out += '<em>' + escapeHtml(m[1]) + '</em>';
         else if (m[2] !== undefined) {
           var mk = m[2].replace(/<[^>]*>/g, '');
-          out += '<sup class="fn" data-v="' + vnum + '" data-fn="' + escapeHtml(mk) + '">' + escapeHtml(mk) + '</sup>';
+          out += '<sup class="fn" data-vk="' + escapeHtml(vkey) + '" data-v="' + vnum + '" data-fn="' + escapeHtml(mk) + '">' + escapeHtml(mk) + '</sup>';
         }
         else if (m[3] !== undefined) out += escapeHtml(m[3]);
         // else: 기타 태그 제거
@@ -782,7 +784,8 @@
     }
 
     // 본문 렌더: 원어 코드 / 각주·이탤릭 / 순수 텍스트
-    function renderVerseText(txt, vnum) {
+    function renderVerseText(txt, vnum, vkey) {
+      vkey = vkey || '';
       if (!txt) return '';
       // 1) 원어(스트롱) 코드 번역본
       if (txt.indexOf('<W') !== -1) {
@@ -806,10 +809,10 @@
         var parts = notesRaw.split(/<sup>([\s\S]*?)<\/sup>/);
         for (var i = 1; i < parts.length; i += 2) {
           var marker = parts[i].replace(/<[^>]*>/g, '').trim();
-          if (marker) CUR_FN[vnum + '|' + marker] = renderNote(parts[i + 1] || '');
+          if (marker) CUR_FN[vkey + '|' + vnum + '|' + marker] = renderNote(parts[i + 1] || '');
         }
       }
-      return renderMain(main.replace(/<br\s*\/?>\s*$/, ''), vnum);
+      return renderMain(main.replace(/<br\s*\/?>\s*$/, ''), vnum, vkey);
     }
 
     // 토스트 (비침습 알림)
@@ -823,6 +826,7 @@
     }
 
     var PENDING_STRON = false;
+    var PRE_STRON = null; // 원어로 전환하기 직전 번역본 (원어 끄면 복귀)
 
     // 원어 모드 켜기 (사전 없으면 임포트 유도)
     function enableStron() {
@@ -861,6 +865,7 @@
     stronBtn.addEventListener('click', function () {
       if (!HAS_CODES) {
         if (VERSIONS.indexOf('개역개정S') === -1) { toast('개역개정S 번역본이 없습니다'); return; }
+        PRE_STRON = curVersion; // 돌아올 번역본 기억
         PENDING_STRON = true;
         toast('개역개정S(원어)로 전환했습니다');
         loadVersion('개역개정S', curBook, curChap);
@@ -870,6 +875,7 @@
         document.body.classList.remove('stron');
         stronBtn.classList.remove('on');
         try { localStorage.setItem('bibleStron', '0'); } catch (e) {}
+        if (PRE_STRON && PRE_STRON !== curVersion) { var p = PRE_STRON; PRE_STRON = null; loadVersion(p, curBook, curChap); } // 이전 번역본 복귀
       } else {
         enableStron();
       }
@@ -952,18 +958,18 @@
     contentEl.addEventListener('click', function (e) {
       var t = e.target;
       var fn = t.closest ? t.closest('.fn') : null;
-      if (fn) { openFn(fn.getAttribute('data-v'), fn.getAttribute('data-fn')); return; }
+      if (fn) { openFn(fn.getAttribute('data-vk') || '', fn.getAttribute('data-v'), fn.getAttribute('data-fn')); return; }
       var xr = t.closest ? t.closest('.xref') : null;
       if (xr) { jumpXref(xr); return; }
-      if (document.body.classList.contains('stron')) {
+      if (document.body.classList.contains('stron') || PAR_ON) {   // 병행에서도 원어 탭
         var el = t.closest ? t.closest('.w.has') : null;
         if (el) openSheet(el.getAttribute('data-code'), el.textContent.trim());
       }
     });
 
     // 각주 보기 (하단 시트 재사용)
-    function openFn(vnum, marker) {
-      var html = CUR_FN[vnum + '|' + marker] || '(각주 내용 없음)';
+    function openFn(vk, vnum, marker) {
+      var html = CUR_FN[(vk || '') + '|' + vnum + '|' + marker] || '(각주 내용 없음)';
       document.getElementById('shCode').textContent = '각주 ' + marker;
       var ab = (BIBLE && BIBLE.books[curBook]) ? (BIBLE.books[curBook].abbr || '') : '';
       document.getElementById('shWord').textContent = ab + ' ' + (curChap + 1) + ':' + vnum;
@@ -1079,6 +1085,7 @@
       var base = datas[list[0]] || null, i;
       if (!base) { for (i = 0; i < list.length; i++) { if (datas[list[i]]) { base = datas[list[i]]; break; } } }
       if (!base) { contentEl.innerHTML = '<div class="status">번역본을 불러오지 못했습니다.</div>'; return; }
+      CUR_FN = {}; // 각주 초기화 (번역본별 키)
       var book = base.books[curBook], verses = book.chapters[curChap];
       var html = '<div class="chap-title">' + book.name + ' ' + (curChap + 1) + '장</div>';
       for (var v = 0; v < verses.length; v++) {
@@ -1086,8 +1093,10 @@
         for (i = 0; i < list.length; i++) {
           var nm = list[i], txt = '';
           try { txt = datas[nm].books[curBook].chapters[curChap][v] || ''; } catch (e) {}
+          var heb = /[֐-׿]/.test(txt);
           html += '<div class="pvrow"><span class="plabel' + (isEngVer(nm) ? ' eng' : '') + '">' +
-            escapeHtml(nm) + '</span><span class="ptext">' + parText(txt) + '</span></div>';
+            escapeHtml(nm) + '</span><span class="ptext"' + (heb ? ' dir="rtl"' : '') + '>' +
+            renderVerseText(txt, v + 1, nm) + '</span></div>';
         }
         html += '</div></div>';
       }
