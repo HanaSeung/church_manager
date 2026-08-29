@@ -17,3 +17,7 @@ data/bible/*.dct
 data/bible/*.dct-journal
 data/bible/*.sdb
 data/bible/lexicon_ko.json
+# 개인 임포트용 번역본(저작권) — 공개 제외
+data/bible/현대인.json
+data/bible/새번역.json
+data/bible/ESV.json
