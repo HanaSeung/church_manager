@@ -5,7 +5,7 @@ import sqlite3, json, io, os, re
 
 base = os.path.join(os.path.dirname(__file__), '..', 'data', 'bible')
 base = os.path.abspath(base)
-FILES = ['매튜헨리.cdb', '만나주석.cdb', '화잇주석.cdb']
+FILES = ['매튜헨리.cdb', '만나주석.cdb']
 
 def sanitize(html):
     if not html: return ''
