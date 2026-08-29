@@ -301,6 +301,7 @@
     #wjbBody .wr .wk { flex:0 0 76px; color:var(--muted); }
     #wjbBody .wr .wv { flex:1; }
     #wjbBody .wr .wv.code { color:#2f6fd6; font-weight:600; }
+    #wjbBody .wjb-code { cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
     /* 각주·상호참조·이탤릭 */
     .vtext em, .sh-body em { font-style:italic; }
     .fn { color:#2f6fd6; cursor:pointer; font-size:.68em; vertical-align:super;
@@ -1432,8 +1433,10 @@
       document.getElementById('wjbMean').textContent = (t.m && t.m !== '_') ? t.m : '';
       document.getElementById('wjbBody').innerHTML =
         '<div class="wr"><span class="wk">기본형</span><span class="wv">' + escapeHtml(t.l) + ' <span style="color:var(--muted)">' + escapeHtml(t.p) + '</span></span></div>' +
-        '<div class="wr"><span class="wk">스트롱</span><span class="wv code">' + escapeHtml(t.c) + '</span></div>' +
+        '<div class="wr"><span class="wk">스트롱</span><span class="wv code wjb-code">' + escapeHtml(t.c) + ' <span style="font-size:12px;font-weight:400">› 사전</span></span></div>' +
         '<div class="wr"><span class="wk">문법</span><span class="wv">' + escapeHtml(t.g || '-') + '</span></div>';
+      var cc = document.querySelector('#wjbBody .wjb-code');
+      if (cc) cc.onclick = function () { closeWjb(); openSheet(t.c, t.w); }; // 스트롱 → 원어 사전
       sheetMask.classList.add('show'); wjbSheet.classList.add('show');
     }
     function closeWjb() { wjbSheet.classList.remove('show'); sheetMask.classList.remove('show'); }
