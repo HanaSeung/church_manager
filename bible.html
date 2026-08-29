@@ -79,7 +79,7 @@
   </div>
 
   <div id="verOverlay" class="picker-overlay" style="display:none;">
-    <div class="picker-box" style="max-width:300px;">
+    <div class="picker-box" style="max-width:440px;">
       <div class="picker-head">
         <button id="verBack" class="pk-back" title="닫기">‹</button>
         <span class="pk-title">번역본 선택</span>
@@ -223,6 +223,11 @@
     .fn { color:#2f6fd6; cursor:pointer; font-size:.68em; vertical-align:super;
       font-weight:700; padding:0 1px; line-height:0; }
     .xref { color:#2f6fd6; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+    /* 번역본 선택창: 이름(왼쪽) + 서술형 해설(오른쪽) */
+    #verList .pick-item { text-align:left; display:flex; align-items:flex-start; gap:10px; padding:11px 14px; }
+    #verList .ver-name { font-weight:700; flex:0 0 auto; }
+    #verList .ver-desc { color:var(--muted); font-size:12px; line-height:1.35; flex:1 1 auto; text-align:right; }
+    #verList .pick-item.on .ver-desc { color:rgba(255,255,255,.85); }
   </style>
 
   <script>
@@ -295,12 +300,40 @@
       });
     }
 
+    var HEB = false; // 현재 번역본이 히브리어(오른쪽→왼쪽)인지
+
+    // 번역본 서술형 해설 (선택창 오른쪽에 표시)
+    var VER_DESC = {
+      '개역개정': '한국 교회가 표준으로 쓰는 공인 개정 번역',
+      '쉬운성경': '누구나 이해하기 쉽게 풀어 쓴 우리말 번역',
+      'NIV(2011)': '자연스러운 현대 영어 번역',
+      'KJV(1611)': '1611년 흠정역, 고전 영어의 대표 번역',
+      '개역개정S': '단어마다 원어(히브리·헬라) 뜻을 볼 수 있는 스트롱 번역',
+      'ESV': '원문에 충실한 직역 위주의 영어 번역',
+      '새번역': '원문에 충실하면서 현대 한국어로 다듬은 번역',
+      '현대인': '뜻을 쉽게 풀어 옮긴 의역 번역',
+      '공동번역': '개신교와 천주교가 함께 만든 문학적 번역',
+      'NASB': '가장 직역에 가까운 영어 번역, 원어 연구에 유용',
+      'BHSStp': '히브리어 구약 원문 (BHS)',
+      'LXXStp': '헬라어 구약, 70인역 (LXX)'
+    };
+
     function buildVersionOptions() {
       verList.innerHTML = '';
       VERSIONS.forEach(function (v) {
         var el = document.createElement('div');
-        el.className = 'pick-item' + (v === curVersion ? ' on' : '');
-        el.textContent = v;
+        el.className = 'pick-item ver-item' + (v === curVersion ? ' on' : '');
+        var nm = document.createElement('span');
+        nm.className = 'ver-name';
+        nm.textContent = v;
+        el.appendChild(nm);
+        var d = VER_DESC[v];
+        if (d) {
+          var ds = document.createElement('span');
+          ds.className = 'ver-desc';
+          ds.textContent = d;
+          el.appendChild(ds);
+        }
         el.addEventListener('click', function () {
           verOverlay.style.display = 'none';
           if (v !== curVersion) loadVersion(v, curBook, curChap);
@@ -311,6 +344,7 @@
 
     function applyBible(data, version, bookIdx, chapIdx) {
       BIBLE = data;
+      try { HEB = /[֐-׿]/.test((data.books[0].chapters[0][0]) || ''); } catch (e) { HEB = false; }
       curVersion = version;
       verBtn.textContent = version;
       buildVersionOptions();
@@ -367,6 +401,7 @@
       curBook = bookIdx; curChap = chapIdx;
       curVerse = jumpVerse && jumpVerse >= 1 ? jumpVerse : 1;
       contentEl.style.display = 'block';
+      contentEl.dir = HEB ? 'rtl' : 'ltr'; // 히브리어는 오른쪽→왼쪽
 
       updateLocBtn();
 
