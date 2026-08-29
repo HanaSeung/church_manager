@@ -21,8 +21,10 @@
       justify-content:center; color:#fff; text-decoration:none; }
     .topbar .tb-back svg { width:20px; height:20px; }
     .topbar .tb-icon { justify-self:end; display:flex; align-items:center;
-      color:rgba(255,255,255,.9); }
+      color:rgba(255,255,255,.9); background:none; border:none; cursor:pointer;
+      padding:6px; margin:-6px; }
     .topbar .tb-icon svg { width:20px; height:20px; }
+    .topbar .tb-icon:active { color:#fff; }
     .topbar h1 { font-size:17px; font-weight:500; text-align:center; }
     #fixedHead { position:fixed; top:0; left:0; right:0; z-index:20;
       background:var(--bg); box-shadow:0 2px 6px rgba(0,0,0,.08); }
@@ -37,9 +39,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
     <h1>성경 뷰어</h1>
-    <span class="tb-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h11a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M8 4v16"/></svg>
-    </span>
+    <button id="optBtn" class="tb-icon" aria-label="옵션" title="옵션">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
   </div>
 
     <div class="controls" id="controls">
@@ -90,6 +92,16 @@
         <button id="verImport" class="pk-import" title="번역본·사전 파일 불러오기">＋ 불러오기</button>
       </div>
       <div id="verList" class="picker-col" style="max-height:60vh;"></div>
+    </div>
+  </div>
+
+  <div id="optOverlay" class="picker-overlay" style="display:none;">
+    <div class="picker-box" style="max-width:460px;">
+      <div class="picker-head">
+        <button id="optBack" class="pk-back" title="닫기">‹</button>
+        <span class="pk-title">옵션</span>
+      </div>
+      <div id="optBody" class="opt-body"></div>
     </div>
   </div>
 
@@ -243,6 +255,20 @@
     .comm-blk .cv { color:var(--green-d); font-weight:700; font-size:12.5px; margin-bottom:4px; }
     .comm-blk p { margin:0 0 7px; } .comm-blk p:last-child { margin-bottom:0; }
     .comm-blk strong { font-weight:700; }
+    /* 옵션 화면 */
+    .opt-body { max-height:70vh; overflow-y:auto; padding:6px 0 16px; }
+    .opt-sec-t { font-size:13px; font-weight:700; color:var(--green-d); padding:14px 16px 6px; }
+    .opt-item { display:flex; align-items:center; gap:10px; padding:11px 16px;
+      border-bottom:1px solid var(--line); }
+    .opt-item .oi-name { flex:1 1 auto; font-size:14.5px; }
+    .opt-item .oi-tag { font-size:11px; color:var(--muted); border:1px solid var(--line);
+      border-radius:10px; padding:1px 7px; }
+    .opt-del { flex:0 0 auto; border:1px solid #e0b4b4; color:#b23b3b; background:#fff;
+      border-radius:8px; padding:5px 12px; font-size:13px; cursor:pointer; }
+    .opt-del:active { background:#fbeaea; }
+    .opt-restore { flex:0 0 auto; border:1px solid var(--line); color:var(--green-d);
+      background:#fff; border-radius:8px; padding:5px 12px; font-size:13px; cursor:pointer; }
+    .opt-empty { color:var(--muted); font-size:13px; padding:8px 16px 14px; }
     /* 각주·상호참조·이탤릭 */
     .vtext em, .sh-body em { font-style:italic; }
     .fn { color:#2f6fd6; cursor:pointer; font-size:.68em; vertical-align:super;
@@ -307,6 +333,10 @@
     var VERSIONS = [];
     var DEPLOYED_VERSIONS = [];
     var IMPORTED_VERSIONS = [];
+    // 사용자가 삭제한 배포 번역본 (배포본은 웹에서 오므로 목록에서 감춰 삭제 효과)
+    var REMOVED_DEPLOYED = [];
+    try { REMOVED_DEPLOYED = JSON.parse(localStorage.getItem('bibleRemovedDeployed') || '[]') || []; } catch (e) { REMOVED_DEPLOYED = []; }
+    function saveRemovedDeployed() { try { localStorage.setItem('bibleRemovedDeployed', JSON.stringify(REMOVED_DEPLOYED)); } catch (e) {} }
     var curVersion = '개역개정';
 
     var locBtn = document.getElementById('locBtn');
@@ -335,8 +365,8 @@
           });
           if (!DEPLOYED_VERSIONS.length) DEPLOYED_VERSIONS = ['개역개정'];
           refreshVersions(function () {
-            curVersion = VERSIONS[0] || '개역개정';
-            loadVersion(curVersion, 0, 0);
+            if (VERSIONS.length) { curVersion = VERSIONS[0]; loadVersion(curVersion, 0, 0); }
+            else { showBlank(); }
           });
         })
         .catch(function () {
@@ -359,6 +389,7 @@
           if (deployedNorm.indexOf(normName(k)) !== -1) return; // 기본 제공과 중복 → 숨김
           if (merged.indexOf(k) === -1) merged.push(k);
         });
+        merged = merged.filter(function (n) { return REMOVED_DEPLOYED.indexOf(n) === -1; }); // 삭제한 번역본 제외
         VERSIONS = applyVerOrder(merged);
         buildVersionOptions();
         cb && cb();
@@ -463,6 +494,17 @@
       statusEl.style.display = 'none';
       showChapter(bookIdx || 0, chapIdx || 0);
       adjustHeadSpace();
+    }
+
+    // 번역본이 하나도 없을 때
+    function showBlank() {
+      BIBLE = null; curVersion = '';
+      verBtn.textContent = '번역본 없음';
+      try { locBook.textContent = ''; locCV.textContent = ''; } catch (e) {}
+      statusEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      contentEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:48px 16px;font-size:15px;line-height:1.8;">번역본이 없습니다.<br>우측 상단 옵션 또는 번역본 선택(＋불러오기)에서 불러오세요.</div>';
+      if (window._closeCommSheet) window._closeCommSheet();
     }
 
     function loadVersion(version, bookIdx, chapIdx) {
@@ -745,6 +787,15 @@
         tx.onerror = function () { cb && cb(); };
       } catch (e) { cb && cb(); }
     }
+    function delVersion(name, cb) {
+      if (!LEXDB) { cb && cb(); return; }
+      try {
+        var tx = LEXDB.transaction('versions', 'readwrite');
+        tx.objectStore('versions').delete(name);
+        tx.oncomplete = function () { cb && cb(); };
+        tx.onerror = function () { cb && cb(); };
+      } catch (e) { cb && cb(); }
+    }
     function getVersion(name, cb) {
       if (!LEXDB) { cb(null); return; }
       try {
@@ -798,6 +849,21 @@
         COMM_NAMES.push(name);
         try { localStorage.setItem('bibleCommNames', JSON.stringify(COMM_NAMES)); } catch (e) {}
       }
+    }
+    function delCommByName(name, cb) {
+      var i = COMM_NAMES.indexOf(name);
+      if (i !== -1) { COMM_NAMES.splice(i, 1); try { localStorage.setItem('bibleCommNames', JSON.stringify(COMM_NAMES)); } catch (e) {} }
+      if (!LEXDB) { cb && cb(); return; }
+      try {
+        var tx = LEXDB.transaction('comm', 'readwrite');
+        var store = tx.objectStore('comm');
+        var kr = store.getAllKeys();
+        kr.onsuccess = function () {
+          (kr.result || []).forEach(function (k) { if (String(k).indexOf(name + '|') === 0) store.delete(k); });
+        };
+        tx.oncomplete = function () { cb && cb(); };
+        tx.onerror = function () { cb && cb(); };
+      } catch (e) { cb && cb(); }
     }
 
     function lexGet(code, cb) {
@@ -1146,6 +1212,84 @@
       });
       document.getElementById('commX').addEventListener('click', closeS);
       sheetMask.addEventListener('click', function () { if (COMM_ON) closeS(); });
+    })();
+
+    // ===== 옵션 (번역본·주석 관리) =====
+    (function () {
+      var optOverlay = document.getElementById('optOverlay');
+      var optBody = document.getElementById('optBody');
+
+      function isImported(v) { return IMPORTED_VERSIONS.indexOf(v) !== -1 && DEPLOYED_VERSIONS.indexOf(v) === -1; }
+
+      function afterVersionChange(done) {
+        refreshVersions(function () {
+          if (!curVersion || VERSIONS.indexOf(curVersion) === -1) {
+            if (VERSIONS.length) { curVersion = VERSIONS[0]; loadVersion(curVersion, 0, 0); }
+            else { showBlank(); }
+          }
+          done && done();
+        });
+      }
+      function deleteVersionByName(name, done) {
+        if (DEPLOYED_VERSIONS.indexOf(name) !== -1) {
+          if (REMOVED_DEPLOYED.indexOf(name) === -1) { REMOVED_DEPLOYED.push(name); saveRemovedDeployed(); }
+          if (isImported(name)) { delVersion(name, function () { afterVersionChange(done); }); }
+          else afterVersionChange(done);
+        } else {
+          delVersion(name, function () { afterVersionChange(done); });
+        }
+      }
+      function restoreDeployed(name, done) {
+        var i = REMOVED_DEPLOYED.indexOf(name);
+        if (i !== -1) { REMOVED_DEPLOYED.splice(i, 1); saveRemovedDeployed(); }
+        afterVersionChange(done);
+      }
+
+      function render() {
+        var h = '<div class="opt-sec-t">번역본 관리</div>';
+        if (!VERSIONS.length) h += '<div class="opt-empty">표시할 번역본이 없습니다.</div>';
+        VERSIONS.forEach(function (v) {
+          h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
+            '<span class="oi-tag">' + (isImported(v) ? '개인' : '기본') + '</span>' +
+            '<button class="opt-del" data-delv="' + v + '">삭제</button></div>';
+        });
+        if (REMOVED_DEPLOYED.length) {
+          h += '<div class="opt-sec-t">삭제된 기본 번역본</div>';
+          REMOVED_DEPLOYED.forEach(function (v) {
+            h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
+              '<button class="opt-restore" data-restv="' + v + '">복원</button></div>';
+          });
+        }
+        h += '<div class="opt-sec-t">주석 관리</div>';
+        if (!COMM_NAMES.length) h += '<div class="opt-empty">불러온 주석이 없습니다.</div>';
+        COMM_NAMES.forEach(function (n) {
+          h += '<div class="opt-item"><span class="oi-name">' + n + '</span>' +
+            '<span class="oi-tag">주석</span>' +
+            '<button class="opt-del" data-delc="' + n + '">삭제</button></div>';
+        });
+        optBody.innerHTML = h;
+        optBody.querySelectorAll('[data-delv]').forEach(function (b) {
+          b.onclick = function () {
+            var v = b.getAttribute('data-delv');
+            if (!confirm('"' + v + '" 번역본을 삭제할까요?')) return;
+            deleteVersionByName(v, render);
+          };
+        });
+        optBody.querySelectorAll('[data-restv]').forEach(function (b) {
+          b.onclick = function () { restoreDeployed(b.getAttribute('data-restv'), render); };
+        });
+        optBody.querySelectorAll('[data-delc]').forEach(function (b) {
+          b.onclick = function () {
+            var n = b.getAttribute('data-delc');
+            if (!confirm('"' + n + '" 주석을 삭제할까요?')) return;
+            delCommByName(n, render);
+          };
+        });
+      }
+
+      document.getElementById('optBtn').addEventListener('click', function () { render(); optOverlay.style.display = 'flex'; });
+      document.getElementById('optBack').addEventListener('click', function () { optOverlay.style.display = 'none'; });
+      optOverlay.addEventListener('click', function (e) { if (e.target === optOverlay) optOverlay.style.display = 'none'; });
     })();
 
     // ===== 병행 보기 (현재 번역본 기준 + 추가 최대 2개) =====
