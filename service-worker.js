@@ -1,4 +1,4 @@
-const CACHE = 'church-manager-v251';
+const CACHE = 'church-manager-v252';
 const ASSETS = [
   'index.html',
   'Sortable.min.js',

@@ -1250,11 +1250,10 @@
         if (!VERSIONS.length) h += '<div class="opt-empty">표시할 번역본이 없습니다.</div>';
         VERSIONS.forEach(function (v) {
           h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
-            '<span class="oi-tag">' + (isImported(v) ? '개인' : '기본') + '</span>' +
             '<button class="opt-del" data-delv="' + v + '">삭제</button></div>';
         });
         if (REMOVED_DEPLOYED.length) {
-          h += '<div class="opt-sec-t">삭제된 기본 번역본</div>';
+          h += '<div class="opt-sec-t">삭제한 번역본 복원</div>';
           REMOVED_DEPLOYED.forEach(function (v) {
             h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
               '<button class="opt-restore" data-restv="' + v + '">복원</button></div>';
@@ -1264,7 +1263,6 @@
         if (!COMM_NAMES.length) h += '<div class="opt-empty">불러온 주석이 없습니다.</div>';
         COMM_NAMES.forEach(function (n) {
           h += '<div class="opt-item"><span class="oi-name">' + n + '</span>' +
-            '<span class="oi-tag">주석</span>' +
             '<button class="opt-del" data-delc="' + n + '">삭제</button></div>';
         });
         optBody.innerHTML = h;
