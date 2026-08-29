@@ -228,6 +228,10 @@
     #verList .ver-name { font-weight:700; flex:0 0 96px; }
     #verList .ver-desc { color:var(--muted); font-size:12px; line-height:1.35; flex:1 1 auto; text-align:left; }
     #verList .pick-item.on .ver-desc { color:rgba(255,255,255,.85); }
+    #verList .ver-handle { flex:0 0 auto; color:#b7bdb8; cursor:grab; font-size:17px;
+      padding:0 4px 0 0; touch-action:none; user-select:none; }
+    #verList .pick-item.on .ver-handle { color:rgba(255,255,255,.7); }
+    #verList .ver-item.dragging { opacity:.6; background:var(--green-soft); }
   </style>
 
   <script>
@@ -294,7 +298,7 @@
           if (deployedNorm.indexOf(normName(k)) !== -1) return; // 기본 제공과 중복 → 숨김
           if (merged.indexOf(k) === -1) merged.push(k);
         });
-        VERSIONS = merged;
+        VERSIONS = applyVerOrder(merged);
         buildVersionOptions();
         cb && cb();
       });
@@ -323,6 +327,11 @@
       VERSIONS.forEach(function (v) {
         var el = document.createElement('div');
         el.className = 'pick-item ver-item' + (v === curVersion ? ' on' : '');
+        el.setAttribute('data-ver', v);
+        var h = document.createElement('span');
+        h.className = 'ver-handle'; h.textContent = '≡'; h.title = '드래그로 순서 변경';
+        h.addEventListener('pointerdown', startVerDrag);
+        el.appendChild(h);
         var nm = document.createElement('span');
         nm.className = 'ver-name';
         nm.textContent = v;
@@ -334,12 +343,59 @@
           ds.textContent = d;
           el.appendChild(ds);
         }
-        el.addEventListener('click', function () {
+        el.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('.ver-handle')) return; // 손잡이는 선택 아님
+          if (verDragMoved) { verDragMoved = false; return; }              // 드래그 직후 클릭 무시
           verOverlay.style.display = 'none';
           if (v !== curVersion) loadVersion(v, curBook, curChap);
         });
         verList.appendChild(el);
       });
+    }
+
+    // 드래그로 번역본 순서 변경 (터치·마우스 공용)
+    var verDragEl = null, verDragging = false, verDragMoved = false;
+    function startVerDrag(e) {
+      var item = e.target.closest('.ver-item'); if (!item) return;
+      e.preventDefault();
+      verDragEl = item; verDragging = true; verDragMoved = false;
+      item.classList.add('dragging');
+      item.style.pointerEvents = 'none';
+      document.addEventListener('pointermove', onVerDrag, { passive: false });
+      document.addEventListener('pointerup', endVerDrag);
+    }
+    function onVerDrag(e) {
+      if (!verDragging) return;
+      e.preventDefault();
+      verDragMoved = true;
+      var over = document.elementFromPoint(e.clientX, e.clientY);
+      var overItem = over && over.closest ? over.closest('.ver-item') : null;
+      if (!overItem || overItem === verDragEl || overItem.parentNode !== verList) return;
+      var rect = overItem.getBoundingClientRect();
+      var before = e.clientY < rect.top + rect.height / 2;
+      verList.insertBefore(verDragEl, before ? overItem : overItem.nextSibling);
+    }
+    function endVerDrag() {
+      if (!verDragging) return;
+      verDragging = false;
+      if (verDragEl) { verDragEl.classList.remove('dragging'); verDragEl.style.pointerEvents = ''; }
+      verDragEl = null;
+      document.removeEventListener('pointermove', onVerDrag);
+      document.removeEventListener('pointerup', endVerDrag);
+      var order = [];
+      verList.querySelectorAll('.ver-item').forEach(function (el) { order.push(el.getAttribute('data-ver')); });
+      VERSIONS = order.slice();
+      try { localStorage.setItem('bibleVerOrder', JSON.stringify(order)); } catch (e) {}
+    }
+    // 저장된 사용자 순서 적용 (새 번역본은 뒤에 붙임)
+    function applyVerOrder(list) {
+      var saved = [];
+      try { saved = JSON.parse(localStorage.getItem('bibleVerOrder') || '[]'); } catch (e) {}
+      if (!saved.length) return list;
+      var out = [];
+      saved.forEach(function (n) { if (list.indexOf(n) !== -1 && out.indexOf(n) === -1) out.push(n); });
+      list.forEach(function (n) { if (out.indexOf(n) === -1) out.push(n); });
+      return out;
     }
 
     function applyBible(data, version, bookIdx, chapIdx) {
