@@ -224,7 +224,8 @@
       font-weight:700; padding:0 1px; line-height:0; }
     .xref { color:#2f6fd6; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
     /* 번역본 선택창: 이름(왼쪽) + 서술형 해설(오른쪽) */
-    #verList .pick-item { text-align:left; display:flex; align-items:flex-start; gap:10px; padding:11px 14px; }
+    #verList .pick-item { text-align:left; display:flex; align-items:flex-start; gap:10px; padding:11px 14px;
+      user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
     #verList .ver-name { font-weight:700; flex:0 0 96px; }
     #verList .ver-desc { color:var(--muted); font-size:12px; line-height:1.35; flex:1 1 auto; text-align:left; }
     #verList .pick-item.on .ver-desc { color:rgba(255,255,255,.85); }
