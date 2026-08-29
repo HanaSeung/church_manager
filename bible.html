@@ -1433,7 +1433,7 @@
       document.getElementById('wjbMean').textContent = (t.m && t.m !== '_') ? t.m : '';
       document.getElementById('wjbBody').innerHTML =
         '<div class="wr"><span class="wk">기본형</span><span class="wv">' + escapeHtml(t.l) + ' <span style="color:var(--muted)">' + escapeHtml(t.p) + '</span></span></div>' +
-        '<div class="wr"><span class="wk">스트롱</span><span class="wv code wjb-code">' + escapeHtml(t.c) + ' <span style="font-size:12px;font-weight:400">› 사전</span></span></div>' +
+        '<div class="wr"><span class="wk">스트롱</span><span class="wv code wjb-code">' + escapeHtml(t.c) + '</span></div>' +
         '<div class="wr"><span class="wk">문법</span><span class="wv">' + escapeHtml(t.g || '-') + '</span></div>';
       var cc = document.querySelector('#wjbBody .wjb-code');
       if (cc) cc.onclick = function () { closeWjb(); openSheet(t.c, t.w); }; // 스트롱 → 원어 사전
