@@ -233,9 +233,11 @@
       padding:8px 12px 8px 2px; margin:-8px 0; touch-action:none; user-select:none;
       -webkit-user-select:none; }
     #verList .pick-item.on .ver-handle { color:rgba(255,255,255,.7); }
-    #verList .ver-item.dragging { opacity:.6; background:var(--green-soft); }
+    #verList .sortable-ghost { opacity:.4; }
+    #verList .sortable-chosen { background:var(--green-soft); }
   </style>
 
+  <script src="Sortable.min.js"></script>
   <script>
     function adjustHeadSpace() {
       var head = document.getElementById('fixedHead');
@@ -332,7 +334,6 @@
         el.setAttribute('data-ver', v);
         var h = document.createElement('span');
         h.className = 'ver-handle'; h.textContent = '≡'; h.title = '드래그로 순서 변경';
-        h.addEventListener('pointerdown', startVerDrag);
         el.appendChild(h);
         var nm = document.createElement('span');
         nm.className = 'ver-name';
@@ -347,7 +348,6 @@
         }
         el.addEventListener('click', function (e) {
           if (e.target.closest && e.target.closest('.ver-handle')) return; // 손잡이는 선택 아님
-          if (verDragMoved) { verDragMoved = false; return; }              // 드래그 직후 클릭 무시
           verOverlay.style.display = 'none';
           if (v !== curVersion) loadVersion(v, curBook, curChap);
         });
@@ -355,51 +355,22 @@
       });
     }
 
-    // 드래그로 번역본 순서 변경 (터치·마우스 공용, 포인터 캡처)
-    var verDragEl = null, verDragging = false, verDragMoved = false, verHandle = null;
-    function startVerDrag(e) {
-      var item = e.target.closest('.ver-item'); if (!item) return;
-      e.preventDefault();
-      verDragEl = item; verDragging = true; verDragMoved = false;
-      item.classList.add('dragging');
-      item.style.pointerEvents = 'none';
-      verHandle = e.currentTarget;
-      try { verHandle.setPointerCapture(e.pointerId); } catch (_) {}
-      verHandle.addEventListener('pointermove', onVerDrag, { passive: false });
-      verHandle.addEventListener('pointerup', endVerDrag);
-      verHandle.addEventListener('pointercancel', endVerDrag);
-    }
-    function onVerDrag(e) {
-      if (!verDragging) return;
-      e.preventDefault();
-      verDragMoved = true;
-      var y = e.clientY;
-      // 목록 가장자리에서 자동 스크롤
-      var lr = verList.getBoundingClientRect();
-      if (y < lr.top + 30) verList.scrollTop -= 10;
-      else if (y > lr.bottom - 30) verList.scrollTop += 10;
-      var over = document.elementFromPoint(e.clientX, y);
-      var overItem = over && over.closest ? over.closest('.ver-item') : null;
-      if (!overItem || overItem === verDragEl || overItem.parentNode !== verList) return;
-      var rect = overItem.getBoundingClientRect();
-      var before = y < rect.top + rect.height / 2;
-      verList.insertBefore(verDragEl, before ? overItem : overItem.nextSibling);
-    }
-    function endVerDrag(e) {
-      if (!verDragging) return;
-      verDragging = false;
-      if (verDragEl) { verDragEl.classList.remove('dragging'); verDragEl.style.pointerEvents = ''; }
-      if (verHandle) {
-        verHandle.removeEventListener('pointermove', onVerDrag);
-        verHandle.removeEventListener('pointerup', endVerDrag);
-        verHandle.removeEventListener('pointercancel', endVerDrag);
-        try { e && verHandle.releasePointerCapture && verHandle.releasePointerCapture(e.pointerId); } catch (_) {}
-      }
-      verDragEl = null; verHandle = null;
+    // 드래그로 번역본 순서 변경 — SortableJS (터치·마우스 안정 지원)
+    function saveVerOrderFromDOM() {
       var order = [];
       verList.querySelectorAll('.ver-item').forEach(function (el) { order.push(el.getAttribute('data-ver')); });
       VERSIONS = order.slice();
-      try { localStorage.setItem('bibleVerOrder', JSON.stringify(order)); } catch (e2) {}
+      try { localStorage.setItem('bibleVerOrder', JSON.stringify(order)); } catch (e) {}
+    }
+    if (window.Sortable) {
+      Sortable.create(verList, {
+        handle: '.ver-handle',
+        animation: 150,
+        delay: 120,               // 살짝 눌러야 시작(스크롤과 구분)
+        delayOnTouchOnly: true,
+        touchStartThreshold: 5,
+        onEnd: saveVerOrderFromDOM
+      });
     }
     // 저장된 사용자 순서 적용 (새 번역본은 뒤에 붙임)
     function applyVerOrder(list) {
