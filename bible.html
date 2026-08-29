@@ -52,6 +52,7 @@
             <span id="locBook" class="loc-book">창</span><span id="locCV" class="loc-cv">1:1</span>
           </button>
           <button id="stronBtn" class="stronbtn disabled" title="원어(스트롱) 보기">원어</button>
+          <button id="wjbBtn" class="stronbtn" title="원전분해 보기">원전분해</button>
           <button id="commBtn" class="stronbtn" title="주석 보기">주석</button>
           <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
           <span id="parBar" class="parbar" style="display:none;"></span>
@@ -124,6 +125,16 @@
     </div>
     <div id="commTabs" class="comm-tabs"></div>
     <div id="commBody" class="sh-body"></div>
+  </div>
+
+  <div id="wjbSheet" class="sheet">
+    <div class="grip"></div>
+    <div class="sh-head">
+      <span id="wjbHeb" style="font-size:26px;font-weight:600;direction:rtl;"></span>
+      <span id="wjbMean" style="font-size:16px;font-weight:700;color:var(--green-d);flex:1;"></span>
+      <button id="wjbX" class="sh-x">×</button>
+    </div>
+    <div id="wjbBody" class="sh-body"></div>
   </div>
   <input type="file" id="lexFile" accept=".json,application/json" multiple style="display:none;">
   <div id="toast" class="toast"></div>
@@ -274,6 +285,22 @@
     .opt-restore { flex:0 0 auto; border:1px solid var(--line); color:var(--green-d);
       background:#fff; border-radius:8px; padding:5px 12px; font-size:13px; cursor:pointer; }
     .opt-empty { color:var(--muted); font-size:13px; padding:8px 16px 14px; }
+    /* 원전분해 인터리니어 */
+    .wjb-line { display:flex; flex-wrap:wrap; gap:2px 13px; margin:2px 0 12px 22px;
+      padding:8px 10px; background:var(--green-soft); border-radius:8px; }
+    .wjb-line.rtl { direction:rtl; }
+    body.par .wjb-line { margin:2px 0 0; }
+    .wjb-w { display:inline-flex; flex-direction:column; align-items:center;
+      padding:3px 2px; border-radius:6px; cursor:pointer; min-width:30px; }
+    .wjb-w:active { background:#fff; }
+    .wjb-w .wh { font-size:19px; line-height:1.35; font-weight:600; color:var(--text); }
+    .wjb-w .wg { font-size:12px; color:var(--green-d); margin-top:1px; white-space:nowrap; }
+    .wjb-w .ws { font-size:9.5px; color:#2f6fd6; margin-top:1px; }
+    .plabel.orig { color:var(--green-d) !important; background:var(--green-soft) !important; }
+    #wjbBody .wr { display:flex; font-size:14px; margin:8px 0; }
+    #wjbBody .wr .wk { flex:0 0 76px; color:var(--muted); }
+    #wjbBody .wr .wv { flex:1; }
+    #wjbBody .wr .wv.code { color:#2f6fd6; font-weight:600; }
     /* 각주·상호참조·이탤릭 */
     .vtext em, .sh-body em { font-style:italic; }
     .fn { color:#2f6fd6; cursor:pointer; font-size:.68em; vertical-align:super;
@@ -565,6 +592,12 @@
       updateLocBtn();
       if (window._refreshComm) window._refreshComm(); // 주석 시트 열려있으면 현재 장으로 갱신
 
+      // 원전분해 켜짐: 현재 장 데이터 준비 후 다시 렌더 (단일·병행 공통)
+      if (WONJEON_ON && (!WONJEON_CH || WONJEON_CH.book !== bookIdx + 1 || WONJEON_CH.chap !== chapIdx + 1)) {
+        ensureWonjeon(bookIdx, chapIdx, function () { showChapter(bookIdx, chapIdx, jumpVerse); });
+        return;
+      }
+
       if (PAR_ON) { contentEl.dir = 'ltr'; renderParallel(); return; } // 병행 보기
 
       var book = BIBLE.books[bookIdx];
@@ -575,6 +608,7 @@
       verses.forEach(function (txt, i) {
         html += '<p class="verse" id="v' + (i + 1) + '"><span class="vnum">' + (i + 1) + '</span>' +
           '<span class="vtext">' + renderVerseText(txt, i + 1) + '</span></p>';
+        if (WONJEON_ON) html += wonjeonHTML(i + 1); // 각 절 아래 원전분해
       });
       contentEl.innerHTML = html;
 
@@ -768,14 +802,16 @@
     //  store 'lex'      : 원어사전 { 코드: 뜻 }
     //  store 'versions' : 임포트한 번역본 { 이름: 성경JSON }
     //  store 'comm'     : 임포트한 주석 (장 단위) key="이름|책|장" -> {name,book,chap,blocks}
+    //  store 'wonjeon'  : 원전분해 (장 단위) key="책|장" -> {book,chap,verses:{절:[토큰]}}
     function openLexDB(cb) {
       try {
-        var req = indexedDB.open('bibleLex', 3);
+        var req = indexedDB.open('bibleLex', 4);
         req.onupgradeneeded = function (e) {
           var db = e.target.result;
           if (!db.objectStoreNames.contains('lex')) db.createObjectStore('lex');
           if (!db.objectStoreNames.contains('versions')) db.createObjectStore('versions');
           if (!db.objectStoreNames.contains('comm')) db.createObjectStore('comm');
+          if (!db.objectStoreNames.contains('wonjeon')) db.createObjectStore('wonjeon');
         };
         req.onsuccess = function (e) { LEXDB = e.target.result; cb && cb(); };
         req.onerror = function () { LEXDB = null; cb && cb(); };
@@ -866,6 +902,51 @@
         kr.onsuccess = function () {
           (kr.result || []).forEach(function (k) { if (String(k).indexOf(name + '|') === 0) store.delete(k); });
         };
+        tx.oncomplete = function () { cb && cb(); };
+        tx.onerror = function () { cb && cb(); };
+      } catch (e) { cb && cb(); }
+    }
+
+    // 원전분해: 장 단위 저장/조회
+    var WONJEON_AVAILABLE = false;
+    try { WONJEON_AVAILABLE = localStorage.getItem('bibleHasWonjeon') === '1'; } catch (e) {}
+    function putWonjeonObj(obj, cb) {
+      // obj = {type:'wonjeon', name, books:{책:{장:{절:[토큰]}}}}
+      if (!LEXDB || !obj || !obj.books) { cb && cb(0); return; }
+      try {
+        var tx = LEXDB.transaction('wonjeon', 'readwrite');
+        var store = tx.objectStore('wonjeon');
+        var cnt = 0;
+        Object.keys(obj.books).forEach(function (bk) {
+          var chaps = obj.books[bk];
+          Object.keys(chaps).forEach(function (ch) {
+            store.put({ book: +bk, chap: +ch, verses: chaps[ch] }, bk + '|' + ch);
+            cnt++;
+          });
+        });
+        tx.oncomplete = function () {
+          WONJEON_AVAILABLE = true;
+          try { localStorage.setItem('bibleHasWonjeon', '1'); } catch (e) {}
+          cb && cb(cnt);
+        };
+        tx.onerror = function () { cb && cb(0); };
+      } catch (e) { cb && cb(0); }
+    }
+    function getWonjeonChapter(book, chap, cb) {
+      if (!LEXDB) { cb(null); return; }
+      try {
+        var r = LEXDB.transaction('wonjeon', 'readonly').objectStore('wonjeon').get(book + '|' + chap);
+        r.onsuccess = function () { cb(r.result || null); };
+        r.onerror = function () { cb(null); };
+      } catch (e) { cb(null); }
+    }
+    function delWonjeon(cb) {
+      WONJEON_AVAILABLE = false;
+      try { localStorage.removeItem('bibleHasWonjeon'); } catch (e) {}
+      if (!LEXDB) { cb && cb(); return; }
+      try {
+        var tx = LEXDB.transaction('wonjeon', 'readwrite');
+        tx.objectStore('wonjeon').clear();
         tx.oncomplete = function () { cb && cb(); };
         tx.onerror = function () { cb && cb(); };
       } catch (e) { cb && cb(); }
@@ -1043,7 +1124,9 @@
         var p = payloads[i++];
         var obj;
         try { obj = JSON.parse(p.text); } catch (e) { res.errors++; return next(); }
-        if (obj && obj.type === 'commentary' && obj.name && obj.books) {
+        if (obj && obj.type === 'wonjeon' && obj.books) {
+          putWonjeonObj(obj, function () { if (res.added.indexOf('원전분해') === -1) res.added.push('원전분해'); next(); });
+        } else if (obj && obj.type === 'commentary' && obj.name && obj.books) {
           putCommObj(obj, function (c) { if (res.added.indexOf(obj.name) === -1) res.added.push(obj.name); next(); });
         } else if (obj && obj.books) {
           var fbase = String(p.name || '').replace(/\.json$/i, '');
@@ -1273,6 +1356,11 @@
             '<button class="opt-del" data-delc="' + n + '">삭제</button></div>';
         });
         h += '</div>';
+        if (WONJEON_AVAILABLE) {
+          h += '<div class="opt-sec"><div class="opt-sec-t">원전분해 관리</div>' +
+            '<div class="opt-item"><span class="oi-name">원전분해</span>' +
+            '<button class="opt-del" data-delw="1">삭제</button></div></div>';
+        }
         optBody.innerHTML = h;
         optBody.querySelectorAll('[data-delv]').forEach(function (b) {
           b.onclick = function () {
@@ -1284,6 +1372,17 @@
         optBody.querySelectorAll('[data-restv]').forEach(function (b) {
           b.onclick = function () { restoreDeployed(b.getAttribute('data-restv'), render); };
         });
+        var bw = optBody.querySelector('[data-delw]');
+        if (bw) bw.onclick = function () {
+          if (!confirm('원전분해를 삭제할까요?')) return;
+          delWonjeon(function () {
+            if (WONJEON_ON) {
+              WONJEON_ON = false; wjbBtn.classList.remove('on'); WONJEON_CH = null;
+              if (PAR_ON) renderParallel(); else showChapter(curBook, curChap, curVerse);
+            }
+            render();
+          });
+        };
         optBody.querySelectorAll('[data-delc]').forEach(function (b) {
           b.onclick = function () {
             var n = b.getAttribute('data-delc');
@@ -1297,6 +1396,61 @@
       document.getElementById('optBack').addEventListener('click', function () { optOverlay.style.display = 'none'; });
       optOverlay.addEventListener('click', function (e) { if (e.target === optOverlay) optOverlay.style.display = 'none'; });
     })();
+
+    // ===== 원전분해 보기 (토글: 단일=각 절 아래 / 병행=마지막 줄) =====
+    var WONJEON_ON = false;
+    var WONJEON_CH = null; // { book, chap, verses:{절:[토큰]} }
+    var wjbBtn = document.getElementById('wjbBtn');
+    var wjbSheet = document.getElementById('wjbSheet');
+
+    function ensureWonjeon(bookIdx, chapIdx, cb) {
+      var b = bookIdx + 1, c = chapIdx + 1;
+      if (WONJEON_CH && WONJEON_CH.book === b && WONJEON_CH.chap === c) { cb && cb(); return; }
+      getWonjeonChapter(b, c, function (rec) {
+        WONJEON_CH = { book: b, chap: c, verses: (rec && rec.verses) || {} };
+        cb && cb();
+      });
+    }
+    function wonjeonHTML(v) {
+      var toks = (WONJEON_CH && WONJEON_CH.verses[String(v)]) || [];
+      if (!toks.length) return '';
+      var rtl = /[֐-׿]/.test(toks[0].w) ? ' rtl' : '';
+      var h = '<div class="wjb-line' + rtl + '">';
+      for (var i = 0; i < toks.length; i++) {
+        var t = toks[i];
+        h += '<span class="wjb-w" data-wv="' + v + '" data-wi="' + i + '">' +
+          '<span class="wh">' + escapeHtml(t.w) + '</span>' +
+          '<span class="wg">' + escapeHtml(t.m && t.m !== '_' ? t.m : '·') + '</span>' +
+          '<span class="ws">' + escapeHtml(t.c) + '</span></span>';
+      }
+      return h + '</div>';
+    }
+    function openWjbToken(v, i) {
+      var arr = (WONJEON_CH && WONJEON_CH.verses[String(v)]) || [];
+      var t = arr[i]; if (!t) return;
+      document.getElementById('wjbHeb').textContent = t.w;
+      document.getElementById('wjbMean').textContent = (t.m && t.m !== '_') ? t.m : '';
+      document.getElementById('wjbBody').innerHTML =
+        '<div class="wr"><span class="wk">기본형</span><span class="wv">' + escapeHtml(t.l) + ' <span style="color:var(--muted)">' + escapeHtml(t.p) + '</span></span></div>' +
+        '<div class="wr"><span class="wk">스트롱</span><span class="wv code">' + escapeHtml(t.c) + '</span></div>' +
+        '<div class="wr"><span class="wk">문법</span><span class="wv">' + escapeHtml(t.g || '-') + '</span></div>';
+      sheetMask.classList.add('show'); wjbSheet.classList.add('show');
+    }
+    function closeWjb() { wjbSheet.classList.remove('show'); sheetMask.classList.remove('show'); }
+    document.getElementById('wjbX').addEventListener('click', closeWjb);
+    sheetMask.addEventListener('click', function () { if (wjbSheet.classList.contains('show')) closeWjb(); });
+    contentEl.addEventListener('click', function (e) {
+      var w = e.target.closest ? e.target.closest('.wjb-w') : null;
+      if (w) openWjbToken(+w.getAttribute('data-wv'), +w.getAttribute('data-wi'));
+    });
+    wjbBtn.addEventListener('click', function () {
+      if (!WONJEON_AVAILABLE) { toast('원전분해를 먼저 불러오세요 (＋ 불러오기)'); return; }
+      WONJEON_ON = !WONJEON_ON;
+      wjbBtn.classList.toggle('on', WONJEON_ON);
+      WONJEON_CH = null; // 현재 장 다시 로드
+      if (PAR_ON) renderParallel();
+      else showChapter(curBook, curChap, curVerse);
+    });
 
     // ===== 병행 보기 (현재 번역본 기준 + 추가 최대 2개) =====
     var parBtn = document.getElementById('parBtn');
@@ -1373,6 +1527,9 @@
 
     function renderParallel() {
       if (!PAR_ON) return;
+      if (WONJEON_ON && (!WONJEON_CH || WONJEON_CH.book !== curBook + 1 || WONJEON_CH.chap !== curChap + 1)) {
+        ensureWonjeon(curBook, curChap, renderParallel); return; // 원전분해 데이터 준비 후 재렌더
+      }
       var list = parList(), datas = {}, pending = list.length;
       list.forEach(function (nm) { getVersionData(nm, function (d) { datas[nm] = d; if (--pending === 0) paintParallel(list, datas); }); });
     }
@@ -1392,6 +1549,10 @@
           html += '<div class="pvrow"><span class="plabel' + (isEngVer(nm) ? ' eng' : '') + '">' +
             escapeHtml(nm) + '</span><span class="ptext"' + (heb ? ' dir="rtl"' : '') + '>' +
             renderVerseText(txt, v + 1, nm) + '</span></div>';
+        }
+        if (WONJEON_ON) { // 마지막 줄에 원전분해
+          var wh = wonjeonHTML(v + 1);
+          if (wh) html += '<div class="pvrow"><span class="plabel orig">원전분해</span>' + wh + '</div>';
         }
         html += '</div></div>';
       }
