@@ -83,6 +83,8 @@
       <div class="picker-head">
         <button id="verBack" class="pk-back" title="닫기">‹</button>
         <span class="pk-title">번역본 선택</span>
+        <span style="flex:1;"></span>
+        <button id="verImport" class="pk-import" title="번역본·사전 파일 불러오기">＋ 불러오기</button>
       </div>
       <div id="verList" class="picker-col" style="max-height:60vh;"></div>
     </div>
@@ -98,7 +100,7 @@
     </div>
     <div id="shBody" class="sh-body"></div>
   </div>
-  <input type="file" id="lexFile" accept=".json,application/json" style="display:none;">
+  <input type="file" id="lexFile" accept=".json,application/json" multiple style="display:none;">
   <div id="toast" class="toast"></div>
 
   <div class="wrap">
@@ -192,6 +194,9 @@
       border-radius:20px; z-index:80; opacity:0; pointer-events:none; transition:.25s;
       white-space:nowrap; max-width:90vw; text-align:center; }
     .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .pk-import { border:1px solid var(--line); background:#f5f6f4; color:var(--green-d);
+      font-size:13px; font-weight:600; padding:5px 10px; border-radius:8px; cursor:pointer; }
+    .pk-import:hover { background:var(--green-soft); }
     body.stron .vtext .w.has { border-bottom:1.5px dotted var(--green); color:var(--green-d); cursor:pointer; }
     body.stron .vtext .w.has:active { background:var(--green-soft); }
     .sheet-mask { position:fixed; inset:0; background:rgba(0,0,0,.35); opacity:0;
@@ -230,6 +235,8 @@
     var FS = 20;
     try { var _sf = parseInt(localStorage.getItem('bibleFontPx'), 10); if (_sf >= FS_MIN && _sf <= FS_MAX) FS = _sf; } catch (e) {}
     var VERSIONS = [];
+    var DEPLOYED_VERSIONS = [];
+    var IMPORTED_VERSIONS = [];
     var curVersion = '개역개정';
 
     var locBtn = document.getElementById('locBtn');
@@ -246,26 +253,43 @@
     var statusEl = document.getElementById('status');
     var curVerse = 1;
 
-    fetch('data/bible/versions.json')
-      .then(function (r) { return r.ok ? r.json() : ['개역개정']; })
-      .then(function (list) {
-        VERSIONS = (list && list.length) ? list : ['개역개정'];
+    // DB 준비 후 앱 시작 (배포 목록 + 임포트 목록 병합)
+    function startApp() {
+      fetch('data/bible/versions.json')
+        .then(function (r) { return r.ok ? r.json() : ['개역개정']; })
+        .then(function (list) {
+          DEPLOYED_VERSIONS = (list && list.length) ? list : ['개역개정'];
+          refreshVersions(function () {
+            curVersion = VERSIONS[0] || '개역개정';
+            loadVersion(curVersion, 0, 0);
+          });
+        })
+        .catch(function () {
+          DEPLOYED_VERSIONS = ['개역개정'];
+          refreshVersions(function () { loadVersion('개역개정', 0, 0); });
+        });
+    }
+    openLexDB(startApp);
+
+    // 배포 번역본 + 임포트 번역본 병합 → 목록 갱신
+    function refreshVersions(cb) {
+      getVersionKeys(function (keys) {
+        IMPORTED_VERSIONS = keys || [];
+        var merged = DEPLOYED_VERSIONS.slice();
+        IMPORTED_VERSIONS.forEach(function (k) { if (merged.indexOf(k) === -1) merged.push(k); });
+        VERSIONS = merged;
         buildVersionOptions();
-        curVersion = VERSIONS[0];
-        loadVersion(curVersion, 0, 0);
-      })
-      .catch(function () {
-        VERSIONS = ['개역개정'];
-        buildVersionOptions();
-        loadVersion('개역개정', 0, 0);
+        cb && cb();
       });
+    }
 
     function buildVersionOptions() {
       verList.innerHTML = '';
       VERSIONS.forEach(function (v) {
+        var mine = IMPORTED_VERSIONS.indexOf(v) !== -1;
         var el = document.createElement('div');
         el.className = 'pick-item' + (v === curVersion ? ' on' : '');
-        el.textContent = v;
+        el.textContent = v + (mine ? '  · 내 파일' : '');
         el.addEventListener('click', function () {
           verOverlay.style.display = 'none';
           if (v !== curVersion) loadVersion(v, curBook, curChap);
@@ -274,25 +298,36 @@
       });
     }
 
+    function applyBible(data, version, bookIdx, chapIdx) {
+      BIBLE = data;
+      curVersion = version;
+      verBtn.textContent = version;
+      buildVersionOptions();
+      detectCodes();
+      statusEl.style.display = 'none';
+      showChapter(bookIdx || 0, chapIdx || 0);
+      adjustHeadSpace();
+    }
+
     function loadVersion(version, bookIdx, chapIdx) {
       statusEl.style.display = 'block';
       statusEl.textContent = version + ' 데이터를 불러오는 중…';
       contentEl.style.display = 'none';
+      if (IMPORTED_VERSIONS.indexOf(version) !== -1) {
+        // 개인 임포트 번역본 → IndexedDB에서 로드
+        getVersion(version, function (data) {
+          if (data && data.books) { applyBible(data, version, bookIdx, chapIdx); }
+          else { statusEl.style.display = 'block'; statusEl.textContent = version + ' 데이터를 불러오지 못했습니다.'; }
+        });
+        return;
+      }
+      // 배포 번역본 → 파일에서 로드
       fetch('data/bible/' + encodeURIComponent(version) + '.json')
         .then(function (r) {
           if (!r.ok) throw new Error('not found');
           return r.json();
         })
-        .then(function (data) {
-          BIBLE = data;
-          curVersion = version;
-          verBtn.textContent = version;
-          buildVersionOptions();
-          detectCodes();
-          statusEl.style.display = 'none';
-          showChapter(bookIdx || 0, chapIdx || 0);
-          adjustHeadSpace();
-        })
+        .then(function (data) { applyBible(data, version, bookIdx, chapIdx); })
         .catch(function () {
           statusEl.style.display = 'block';
           statusEl.textContent = version + ' 데이터를 불러오지 못했습니다. data/bible/' + version + '.json 파일을 확인하세요.';
@@ -520,15 +555,48 @@
     var lexFile = document.getElementById('lexFile');
     var LEXDB = null;
 
-    // 사전 저장소 (IndexedDB — 개인 기기 내부, 서버 전송 없음)
-    (function openLexDB() {
+    // 개인 저장소 (IndexedDB — 기기 내부, 서버 전송 없음)
+    //  store 'lex'      : 원어사전 { 코드: 뜻 }
+    //  store 'versions' : 임포트한 번역본 { 이름: 성경JSON }
+    function openLexDB(cb) {
       try {
-        var req = indexedDB.open('bibleLex', 1);
-        req.onupgradeneeded = function (e) { e.target.result.createObjectStore('lex'); };
-        req.onsuccess = function (e) { LEXDB = e.target.result; };
-        req.onerror = function () { LEXDB = null; };
-      } catch (e) { LEXDB = null; }
-    })();
+        var req = indexedDB.open('bibleLex', 2);
+        req.onupgradeneeded = function (e) {
+          var db = e.target.result;
+          if (!db.objectStoreNames.contains('lex')) db.createObjectStore('lex');
+          if (!db.objectStoreNames.contains('versions')) db.createObjectStore('versions');
+        };
+        req.onsuccess = function (e) { LEXDB = e.target.result; cb && cb(); };
+        req.onerror = function () { LEXDB = null; cb && cb(); };
+      } catch (e) { LEXDB = null; cb && cb(); }
+    }
+
+    // 임포트 번역본 저장/조회
+    function putVersion(name, obj, cb) {
+      if (!LEXDB) { cb && cb(); return; }
+      try {
+        var tx = LEXDB.transaction('versions', 'readwrite');
+        tx.objectStore('versions').put(obj, name);
+        tx.oncomplete = function () { cb && cb(); };
+        tx.onerror = function () { cb && cb(); };
+      } catch (e) { cb && cb(); }
+    }
+    function getVersion(name, cb) {
+      if (!LEXDB) { cb(null); return; }
+      try {
+        var r = LEXDB.transaction('versions', 'readonly').objectStore('versions').get(name);
+        r.onsuccess = function () { cb(r.result || null); };
+        r.onerror = function () { cb(null); };
+      } catch (e) { cb(null); }
+    }
+    function getVersionKeys(cb) {
+      if (!LEXDB) { cb([]); return; }
+      try {
+        var r = LEXDB.transaction('versions', 'readonly').objectStore('versions').getAllKeys();
+        r.onsuccess = function () { cb(r.result || []); };
+        r.onerror = function () { cb([]); };
+      } catch (e) { cb([]); }
+    }
 
     function lexGet(code, cb) {
       if (!LEXDB) { cb(null); return; }
@@ -635,28 +703,71 @@
       }
     });
 
-    // 사전 파일 임포트 (1회 — IndexedDB에 저장)
-    lexFile.addEventListener('change', function () {
-      var f = this.files[0]; if (!f) return;
-      statusEl.style.display = 'block';
-      statusEl.textContent = '사전을 불러오는 중…';
-      var reader = new FileReader();
-      reader.onload = function () {
+    // 임포트 코어 — payloads: [{name, text}] (번역본/원어사전 자동 판별)
+    function _importPayloads(payloads, done) {
+      var res = { added: [], lex: 0, errors: 0 };
+      var i = 0;
+      (function next() {
+        if (i >= payloads.length) { done(res); return; }
+        var p = payloads[i++];
         var obj;
-        try { obj = JSON.parse(reader.result); }
-        catch (e) { statusEl.style.display = 'none'; alert('사전 파일을 읽지 못했습니다.'); return; }
-        lexImport(obj, function (ok) {
-          statusEl.style.display = 'none';
-          if (ok) {
-            document.body.classList.add('stron'); stronBtn.classList.add('on');
-            try { localStorage.setItem('bibleStron', '1'); } catch (e) {}
-            alert('원어사전 불러오기 완료 (' + Object.keys(obj).length + '개 항목)');
-          } else { alert('사전 저장에 실패했습니다.'); }
-        });
-      };
-      reader.readAsText(f);
-      this.value = '';
+        try { obj = JSON.parse(p.text); } catch (e) { res.errors++; return next(); }
+        if (obj && obj.books) {
+          var name = obj.version || String(p.name || '번역본').replace(/\.json$/i, '');
+          obj.version = name;
+          putVersion(name, obj, function () { res.added.push(name); next(); });
+        } else if (obj && typeof obj === 'object') {
+          var keys = Object.keys(obj);
+          if (keys.length && /^[HG]\d/.test(keys[0])) {
+            lexImport(obj, function () { res.lex += keys.length; next(); }); // 원어사전
+          } else { res.errors++; next(); }
+        } else { res.errors++; next(); }
+      })();
+    }
+
+    // 파일(File[]) → 텍스트로 읽어 임포트
+    function importFiles(fileList, done) {
+      var arr = Array.prototype.slice.call(fileList);
+      if (!arr.length) { done({ added: [], lex: 0, errors: 0 }); return; }
+      var payloads = [], pending = arr.length;
+      arr.forEach(function (f) {
+        var reader = new FileReader();
+        reader.onload = function () { payloads.push({ name: f.name, text: reader.result }); if (--pending === 0) _importPayloads(payloads, done); };
+        reader.onerror = function () { if (--pending === 0) _importPayloads(payloads, done); };
+        reader.readAsText(f);
+      });
+    }
+
+    // 텍스트 payload 직접 임포트 (공유 받기용)
+    function importTexts(payloads, done) { _importPayloads(payloads, done); }
+
+    // 파일 선택 → 임포트 (번역본/사전 공용, 다중 선택)
+    lexFile.addEventListener('change', function () {
+      var input = this;
+      var files = input.files; if (!files || !files.length) return;
+      statusEl.style.display = 'block';
+      statusEl.textContent = '불러오는 중…';
+      importFiles(files, function (res) {
+        input.value = '';
+        statusEl.style.display = 'none';
+        var msg = [];
+        if (res.added.length) msg.push('번역본 ' + res.added.length + '개');
+        if (res.lex) msg.push('원어사전');
+        if (res.errors) msg.push('실패 ' + res.errors);
+        toast(msg.length ? ('불러오기 완료: ' + msg.join(', ')) : '불러온 파일이 없습니다');
+        refreshVersions();
+        if (res.lex && HAS_CODES) {
+          document.body.classList.add('stron'); stronBtn.classList.add('on');
+          try { localStorage.setItem('bibleStron', '1'); } catch (e) {}
+        }
+      });
     });
+
+    // 번역본 선택창의 '불러오기' 버튼
+    (function () {
+      var vi = document.getElementById('verImport');
+      if (vi) vi.addEventListener('click', function () { lexFile.click(); });
+    })();
 
     // 단어 탭 → 하단 시트
     contentEl.addEventListener('click', function (e) {
@@ -680,6 +791,28 @@
     function closeSheet() { sheetMask.classList.remove('show'); sheetEl.classList.remove('show'); }
     document.getElementById('shX').addEventListener('click', closeSheet);
     sheetMask.addEventListener('click', closeSheet);
+
+    // 공유(Share Target)로 받은 파일 처리 — 서비스워커가 캐시에 담아두면 여기서 임포트
+    function processSharedIfAny() {
+      if (location.search.indexOf('shared=1') === -1 || !('caches' in window)) return;
+      caches.open('shared-incoming').then(function (cache) {
+        cache.match('shared-payload.json').then(function (resp) {
+          if (!resp) return;
+          resp.json().then(function (payloads) {
+            if (!payloads || !payloads.length) return;
+            importTexts(payloads, function (res) {
+              cache.delete('shared-payload.json');
+              var msg = [];
+              if (res.added.length) msg.push('번역본 ' + res.added.length + '개');
+              if (res.lex) msg.push('원어사전');
+              toast(msg.length ? ('공유 불러오기 완료: ' + msg.join(', ')) : '불러온 파일이 없습니다');
+              refreshVersions();
+            });
+          });
+        });
+      });
+    }
+    processSharedIfAny();
   </script>
 </body>
 </html>
