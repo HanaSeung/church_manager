@@ -247,6 +247,7 @@
     .parchip .parx:active { opacity:1; }
     .paradd { border:1px dashed var(--line); color:var(--green); background:#fff;
       border-radius:16px; padding:3px 13px; font-size:16px; font-weight:700; cursor:pointer; line-height:1.4; }
+    .parbase { font-size:12.5px; color:var(--muted); font-weight:600; padding:4px 4px 4px 2px; }
     /* 병행 절 카드 (안1) */
     body.par .pv { background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:12px 14px 12px 12px; margin-bottom:12px; display:flex; gap:10px; }
@@ -993,34 +994,42 @@
     document.getElementById('shX').addEventListener('click', closeSheet);
     sheetMask.addEventListener('click', closeSheet);
 
-    // ===== 병행 보기 =====
+    // ===== 병행 보기 (현재 번역본 기준 + 추가 최대 2개) =====
     var parBtn = document.getElementById('parBtn');
     var parBar = document.getElementById('parBar');
-    var PAR_ON = false, PAR_VERSIONS = [], PAR_CACHE = {}, PAR_PICK_IDX = -1;
-    try { PAR_VERSIONS = JSON.parse(localStorage.getItem('bibleParVersions') || '[]') || []; } catch (e) {}
-    if (PAR_VERSIONS.length > 3) PAR_VERSIONS = PAR_VERSIONS.slice(0, 3);
+    var PAR_ON = false, PAR_EXTRA = [], PAR_CACHE = {}, PAR_PICK_IDX = -1;
+    try { PAR_EXTRA = JSON.parse(localStorage.getItem('bibleParExtra') || '[]') || []; } catch (e) {}
+    if (PAR_EXTRA.length > 2) PAR_EXTRA = PAR_EXTRA.slice(0, 2);
 
-    function savePar() { try { localStorage.setItem('bibleParVersions', JSON.stringify(PAR_VERSIONS)); } catch (e) {} }
+    function savePar() { try { localStorage.setItem('bibleParExtra', JSON.stringify(PAR_EXTRA)); } catch (e) {} }
     function isEngVer(nm) { return /^(ESV|NIV|KJV|NASB|LXX|NKJV|NLT|NRSV|RSV|NET|AMP|CSB|GNT|MSG|YLT|MLV|Darby|NHEB)/.test(nm); }
+
+    // 표시 목록: 현재(기준) + 추가(기준·중복 제외), 최대 3
+    function parList() {
+      var out = [curVersion];
+      PAR_EXTRA.forEach(function (n) { if (out.indexOf(n) === -1) out.push(n); });
+      return out.slice(0, 3);
+    }
 
     function renderParBar() {
       parBar.innerHTML = '';
-      PAR_VERSIONS.forEach(function (nm, idx) {
+      var base = document.createElement('span'); base.className = 'parbase';
+      base.textContent = curVersion + ' · 기준';
+      parBar.appendChild(base);
+      PAR_EXTRA.forEach(function (nm, idx) {
         var chip = document.createElement('span'); chip.className = 'parchip';
         var t = document.createElement('span'); t.className = 'pname'; t.textContent = nm;
         t.addEventListener('click', function () { openParPick(idx); });
         chip.appendChild(t);
         var x = document.createElement('span'); x.className = 'parx'; x.textContent = '✕';
-        x.addEventListener('click', function () {
-          PAR_VERSIONS.splice(idx, 1); savePar(); renderParBar(); renderParallel();
-        });
+        x.addEventListener('click', function () { PAR_EXTRA.splice(idx, 1); savePar(); renderParBar(); renderParallel(); });
         chip.appendChild(x);
         parBar.appendChild(chip);
       });
-      if (PAR_VERSIONS.length < 3) {
+      if (PAR_EXTRA.length < 2) {
         var add = document.createElement('span'); add.className = 'paradd'; add.textContent = '＋';
         add.title = '번역본 추가';
-        add.addEventListener('click', function () { openParPick(PAR_VERSIONS.length); });
+        add.addEventListener('click', function () { openParPick(PAR_EXTRA.length); });
         parBar.appendChild(add);
       }
       adjustHeadSpace();
@@ -1030,9 +1039,10 @@
     function pickParVersion(v) {
       var idx = PAR_PICK_IDX; PAR_PICK_IDX = -1;
       verOverlay.style.display = 'none';
-      if (idx >= PAR_VERSIONS.length) PAR_VERSIONS.push(v); else PAR_VERSIONS[idx] = v;
-      PAR_VERSIONS = PAR_VERSIONS.filter(function (x, i, a) { return a.indexOf(x) === i; }); // 중복 제거
-      if (PAR_VERSIONS.length > 3) PAR_VERSIONS = PAR_VERSIONS.slice(0, 3);
+      if (v !== curVersion && PAR_EXTRA.indexOf(v) === -1) {   // 기준·중복 제외
+        if (idx >= PAR_EXTRA.length) PAR_EXTRA.push(v); else PAR_EXTRA[idx] = v;
+      }
+      if (PAR_EXTRA.length > 2) PAR_EXTRA = PAR_EXTRA.slice(0, 2);
       savePar(); renderParBar(); renderParallel();
     }
 
@@ -1059,22 +1069,19 @@
 
     function renderParallel() {
       if (!PAR_ON) return;
-      if (!PAR_VERSIONS.length) { contentEl.innerHTML = '<div class="status">＋로 번역본을 추가하세요.</div>'; return; }
-      var datas = {}, pending = PAR_VERSIONS.length;
-      PAR_VERSIONS.forEach(function (nm) {
-        getVersionData(nm, function (d) { datas[nm] = d; if (--pending === 0) paintParallel(datas); });
-      });
+      var list = parList(), datas = {}, pending = list.length;
+      list.forEach(function (nm) { getVersionData(nm, function (d) { datas[nm] = d; if (--pending === 0) paintParallel(list, datas); }); });
     }
-    function paintParallel(datas) {
-      var base = null, i;
-      for (i = 0; i < PAR_VERSIONS.length; i++) { if (datas[PAR_VERSIONS[i]]) { base = datas[PAR_VERSIONS[i]]; break; } }
+    function paintParallel(list, datas) {
+      var base = datas[list[0]] || null, i;
+      if (!base) { for (i = 0; i < list.length; i++) { if (datas[list[i]]) { base = datas[list[i]]; break; } } }
       if (!base) { contentEl.innerHTML = '<div class="status">번역본을 불러오지 못했습니다.</div>'; return; }
       var book = base.books[curBook], verses = book.chapters[curChap];
       var html = '<div class="chap-title">' + book.name + ' ' + (curChap + 1) + '장</div>';
       for (var v = 0; v < verses.length; v++) {
         html += '<div class="pv" id="v' + (v + 1) + '"><div class="pvnum">' + (v + 1) + '</div><div class="pvbody">';
-        for (i = 0; i < PAR_VERSIONS.length; i++) {
-          var nm = PAR_VERSIONS[i], txt = '';
+        for (i = 0; i < list.length; i++) {
+          var nm = list[i], txt = '';
           try { txt = datas[nm].books[curBook].chapters[curChap][v] || ''; } catch (e) {}
           html += '<div class="pvrow"><span class="plabel' + (isEngVer(nm) ? ' eng' : '') + '">' +
             escapeHtml(nm) + '</span><span class="ptext">' + parText(txt) + '</span></div>';
@@ -1096,9 +1103,10 @@
       } else {
         PAR_ON = true; parBtn.classList.add('on');
         parBar.style.display = 'flex'; document.body.classList.add('par');
+        if (BIBLE) PAR_CACHE[curVersion] = BIBLE;   // 기준 데이터 재사용
         renderParBar();
-        if (PAR_VERSIONS.length === 0) openParPick(0); // 첫 슬롯 → 번역본 선택창
-        else renderParallel();
+        renderParallel();                            // 기준만이라도 병행 형식으로
+        if (PAR_EXTRA.length === 0) openParPick(0);   // 추가 없으면 선택창 바로
       }
     });
 
