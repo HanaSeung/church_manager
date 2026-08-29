@@ -631,9 +631,19 @@
       } catch (e) { cb(false); }
     }
 
+    // 각주·상호참조·HTML 태그 정리 (ESV 등 일부 번역본은 본문에 각주 마크업이 섞여 있음)
+    function cleanVerse(txt) {
+      var t = txt.replace(/▷[\s\S]*$/, '');       // 각주/상호참조 블록(▷ 이후) 제거
+      t = t.replace(/<sup>[\s\S]*?<\/sup>/g, ''); // 각주 번호 표시 제거
+      t = t.replace(/<[^>]*>/g, '');               // 나머지 HTML 태그 제거
+      t = t.replace(/\s+/g, ' ').trim();           // 공백 정리
+      return t;
+    }
+
     // 본문 렌더: <WH####>/<WG####> 코드는 숨기고 단어를 탭 가능하게
     function renderVerseText(txt) {
-      if (!txt || txt.indexOf('<W') === -1) return escapeHtml(txt || '');
+      if (!txt) return '';
+      if (txt.indexOf('<W') === -1) return escapeHtml(cleanVerse(txt));
       var html = '', re = /([^<]*)<W([HG]\d+[a-z]?)>/g, m, last = 0;
       while ((m = re.exec(txt)) !== null) {
         var seg = m[1], code = m[2];
