@@ -218,6 +218,11 @@
     .sheet .sh-body { overflow-y:auto; padding:14px 18px 26px; font-size:15px; line-height:1.75; }
     .sheet .sh-body num { color:#2f6fd6; font-weight:600; }
     .sheet .noentry { color:var(--muted); font-size:14px; }
+    /* 각주·상호참조·이탤릭 */
+    .vtext em, .sh-body em { font-style:italic; }
+    .fn { color:#2f6fd6; cursor:pointer; font-size:.68em; vertical-align:super;
+      font-weight:700; padding:0 1px; line-height:0; }
+    .xref { color:#2f6fd6; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
   </style>
 
   <script>
@@ -368,10 +373,11 @@
       var book = BIBLE.books[bookIdx];
       var verses = book.chapters[chapIdx];
 
+      CUR_FN = {}; // 장 바뀔 때 각주 초기화
       var html = '<div class="chap-title">' + book.name + ' ' + (chapIdx + 1) + '장</div>';
       verses.forEach(function (txt, i) {
         html += '<p class="verse" id="v' + (i + 1) + '"><span class="vnum">' + (i + 1) + '</span>' +
-          '<span class="vtext">' + renderVerseText(txt) + '</span></p>';
+          '<span class="vtext">' + renderVerseText(txt, i + 1) + '</span></p>';
       });
       contentEl.innerHTML = html;
 
@@ -631,29 +637,71 @@
       } catch (e) { cb(false); }
     }
 
-    // 각주·상호참조·HTML 태그 정리 (ESV 등 일부 번역본은 본문에 각주 마크업이 섞여 있음)
-    function cleanVerse(txt) {
-      var t = txt.replace(/▷[\s\S]*$/, '');       // 각주/상호참조 블록(▷ 이후) 제거
-      t = t.replace(/<sup>[\s\S]*?<\/sup>/g, ''); // 각주 번호 표시 제거
-      t = t.replace(/<[^>]*>/g, '');               // 나머지 HTML 태그 제거
-      t = t.replace(/\s+/g, ' ').trim();           // 공백 정리
-      return t;
+    var CUR_FN = {}; // 현재 장 각주: "절번호|마커" -> 각주 HTML
+
+    // 각주 본문 렌더 (이탤릭, 상호참조 링크)
+    function renderNote(body) {
+      var S1='\u0001',S2='\u0002',S3='\u0003',S4='\u0004',S5='\u0005',S6='\u0006';
+      var t = body;
+      // 상호참조 앵커 + 뒤따르는 숫자 → 링크 자리표시
+      t = t.replace(/<a name='B:\d+\s+(\d+):(\d+)'>\s*(\d+)/g, function (_, ch, v, disp) {
+        return S1 + ch + S2 + v + S3 + disp + S4;
+      });
+      // 이탤릭 자리표시
+      t = t.replace(/<i>([\s\S]*?)<\/i>/g, function (_, x) { return S5 + x + S6; });
+      t = t.replace(/<[^>]*>/g, '');           // 나머지 태그 제거
+      t = escapeHtml(t);                         // 텍스트 escape
+      // 자리표시 복원
+      t = t.replace(new RegExp(S5 + '([\\s\\S]*?)' + S6, 'g'), '<em>$1</em>');
+      t = t.replace(new RegExp(S1 + '(\\d+)' + S2 + '(\\d+)' + S3 + '(\\d+)' + S4, 'g'),
+        '<a class="xref" data-c="$1" data-v="$2">$3</a>');
+      return t.replace(/\s+/g, ' ').trim();
     }
 
-    // 본문 렌더: <WH####>/<WG####> 코드는 숨기고 단어를 탭 가능하게
-    function renderVerseText(txt) {
-      if (!txt) return '';
-      if (txt.indexOf('<W') === -1) return escapeHtml(cleanVerse(txt));
-      var html = '', re = /([^<]*)<W([HG]\d+[a-z]?)>/g, m, last = 0;
-      while ((m = re.exec(txt)) !== null) {
-        var seg = m[1], code = m[2];
-        var tappable = (code !== 'G0' && code !== 'H0');
-        html += '<span class="w' + (tappable ? ' has' : '') + '" data-code="' + code + '">' +
-          escapeHtml(seg) + '</span>';
-        last = re.lastIndex;
+    // 주 본문 렌더 (이탤릭 + 각주 마커)
+    function renderMain(main, vnum) {
+      var out = '', re = /<i>([\s\S]*?)<\/i>|<sup>([\s\S]*?)<\/sup>|<[^>]*>|([^<]+)/g, m;
+      while ((m = re.exec(main)) !== null) {
+        if (m[1] !== undefined) out += '<em>' + escapeHtml(m[1]) + '</em>';
+        else if (m[2] !== undefined) {
+          var mk = m[2].replace(/<[^>]*>/g, '');
+          out += '<sup class="fn" data-v="' + vnum + '" data-fn="' + escapeHtml(mk) + '">' + escapeHtml(mk) + '</sup>';
+        }
+        else if (m[3] !== undefined) out += escapeHtml(m[3]);
+        // else: 기타 태그 제거
       }
-      if (last < txt.length) html += escapeHtml(txt.slice(last));
-      return html;
+      return out;
+    }
+
+    // 본문 렌더: 원어 코드 / 각주·이탤릭 / 순수 텍스트
+    function renderVerseText(txt, vnum) {
+      if (!txt) return '';
+      // 1) 원어(스트롱) 코드 번역본
+      if (txt.indexOf('<W') !== -1) {
+        var html = '', re = /([^<]*)<W([HG]\d+[a-z]?)>/g, m, last = 0;
+        while ((m = re.exec(txt)) !== null) {
+          var seg = m[1], code = m[2];
+          var tappable = (code !== 'G0' && code !== 'H0');
+          html += '<span class="w' + (tappable ? ' has' : '') + '" data-code="' + code + '">' + escapeHtml(seg) + '</span>';
+          last = re.lastIndex;
+        }
+        if (last < txt.length) html += escapeHtml(txt.slice(last));
+        return html;
+      }
+      // 2) 순수 텍스트(태그 없음) — 개역개정 등
+      if (txt.indexOf('<') === -1 && txt.indexOf('▷') === -1) return escapeHtml(txt);
+      // 3) 각주/이탤릭 번역본 (ESV·새번역 등)
+      var main = txt, notesRaw = '';
+      var bi = txt.indexOf('▷');
+      if (bi !== -1) { main = txt.slice(0, bi); notesRaw = txt.slice(bi + 1); }
+      if (notesRaw) {
+        var parts = notesRaw.split(/<sup>([\s\S]*?)<\/sup>/);
+        for (var i = 1; i < parts.length; i += 2) {
+          var marker = parts[i].replace(/<[^>]*>/g, '').trim();
+          if (marker) CUR_FN[vnum + '|' + marker] = renderNote(parts[i + 1] || '');
+        }
+      }
+      return renderMain(main.replace(/<br\s*\/?>\s*$/, ''), vnum);
     }
 
     // 토스트 (비침습 알림)
@@ -792,12 +840,38 @@
       if (vi) vi.addEventListener('click', function () { lexFile.click(); });
     })();
 
-    // 단어 탭 → 하단 시트
+    // 본문 탭: 각주(①) / 상호참조 / 원어 단어
     contentEl.addEventListener('click', function (e) {
-      if (!document.body.classList.contains('stron')) return;
-      var el = e.target.closest ? e.target.closest('.w.has') : null;
-      if (!el) return;
-      openSheet(el.getAttribute('data-code'), el.textContent.trim());
+      var t = e.target;
+      var fn = t.closest ? t.closest('.fn') : null;
+      if (fn) { openFn(fn.getAttribute('data-v'), fn.getAttribute('data-fn')); return; }
+      var xr = t.closest ? t.closest('.xref') : null;
+      if (xr) { jumpXref(xr); return; }
+      if (document.body.classList.contains('stron')) {
+        var el = t.closest ? t.closest('.w.has') : null;
+        if (el) openSheet(el.getAttribute('data-code'), el.textContent.trim());
+      }
+    });
+
+    // 각주 보기 (하단 시트 재사용)
+    function openFn(vnum, marker) {
+      var html = CUR_FN[vnum + '|' + marker] || '(각주 내용 없음)';
+      document.getElementById('shCode').textContent = '각주 ' + marker;
+      var ab = (BIBLE && BIBLE.books[curBook]) ? (BIBLE.books[curBook].abbr || '') : '';
+      document.getElementById('shWord').textContent = ab + ' ' + (curChap + 1) + ':' + vnum;
+      document.getElementById('shBody').innerHTML = html;
+      sheetMask.classList.add('show'); sheetEl.classList.add('show');
+    }
+    // 상호참조 이동 (현재 책 기준)
+    function jumpXref(el) {
+      var c = parseInt(el.getAttribute('data-c'), 10), v = parseInt(el.getAttribute('data-v'), 10);
+      closeSheet();
+      if (c >= 1 && BIBLE && c <= BIBLE.books[curBook].chapters.length) showChapter(curBook, c - 1, v);
+    }
+    // 시트 안 상호참조 클릭
+    document.getElementById('shBody').addEventListener('click', function (e) {
+      var xr = e.target.closest ? e.target.closest('.xref') : null;
+      if (xr) jumpXref(xr);
     });
 
     function openSheet(code, word) {
