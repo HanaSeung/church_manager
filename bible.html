@@ -303,9 +303,14 @@
     // DB 준비 후 앱 시작 (배포 목록 + 임포트 목록 병합)
     function startApp() {
       fetch('data/bible/versions.json')
-        .then(function (r) { return r.ok ? r.json() : ['개역개정']; })
+        .then(function (r) { return r.ok ? r.json() : []; })
         .then(function (list) {
-          DEPLOYED_VERSIONS = (list && list.length) ? list : ['개역개정'];
+          DEPLOYED_VERSIONS = [];
+          (list || []).forEach(function (e) {
+            if (typeof e === 'string') { DEPLOYED_VERSIONS.push(e); }
+            else if (e && e.name) { DEPLOYED_VERSIONS.push(e.name); setDesc(e.name, e.desc); }
+          });
+          if (!DEPLOYED_VERSIONS.length) DEPLOYED_VERSIONS = ['개역개정'];
           refreshVersions(function () {
             curVersion = VERSIONS[0] || '개역개정';
             loadVersion(curVersion, 0, 0);
@@ -339,21 +344,15 @@
 
     var HEB = false; // 현재 번역본이 히브리어(오른쪽→왼쪽)인지
 
-    // 번역본 서술형 해설 (선택창 오른쪽에 표시)
-    var VER_DESC = {
-      '개역개정': '한국 교회가 표준으로 쓰는 공인 개정 번역',
-      '쉬운성경': '누구나 이해하기 쉽게 풀어 쓴 우리말 번역',
-      'NIV(2011)': '자연스러운 현대 영어 번역',
-      'KJV(1611)': '1611년 흠정역, 고전 영어의 대표 번역',
-      '개역개정S': '단어마다 원어(히브리·헬라) 뜻을 볼 수 있는 스트롱 번역',
-      'ESV': '원문에 충실한 직역 위주의 영어 번역',
-      '새번역': '원문에 충실하면서 현대 한국어로 다듬은 번역',
-      '현대인': '뜻을 쉽게 풀어 옮긴 의역 번역',
-      '공동번역': '개신교와 천주교가 함께 만든 문학적 번역',
-      'NASB': '가장 직역에 가까운 영어 번역, 원어 연구에 유용',
-      'BHSStp': '히브리어 구약 원문 (BHS)',
-      'LXXStp': '헬라어 구약, 70인역 (LXX)'
-    };
+    // 번역본 서술형 해설 — 데이터 기반 (versions.json 매니페스트 + 각 번역본 JSON의 desc 필드)
+    // 배포본: versions.json 에서, 임포트본: JSON 안 desc 에서 읽어 localStorage 에 캐시
+    var DESC_MAP = {};
+    try { DESC_MAP = JSON.parse(localStorage.getItem('bibleVerDesc') || '{}') || {}; } catch (e) { DESC_MAP = {}; }
+    function setDesc(name, desc) {
+      if (!name || !desc || DESC_MAP[name] === desc) return;
+      DESC_MAP[name] = desc;
+      try { localStorage.setItem('bibleVerDesc', JSON.stringify(DESC_MAP)); } catch (e) {}
+    }
 
     function buildVersionOptions() {
       verList.innerHTML = '';
@@ -368,7 +367,7 @@
         nm.className = 'ver-name';
         nm.textContent = v;
         el.appendChild(nm);
-        var d = VER_DESC[v];
+        var d = DESC_MAP[v];
         if (d) {
           var ds = document.createElement('span');
           ds.className = 'ver-desc';
@@ -418,6 +417,7 @@
       try { HEB = /[֐-׿]/.test((data.books[0].chapters[0][0]) || ''); } catch (e) { HEB = false; }
       curVersion = version;
       verBtn.textContent = version;
+      if (data && data.desc) setDesc(version, data.desc);
       buildVersionOptions();
       detectCodes();
       statusEl.style.display = 'none';
@@ -899,6 +899,7 @@
             res.skipped++; return next();
           }
           obj.version = name;
+          if (obj.desc) setDesc(name, obj.desc);
           putVersion(name, obj, function () { if (res.added.indexOf(name) === -1) res.added.push(name); next(); });
         } else if (obj && typeof obj === 'object') {
           var keys = Object.keys(obj);
