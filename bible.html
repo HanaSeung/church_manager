@@ -346,6 +346,22 @@
 
     // 번역본 서술형 해설 — 데이터 기반 (versions.json 매니페스트 + 각 번역본 JSON의 desc 필드)
     // 배포본: versions.json 에서, 임포트본: JSON 안 desc 에서 읽어 localStorage 에 캐시
+    // 데이터에 없으면 아래 기본값으로 폴백 (알려진 번역본은 재임포트 없이 즉시 표시)
+    var DEFAULT_DESC = {
+      '개역개정': '한국 교회가 표준으로 쓰는 공인 개정 번역',
+      '쉬운성경': '누구나 이해하기 쉽게 풀어 쓴 우리말 번역',
+      'NIV(2011)': '자연스러운 현대 영어 번역',
+      'KJV(1611)': '1611년 흠정역, 고전 영어의 대표 번역',
+      '개역개정S': '단어마다 원어(히브리·헬라) 뜻을 볼 수 있는 스트롱 번역',
+      'ESV': '원문에 충실한 직역 위주의 영어 번역',
+      '새번역': '원문에 충실하면서 현대 한국어로 다듬은 번역',
+      '현대인': '뜻을 쉽게 풀어 옮긴 의역 번역',
+      '공동번역': '개신교와 천주교가 함께 만든 문학적 번역',
+      'NASB': '가장 직역에 가까운 영어 번역, 원어 연구에 유용',
+      'BHSStp': '히브리어 구약 원문 (BHS)',
+      'LXXStp': '헬라어 구약, 70인역 (LXX)',
+      '바른성경': '원문에 충실한 보수적 직역의 한국어 번역'
+    };
     var DESC_MAP = {};
     try { DESC_MAP = JSON.parse(localStorage.getItem('bibleVerDesc') || '{}') || {}; } catch (e) { DESC_MAP = {}; }
     function setDesc(name, desc) {
@@ -353,6 +369,7 @@
       DESC_MAP[name] = desc;
       try { localStorage.setItem('bibleVerDesc', JSON.stringify(DESC_MAP)); } catch (e) {}
     }
+    function getDesc(name) { return DESC_MAP[name] || DEFAULT_DESC[name] || ''; }
 
     function buildVersionOptions() {
       verList.innerHTML = '';
@@ -367,7 +384,7 @@
         nm.className = 'ver-name';
         nm.textContent = v;
         el.appendChild(nm);
-        var d = DESC_MAP[v];
+        var d = getDesc(v);
         if (d) {
           var ds = document.createElement('span');
           ds.className = 'ver-desc';
