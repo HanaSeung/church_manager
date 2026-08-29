@@ -28,5 +28,6 @@ data/bible/LXXStp.json
 data/bible/바른성경.json
 # 주석 파일(저작권) — 공개 제외
 data/bible/*.cdb
+data/bible/*.comm.json
 # 원본 성경 DB(변환 재료, 저작권) — 공개 제외
 data/bible/*.bdb

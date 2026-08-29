@@ -51,6 +51,7 @@
           </button>
           <button id="stronBtn" class="stronbtn disabled" title="원어(스트롱) 보기">원어</button>
           <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
+          <button id="commBtn" class="stronbtn" title="주석 보기">주석</button>
           <span id="parBar" class="parbar" style="display:none;"></span>
         </div>
         <div class="grp btns">
@@ -101,6 +102,16 @@
       <button id="shX" class="sh-x">×</button>
     </div>
     <div id="shBody" class="sh-body"></div>
+  </div>
+
+  <div id="commSheet" class="sheet">
+    <div class="grip"></div>
+    <div class="sh-head">
+      <span id="commTitle" class="sh-word" style="flex:1; font-weight:700; color:var(--green-d);"></span>
+      <button id="commX" class="sh-x">×</button>
+    </div>
+    <div id="commTabs" class="comm-tabs"></div>
+    <div id="commBody" class="sh-body"></div>
   </div>
   <input type="file" id="lexFile" accept=".json,application/json" multiple style="display:none;">
   <div id="toast" class="toast"></div>
@@ -220,6 +231,18 @@
     .sheet .sh-body { overflow-y:auto; padding:14px 18px 26px; font-size:15px; line-height:1.75; }
     .sheet .sh-body num { color:#2f6fd6; font-weight:600; }
     .sheet .noentry { color:var(--muted); font-size:14px; }
+    /* 주석 시트 */
+    .comm-tabs { display:flex; gap:6px; padding:10px 16px; border-bottom:1px solid var(--line);
+      flex-wrap:wrap; }
+    .comm-tab { font-size:12.5px; padding:5px 12px; border:1px solid var(--line);
+      border-radius:16px; background:#fff; color:var(--text); cursor:pointer; white-space:nowrap; }
+    .comm-tab.on { background:var(--green); color:#fff; border-color:var(--green); }
+    .comm-blk { background:var(--green-soft); border-left:3px solid var(--green);
+      padding:10px 14px; margin:0 0 8px; font-size:14px; line-height:1.75;
+      border-radius:0 8px 8px 0; }
+    .comm-blk .cv { color:var(--green-d); font-weight:700; font-size:12.5px; margin-bottom:4px; }
+    .comm-blk p { margin:0 0 7px; } .comm-blk p:last-child { margin-bottom:0; }
+    .comm-blk strong { font-weight:700; }
     /* 각주·상호참조·이탤릭 */
     .vtext em, .sh-body em { font-style:italic; }
     .fn { color:#2f6fd6; cursor:pointer; font-size:.68em; vertical-align:super;
@@ -493,6 +516,7 @@
       contentEl.dir = HEB ? 'rtl' : 'ltr'; // 히브리어는 오른쪽→왼쪽
 
       updateLocBtn();
+      if (window._refreshComm) window._refreshComm(); // 주석 시트 열려있으면 현재 장으로 갱신
 
       if (PAR_ON) { contentEl.dir = 'ltr'; renderParallel(); return; } // 병행 보기
 
@@ -696,13 +720,15 @@
     // 개인 저장소 (IndexedDB — 기기 내부, 서버 전송 없음)
     //  store 'lex'      : 원어사전 { 코드: 뜻 }
     //  store 'versions' : 임포트한 번역본 { 이름: 성경JSON }
+    //  store 'comm'     : 임포트한 주석 (장 단위) key="이름|책|장" -> {name,book,chap,blocks}
     function openLexDB(cb) {
       try {
-        var req = indexedDB.open('bibleLex', 2);
+        var req = indexedDB.open('bibleLex', 3);
         req.onupgradeneeded = function (e) {
           var db = e.target.result;
           if (!db.objectStoreNames.contains('lex')) db.createObjectStore('lex');
           if (!db.objectStoreNames.contains('versions')) db.createObjectStore('versions');
+          if (!db.objectStoreNames.contains('comm')) db.createObjectStore('comm');
         };
         req.onsuccess = function (e) { LEXDB = e.target.result; cb && cb(); };
         req.onerror = function () { LEXDB = null; cb && cb(); };
@@ -734,6 +760,44 @@
         r.onsuccess = function () { cb(r.result || []); };
         r.onerror = function () { cb([]); };
       } catch (e) { cb([]); }
+    }
+
+    // 주석 저장 (장 단위 레코드) / 조회
+    function commKey(name, book, chap) { return name + '|' + book + '|' + chap; }
+    function putCommObj(obj, cb) {
+      // obj = {type:'commentary', name, books:{book:{chap:[{v,html}]}}}
+      if (!LEXDB || !obj || !obj.name || !obj.books) { cb && cb(0); return; }
+      try {
+        var tx = LEXDB.transaction('comm', 'readwrite');
+        var store = tx.objectStore('comm');
+        var name = obj.name, cnt = 0;
+        Object.keys(obj.books).forEach(function (bk) {
+          var chaps = obj.books[bk];
+          Object.keys(chaps).forEach(function (ch) {
+            store.put({ name: name, book: +bk, chap: +ch, blocks: chaps[ch] }, commKey(name, bk, ch));
+            cnt++;
+          });
+        });
+        tx.oncomplete = function () { addCommName(name); cb && cb(cnt); };
+        tx.onerror = function () { cb && cb(0); };
+      } catch (e) { cb && cb(0); }
+    }
+    function getCommChapter(name, book, chap, cb) {
+      if (!LEXDB) { cb(null); return; }
+      try {
+        var r = LEXDB.transaction('comm', 'readonly').objectStore('comm').get(commKey(name, book, chap));
+        r.onsuccess = function () { cb(r.result || null); };
+        r.onerror = function () { cb(null); };
+      } catch (e) { cb(null); }
+    }
+    // 임포트된 주석 목록 (localStorage 로 가볍게 관리)
+    var COMM_NAMES = [];
+    try { COMM_NAMES = JSON.parse(localStorage.getItem('bibleCommNames') || '[]') || []; } catch (e) { COMM_NAMES = []; }
+    function addCommName(name) {
+      if (COMM_NAMES.indexOf(name) === -1) {
+        COMM_NAMES.push(name);
+        try { localStorage.setItem('bibleCommNames', JSON.stringify(COMM_NAMES)); } catch (e) {}
+      }
     }
 
     function lexGet(code, cb) {
@@ -908,7 +972,9 @@
         var p = payloads[i++];
         var obj;
         try { obj = JSON.parse(p.text); } catch (e) { res.errors++; return next(); }
-        if (obj && obj.books) {
+        if (obj && obj.type === 'commentary' && obj.name && obj.books) {
+          putCommObj(obj, function (c) { if (res.added.indexOf(obj.name) === -1) res.added.push(obj.name); next(); });
+        } else if (obj && obj.books) {
           var fbase = String(p.name || '').replace(/\.json$/i, '');
           var name = obj.version || fbase || '번역본';
           // 기본 제공 번역본과 중복이면 저장하지 않음 (웹에서 옴)
@@ -1020,6 +1086,67 @@
     function closeSheet() { sheetMask.classList.remove('show'); sheetEl.classList.remove('show'); }
     document.getElementById('shX').addEventListener('click', closeSheet);
     sheetMask.addEventListener('click', closeSheet);
+
+    // ===== 주석 보기 (버튼 → 바텀시트, 상단 탭으로 주석 종류 전환) =====
+    (function () {
+      var commBtn = document.getElementById('commBtn');
+      var commSheet = document.getElementById('commSheet');
+      var commTabs = document.getElementById('commTabs');
+      var commBody = document.getElementById('commBody');
+      var commTitle = document.getElementById('commTitle');
+      var COMM_ON = false, COMM_SRC = '';
+      try { COMM_SRC = localStorage.getItem('bibleCommSrc') || ''; } catch (e) {}
+
+      function openS() { sheetMask.classList.add('show'); commSheet.classList.add('show'); commBtn.classList.add('on'); COMM_ON = true; }
+      function closeS() { commSheet.classList.remove('show'); sheetMask.classList.remove('show'); commBtn.classList.remove('on'); COMM_ON = false; }
+      window._closeCommSheet = closeS;
+      window._refreshComm = function () { if (COMM_ON) renderComm(); };
+
+      function renderTabs() {
+        if (COMM_NAMES.indexOf(COMM_SRC) === -1) COMM_SRC = COMM_NAMES[0] || '';
+        var h = '';
+        COMM_NAMES.forEach(function (n) {
+          h += '<span class="comm-tab' + (n === COMM_SRC ? ' on' : '') + '" data-n="' + n + '">' + n + '</span>';
+        });
+        commTabs.innerHTML = h;
+        commTabs.querySelectorAll('.comm-tab').forEach(function (t) {
+          t.onclick = function () {
+            COMM_SRC = t.getAttribute('data-n');
+            try { localStorage.setItem('bibleCommSrc', COMM_SRC); } catch (e) {}
+            renderTabs(); renderComm();
+          };
+        });
+      }
+      function renderComm() {
+        var book = curBook + 1, chap = curChap + 1;
+        var bn = ''; try { bn = BIBLE.books[curBook].name; } catch (e) {}
+        commTitle.textContent = bn + ' ' + chap + '장 · ' + COMM_SRC;
+        commBody.innerHTML = '<div class="noentry">불러오는 중…</div>';
+        getCommChapter(COMM_SRC, book, chap, function (rec) {
+          var blocks = rec && rec.blocks;
+          if (!blocks || !blocks.length) {
+            commBody.innerHTML = '<div class="noentry">이 장에 ' + COMM_SRC + ' 주석이 없습니다.</div>';
+            return;
+          }
+          var perVerse = blocks.length > 20; // 절 단위 주석이면 단일 절 표기
+          var h = '';
+          for (var i = 0; i < blocks.length; i++) {
+            var b = blocks[i], nx = blocks[i + 1];
+            var range = perVerse ? (b.v + '절') : (nx ? (b.v + '~' + (nx.v - 1) + '절') : (b.v + '절~'));
+            h += '<div class="comm-blk"><div class="cv">' + range + '</div>' + (b.html || '') + '</div>';
+          }
+          commBody.innerHTML = h; commBody.scrollTop = 0;
+        });
+      }
+
+      commBtn.addEventListener('click', function () {
+        if (COMM_ON) { closeS(); return; }
+        if (!COMM_NAMES.length) { toast('주석을 먼저 불러오세요 (＋ 불러오기)'); return; }
+        renderTabs(); renderComm(); openS();
+      });
+      document.getElementById('commX').addEventListener('click', closeS);
+      sheetMask.addEventListener('click', function () { if (COMM_ON) closeS(); });
+    })();
 
     // ===== 병행 보기 (현재 번역본 기준 + 추가 최대 2개) =====
     var parBtn = document.getElementById('parBtn');
