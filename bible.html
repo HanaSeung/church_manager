@@ -51,6 +51,7 @@
           </button>
           <button id="stronBtn" class="stronbtn disabled" title="원어(스트롱) 보기">원어</button>
           <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
+          <span id="parBar" class="parbar" style="display:none;"></span>
         </div>
         <div class="grp btns">
           <button id="prevBtn" class="navb ic" title="이전 장">◀</button>
@@ -60,7 +61,6 @@
         </div>
       </div>
     </div>
-    <div id="parBar" class="parbar" style="display:none;"></div>
   </div>
 
   <div id="pickerOverlay" class="picker-overlay" style="display:none;">
@@ -238,8 +238,10 @@
     #verList .sortable-ghost { opacity:.4; }
     #verList .sortable-chosen { background:var(--green-soft); }
     /* 병행 슬롯 바 */
-    .parbar { display:flex; gap:6px; flex-wrap:wrap; align-items:center;
-      padding:8px 12px; background:var(--bg); border-top:1px solid var(--line); }
+    .parbar { display:flex; gap:5px; align-items:center; flex:1 1 auto; min-width:0;
+      overflow-x:auto; -webkit-overflow-scrolling:touch; padding:0 2px; }
+    .parbar::-webkit-scrollbar { height:0; }
+    .parbar > * { flex:0 0 auto; }
     .parchip { display:flex; align-items:center; gap:5px; background:var(--green-soft);
       color:var(--green-d); border-radius:16px; padding:4px 5px 4px 11px; font-size:13px; font-weight:600; }
     .parchip .pname { cursor:pointer; }
