@@ -399,8 +399,13 @@
           });
           if (!DEPLOYED_VERSIONS.length) DEPLOYED_VERSIONS = ['개역개정'];
           refreshVersions(function () {
-            if (VERSIONS.length) { curVersion = VERSIONS[0]; loadVersion(curVersion, 0, 0); }
-            else { showBlank(); }
+            if (!VERSIONS.length) { showBlank(); return; }
+            var last = readLast();
+            var v = (last && last.v && VERSIONS.indexOf(last.v) !== -1) ? last.v : VERSIONS[0];
+            var b = last ? (last.b | 0) : 0, c = last ? (last.c | 0) : 0, vs = last ? ((last.vs | 0) || 1) : 1;
+            PENDING_VIEW = last ? { par: last.par, wj: last.wj, comm: last.comm } : null;
+            curVersion = v;
+            loadVersion(v, b, c, vs);
           });
         })
         .catch(function () {
@@ -517,7 +522,7 @@
       return out;
     }
 
-    function applyBible(data, version, bookIdx, chapIdx) {
+    function applyBible(data, version, bookIdx, chapIdx, jumpVerse) {
       BIBLE = data;
       try { HEB = /[֐-׿]/.test((data.books[0].chapters[0][0]) || ''); } catch (e) { HEB = false; }
       curVersion = version;
@@ -526,7 +531,7 @@
       buildVersionOptions();
       detectCodes();
       statusEl.style.display = 'none';
-      showChapter(bookIdx || 0, chapIdx || 0);
+      showChapter(bookIdx || 0, chapIdx || 0, jumpVerse);
       adjustHeadSpace();
     }
 
@@ -541,14 +546,14 @@
       if (window._closeCommSheet) window._closeCommSheet();
     }
 
-    function loadVersion(version, bookIdx, chapIdx) {
+    function loadVersion(version, bookIdx, chapIdx, jumpVerse) {
       statusEl.style.display = 'block';
       statusEl.textContent = version + ' 데이터를 불러오는 중…';
       contentEl.style.display = 'none';
       if (IMPORTED_VERSIONS.indexOf(version) !== -1 && DEPLOYED_VERSIONS.indexOf(version) === -1) {
         // 개인 임포트 번역본(기본 제공 아님) → IndexedDB에서 로드
         getVersion(version, function (data) {
-          if (data && data.books) { applyBible(data, version, bookIdx, chapIdx); }
+          if (data && data.books) { applyBible(data, version, bookIdx, chapIdx, jumpVerse); }
           else { statusEl.style.display = 'block'; statusEl.textContent = version + ' 데이터를 불러오지 못했습니다.'; }
         });
         return;
@@ -559,7 +564,7 @@
           if (!r.ok) throw new Error('not found');
           return r.json();
         })
-        .then(function (data) { applyBible(data, version, bookIdx, chapIdx); })
+        .then(function (data) { applyBible(data, version, bookIdx, chapIdx, jumpVerse); })
         .catch(function () {
           statusEl.style.display = 'block';
           statusEl.textContent = version + ' 데이터를 불러오지 못했습니다. data/bible/' + version + '.json 파일을 확인하세요.';
@@ -586,6 +591,9 @@
     }
 
     function showChapter(bookIdx, chapIdx, jumpVerse) {
+      if (!BIBLE || !BIBLE.books) return;
+      if (!BIBLE.books[bookIdx]) bookIdx = 0;                              // 다른 번역본은 책 구성이 달라 범위 보정
+      if (!BIBLE.books[bookIdx].chapters[chapIdx]) chapIdx = 0;
       curBook = bookIdx; curChap = chapIdx;
       curVerse = jumpVerse && jumpVerse >= 1 ? jumpVerse : 1;
       contentEl.style.display = 'block';
@@ -620,6 +628,8 @@
         window.scrollTo(0, 0);
       }
       updateTopVerse();
+      if (!VIEW_RESTORED) { VIEW_RESTORED = true; applyPendingView(); } // 최초 렌더 후 저장된 보기 상태 복원
+      saveLast();
     }
 
     // 화면 맨 위에 보이는 절을 찾아 표시 갱신
@@ -636,6 +646,7 @@
       if (top !== curVerse) {
         curVerse = top;
         locCV.textContent = (curChap + 1) + ':' + curVerse;
+        if (VIEW_RESTORED) saveLast(); // 스크롤로 절 바뀌면 위치 저장
       }
     }
 
@@ -1253,9 +1264,11 @@
       var COMM_ON = false, COMM_SRC = '';
       try { COMM_SRC = localStorage.getItem('bibleCommSrc') || ''; } catch (e) {}
 
-      function openS() { sheetMask.classList.add('show'); commSheet.classList.add('show'); commBtn.classList.add('on'); COMM_ON = true; }
-      function closeS() { commSheet.classList.remove('show'); sheetMask.classList.remove('show'); commBtn.classList.remove('on'); COMM_ON = false; }
+      function openS() { sheetMask.classList.add('show'); commSheet.classList.add('show'); commBtn.classList.add('on'); COMM_ON = true; if (window.saveLast) saveLast(); }
+      function closeS() { commSheet.classList.remove('show'); sheetMask.classList.remove('show'); commBtn.classList.remove('on'); COMM_ON = false; if (window.saveLast) saveLast(); }
       window._closeCommSheet = closeS;
+      window._commOn = function () { return COMM_ON; };
+      window._openCommSheet = function () { if (!COMM_NAMES.length) return; renderTabs(); renderComm(); openS(); };
       window._refreshComm = function () { if (COMM_ON) renderComm(); };
 
       function renderTabs() {
@@ -1454,7 +1467,37 @@
       WONJEON_CH = null; // 현재 장 다시 로드
       if (PAR_ON) renderParallel();
       else showChapter(curBook, curChap, curVerse);
+      saveLast();
     });
+
+    // ===== 마지막 위치·보기 상태 기억 =====
+    var VIEW_RESTORED = false;
+    var PENDING_VIEW = null;
+    function readLast() { try { return JSON.parse(localStorage.getItem('bibleLast') || 'null'); } catch (e) { return null; } }
+    function saveLast() {
+      if (!curVersion) return;
+      try {
+        localStorage.setItem('bibleLast', JSON.stringify({
+          v: curVersion, b: curBook, c: curChap, vs: curVerse,
+          par: PAR_ON ? 1 : 0, wj: WONJEON_ON ? 1 : 0,
+          comm: (window._commOn && window._commOn()) ? 1 : 0
+        }));
+      } catch (e) {}
+    }
+    function applyPendingView() {
+      var p = PENDING_VIEW; PENDING_VIEW = null;
+      if (!p) return;
+      if (p.wj && WONJEON_AVAILABLE) { WONJEON_ON = true; wjbBtn.classList.add('on'); WONJEON_CH = null; }
+      if (p.par) {
+        PAR_ON = true; parBtn.classList.add('on'); parBar.style.display = 'flex'; document.body.classList.add('par');
+        if (BIBLE) PAR_CACHE[curVersion] = BIBLE;
+        renderParBar();
+        renderParallel();
+      } else if (WONJEON_ON) {
+        showChapter(curBook, curChap, curVerse); // 원전분해 반영해 단일 재렌더
+      }
+      if (p.comm && window._openCommSheet) window._openCommSheet();
+    }
 
     // ===== 병행 보기 (현재 번역본 기준 + 추가 최대 2개) =====
     var parBtn = document.getElementById('parBtn');
@@ -1571,7 +1614,7 @@
         PAR_ON = false; parBtn.classList.remove('on');
         parBar.style.display = 'none'; document.body.classList.remove('par');
         adjustHeadSpace();
-        loadVersion(curVersion, curBook, curChap); // 단일 보기 복귀
+        loadVersion(curVersion, curBook, curChap, curVerse); // 단일 보기 복귀
       } else {
         PAR_ON = true; parBtn.classList.add('on');
         parBar.style.display = 'flex'; document.body.classList.add('par');
@@ -1580,6 +1623,7 @@
         renderParallel();                            // 기준만이라도 병행 형식으로
         if (PAR_EXTRA.length === 0) openParPick(0);   // 추가 없으면 선택창 바로
       }
+      saveLast();
     });
 
     // 공유(Share Target)로 받은 파일 처리 — 서비스워커가 캐시에 담아두면 여기서 임포트
