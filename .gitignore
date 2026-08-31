@@ -16,6 +16,7 @@ worklog/
 #    모든 성경 본문·사전·주석은 각 기기에 개인 불러오기(IndexedDB)로만 사용.
 data/bible/*
 !data/bible/versions.json
+!data/bible/audio_sync.json
 
 # 성경 오디오(로고스 빠른성경, 상용 저작물) — 공개 제외, 사적이용/개인 임포트만
 data/audio_bible_fast/
