@@ -368,13 +368,10 @@
     var FS = 20;
     try { var _sf = parseInt(localStorage.getItem('bibleFontPx'), 10); if (_sf >= FS_MIN && _sf <= FS_MAX) FS = _sf; } catch (e) {}
     var VERSIONS = [];
-    var DEPLOYED_VERSIONS = [];
     var IMPORTED_VERSIONS = [];
-    // 사용자가 삭제한 배포 번역본 (배포본은 웹에서 오므로 목록에서 감춰 삭제 효과)
-    var REMOVED_DEPLOYED = [];
-    try { REMOVED_DEPLOYED = JSON.parse(localStorage.getItem('bibleRemovedDeployed') || '[]') || []; } catch (e) { REMOVED_DEPLOYED = []; }
-    function saveRemovedDeployed() { try { localStorage.setItem('bibleRemovedDeployed', JSON.stringify(REMOVED_DEPLOYED)); } catch (e) {} }
-    var curVersion = '개역개정';
+    // 모든 성경은 개인 불러오기(IndexedDB) 전용. 옛 배포본 삭제/복원 설정은 정리.
+    try { localStorage.removeItem('bibleRemovedDeployed'); } catch (e) {}
+    var curVersion = '';
 
     var locBtn = document.getElementById('locBtn');
     var locBook = document.getElementById('locBook');
@@ -392,53 +389,27 @@
 
     // DB 준비 후 앱 시작 (배포 목록 + 임포트 목록 병합)
     function startApp() {
-      fetch('data/bible/versions.json')
-        .then(function (r) { return r.ok ? r.json() : []; })
-        .then(function (list) {
-          DEPLOYED_VERSIONS = [];
-          (list || []).forEach(function (e) {
-            if (typeof e === 'string') { DEPLOYED_VERSIONS.push(e); }
-            else if (e && e.name) { DEPLOYED_VERSIONS.push(e.name); setDesc(e.name, e.desc); }
-          });
-          // 모든 성경은 개인 불러오기(IndexedDB) — 배포 기본값 없음
-          refreshVersions(function () {
-            if (!VERSIONS.length) { showBlank(); return; }
-            var last = readLast();
-            var v = (last && last.v && VERSIONS.indexOf(last.v) !== -1) ? last.v : VERSIONS[0];
-            var b = last ? (last.b | 0) : 0, c = last ? (last.c | 0) : 0, vs = last ? ((last.vs | 0) || 1) : 1;
-            PENDING_VIEW = last ? { par: last.par, wj: last.wj, comm: last.comm } : null;
-            curVersion = v;
-            loadVersion(v, b, c, vs);
-          });
-        })
-        .catch(function () {
-          DEPLOYED_VERSIONS = [];
-          refreshVersions(function () {
-            if (!VERSIONS.length) { showBlank(); return; }
-            var last = readLast();
-            var v = (last && last.v && VERSIONS.indexOf(last.v) !== -1) ? last.v : VERSIONS[0];
-            curVersion = v;
-            loadVersion(v, 0, 0);
-          });
-        });
+      // 모든 성경은 개인 불러오기(IndexedDB). 배포본 없음.
+      refreshVersions(function () {
+        if (!VERSIONS.length) { showBlank(); return; }
+        var last = readLast();
+        var v = (last && last.v && VERSIONS.indexOf(last.v) !== -1) ? last.v : VERSIONS[0];
+        var b = last ? (last.b | 0) : 0, c = last ? (last.c | 0) : 0, vs = last ? ((last.vs | 0) || 1) : 1;
+        PENDING_VIEW = last ? { par: last.par, wj: last.wj, comm: last.comm } : null;
+        curVersion = v;
+        loadVersion(v, b, c, vs);
+      });
     }
     openLexDB(startApp);
 
     // 이름 정규화 (괄호·공백 제거, 소문자) — 중복 판별용. 예: "NIV(2011)"="NIV2011"
     function normName(s) { return String(s).replace(/[()\s]/g, '').toLowerCase(); }
 
-    // 배포 번역본 + 임포트 번역본 병합 → 목록 갱신 (기본 제공과 중복은 숨김)
+    // 임포트 번역본 목록 갱신 (모두 개인 불러오기)
     function refreshVersions(cb) {
       getVersionKeys(function (keys) {
         IMPORTED_VERSIONS = keys || [];
-        var merged = DEPLOYED_VERSIONS.slice();
-        var deployedNorm = DEPLOYED_VERSIONS.map(normName);
-        IMPORTED_VERSIONS.forEach(function (k) {
-          if (deployedNorm.indexOf(normName(k)) !== -1) return; // 기본 제공과 중복 → 숨김
-          if (merged.indexOf(k) === -1) merged.push(k);
-        });
-        merged = merged.filter(function (n) { return REMOVED_DEPLOYED.indexOf(n) === -1; }); // 삭제한 번역본 제외
-        VERSIONS = applyVerOrder(merged);
+        VERSIONS = applyVerOrder(IMPORTED_VERSIONS.slice());
         buildVersionOptions();
         cb && cb();
       });
@@ -446,9 +417,8 @@
 
     var HEB = false; // 현재 번역본이 히브리어(오른쪽→왼쪽)인지
 
-    // 번역본 서술형 해설 — 데이터 기반 (versions.json 매니페스트 + 각 번역본 JSON의 desc 필드)
-    // 배포본: versions.json 에서, 임포트본: JSON 안 desc 에서 읽어 localStorage 에 캐시
-    // 데이터에 없으면 아래 기본값으로 폴백 (알려진 번역본은 재임포트 없이 즉시 표시)
+    // 번역본 설명 — 각 번역본 JSON의 desc 필드에서 읽어 localStorage 에 캐시.
+    // 데이터에 없으면 아래 기본값(DEFAULT_DESC)으로 폴백 (알려진 번역본은 재임포트 없이 즉시 표시)
     var DEFAULT_DESC = {
       '개역개정': '한국 교회가 표준으로 쓰는 공인 개정 번역',
       '쉬운성경': '누구나 이해하기 쉽게 풀어 쓴 우리말 번역',
@@ -559,25 +529,11 @@
       statusEl.style.display = 'block';
       statusEl.textContent = version + ' 데이터를 불러오는 중…';
       contentEl.style.display = 'none';
-      if (IMPORTED_VERSIONS.indexOf(version) !== -1 && DEPLOYED_VERSIONS.indexOf(version) === -1) {
-        // 개인 임포트 번역본(기본 제공 아님) → IndexedDB에서 로드
-        getVersion(version, function (data) {
-          if (data && data.books) { applyBible(data, version, bookIdx, chapIdx, jumpVerse); }
-          else { statusEl.style.display = 'block'; statusEl.textContent = version + ' 데이터를 불러오지 못했습니다.'; }
-        });
-        return;
-      }
-      // 배포 번역본 → 파일에서 로드
-      fetch('data/bible/' + encodeURIComponent(version) + '.json')
-        .then(function (r) {
-          if (!r.ok) throw new Error('not found');
-          return r.json();
-        })
-        .then(function (data) { applyBible(data, version, bookIdx, chapIdx, jumpVerse); })
-        .catch(function () {
-          statusEl.style.display = 'block';
-          statusEl.textContent = version + ' 데이터를 불러오지 못했습니다. data/bible/' + version + '.json 파일을 확인하세요.';
-        });
+      // 모든 성경은 개인 임포트(IndexedDB)에서 로드
+      getVersion(version, function (data) {
+        if (data && data.books) { applyBible(data, version, bookIdx, chapIdx, jumpVerse); }
+        else { statusEl.style.display = 'block'; statusEl.textContent = version + ' 데이터를 불러오지 못했습니다. 옵션에서 다시 불러오세요.'; }
+      });
     }
 
     // 버전 선택창
@@ -1142,7 +1098,6 @@
     // 임포트 코어 — payloads: [{name, text}] (번역본/원어사전 자동 판별)
     function _importPayloads(payloads, done) {
       var res = { added: [], lex: 0, errors: 0, skipped: 0 };
-      var deployedNorm = DEPLOYED_VERSIONS.map(normName);
       var i = 0;
       (function next() {
         if (i >= payloads.length) { done(res); return; }
@@ -1156,10 +1111,6 @@
         } else if (obj && obj.books) {
           var fbase = String(p.name || '').replace(/\.json$/i, '');
           var name = obj.version || fbase || '번역본';
-          // 기본 제공 번역본과 중복이면 저장하지 않음 (웹에서 옴)
-          if (deployedNorm.indexOf(normName(name)) !== -1 || (fbase && deployedNorm.indexOf(normName(fbase)) !== -1)) {
-            res.skipped++; return next();
-          }
           obj.version = name;
           if (obj.desc) setDesc(name, obj.desc);
           putVersion(name, obj, function () { if (res.added.indexOf(name) === -1) res.added.push(name); next(); });
@@ -1334,7 +1285,7 @@
       var optOverlay = document.getElementById('optOverlay');
       var optBody = document.getElementById('optBody');
 
-      function isImported(v) { return IMPORTED_VERSIONS.indexOf(v) !== -1 && DEPLOYED_VERSIONS.indexOf(v) === -1; }
+      function isImported(v) { return IMPORTED_VERSIONS.indexOf(v) !== -1; }
 
       function afterVersionChange(done) {
         refreshVersions(function () {
@@ -1346,18 +1297,7 @@
         });
       }
       function deleteVersionByName(name, done) {
-        if (DEPLOYED_VERSIONS.indexOf(name) !== -1) {
-          if (REMOVED_DEPLOYED.indexOf(name) === -1) { REMOVED_DEPLOYED.push(name); saveRemovedDeployed(); }
-          if (isImported(name)) { delVersion(name, function () { afterVersionChange(done); }); }
-          else afterVersionChange(done);
-        } else {
-          delVersion(name, function () { afterVersionChange(done); });
-        }
-      }
-      function restoreDeployed(name, done) {
-        var i = REMOVED_DEPLOYED.indexOf(name);
-        if (i !== -1) { REMOVED_DEPLOYED.splice(i, 1); saveRemovedDeployed(); }
-        afterVersionChange(done);
+        delVersion(name, function () { afterVersionChange(done); });
       }
 
       function render() {
@@ -1368,14 +1308,7 @@
             '<button class="opt-del" data-delv="' + v + '">삭제</button></div>';
         });
         h += '</div>';
-        if (REMOVED_DEPLOYED.length) {
-          h += '<div class="opt-sec"><div class="opt-sec-t sub">삭제한 번역본 복원</div>';
-          REMOVED_DEPLOYED.forEach(function (v) {
-            h += '<div class="opt-item"><span class="oi-name">' + v + '</span>' +
-              '<button class="opt-restore" data-restv="' + v + '">복원</button></div>';
-          });
-          h += '</div>';
-        }
+
         h += '<div class="opt-sec"><div class="opt-sec-t">주석 관리</div>';
         if (!COMM_NAMES.length) h += '<div class="opt-empty">불러온 주석이 없습니다.</div>';
         COMM_NAMES.forEach(function (n) {
@@ -1396,9 +1329,7 @@
             deleteVersionByName(v, render);
           };
         });
-        optBody.querySelectorAll('[data-restv]').forEach(function (b) {
-          b.onclick = function () { restoreDeployed(b.getAttribute('data-restv'), render); };
-        });
+
         var bw = optBody.querySelector('[data-delw]');
         if (bw) bw.onclick = function () {
           if (!confirm('원전분해를 삭제할까요?')) return;
@@ -1563,17 +1494,10 @@
       savePar(); renderParBar(); renderParallel();
     }
 
-    // 번역본 데이터 로드 (캐시) — 배포본은 fetch, 개인 임포트는 IndexedDB
+    // 번역본 데이터 로드 (캐시) — 모두 개인 임포트(IndexedDB)
     function getVersionData(name, cb) {
       if (PAR_CACHE[name]) { cb(PAR_CACHE[name]); return; }
-      if (IMPORTED_VERSIONS.indexOf(name) !== -1 && DEPLOYED_VERSIONS.indexOf(name) === -1) {
-        getVersion(name, function (d) { if (d) PAR_CACHE[name] = d; cb(d); });
-      } else {
-        fetch('data/bible/' + encodeURIComponent(name) + '.json')
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) { if (d) PAR_CACHE[name] = d; cb(d); })
-          .catch(function () { cb(null); });
-      }
+      getVersion(name, function (d) { if (d) PAR_CACHE[name] = d; cb(d); });
     }
 
     // 병행용 순수 텍스트 (원어 코드·각주 제거)
