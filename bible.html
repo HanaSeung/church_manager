@@ -156,6 +156,7 @@
       <span class="au-right">
         <button id="auRate" class="au-chip" title="배속">1.0×</button>
         <button id="auAuto" class="au-chip on" title="자동 다음 장">자동 ▶</button>
+        <button id="auManage" class="au-chip" title="다운로드 관리">⬇ 관리</button>
         <button id="auClose" class="au-chip" title="닫기">✕</button>
       </span>
     </div>
@@ -170,6 +171,37 @@
       <button id="auNext" class="au-cbtn" title="다음 장">⏭</button>
     </div>
   </div>
+
+  <!-- 오디오 다운로드 관리 -->
+  <div id="auMgrMask" class="au-mgr-mask" hidden></div>
+  <div id="auMgr" class="au-mgr" hidden>
+    <div class="au-mgr-hd"><span>오디오 다운로드</span><button id="auMgrX" class="au-mgr-x">✕</button></div>
+    <div id="auMgrBody" class="au-mgr-body"></div>
+  </div>
+  <style>
+    .au-mgr-mask{position:fixed;inset:0;background:rgba(20,30,25,.35);z-index:70}
+    .au-mgr-mask[hidden]{display:none}
+    .au-mgr{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:560px;
+      background:var(--card,#fff);border-radius:16px 16px 0 0;z-index:71;max-height:78vh;display:flex;flex-direction:column;
+      box-shadow:0 -8px 30px rgba(30,60,45,.20);padding-bottom:env(safe-area-inset-bottom,0px)}
+    .au-mgr[hidden]{display:none}
+    .au-mgr-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line,#eee);font-weight:700;color:var(--green,#4b8a68)}
+    .au-mgr-x{border:none;background:none;font-size:18px;color:var(--muted,#889);cursor:pointer}
+    .au-mgr-body{padding:12px 16px 18px;overflow-y:auto}
+    .mgr-msg{font-size:13px;color:var(--muted,#6b7a70);line-height:1.6;background:var(--green-l,#eef5f0);border-radius:10px;padding:10px 12px;margin-bottom:12px}
+    .mgr-row{display:flex;align-items:center;justify-content:space-between;padding:11px 2px;border-bottom:1px solid var(--line,#f0f2f0)}
+    .mgr-nm{font-size:15px;font-weight:600;color:var(--text,#2f3e4d)}
+    .mgr-sub{font-size:12px;color:var(--muted,#8a97a0);font-weight:500}
+    .mgr-act{display:flex;gap:6px;align-items:center}
+    .mgr-dl{background:var(--green,#4b8a68);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+    .mgr-del{background:#fff;color:#b44;border:1px solid #e3c4c4;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer}
+    .mgr-hd{font-size:13px;color:var(--muted,#889);font-weight:700;margin:14px 0 8px}
+    .mgr-books{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+    .mgr-book{border:1px solid var(--line,#dde3df);background:#fff;border-radius:8px;padding:8px 6px;font-size:12.5px;color:var(--text,#3a4c41);cursor:pointer;text-align:center}
+    .mgr-book.done{background:var(--green-l,#eaf3ee);border-color:var(--green,#4b8a68);color:var(--green-d,#357)}
+    .mgr-book .mgr-sub{display:block;margin-top:2px}
+    body.mgropen{overflow:hidden}
+  </style>
   <style>
     .aubar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--card,#fff);
       border-top:1px solid var(--line,#e6eae8);box-shadow:0 -4px 16px rgba(30,60,45,.10);
@@ -400,6 +432,24 @@
   </style>
 
   <script src="Sortable.min.js"></script>
+  <script type="module">
+    // 오디오용 Firebase 연동 (성경 열람은 로그인 불필요, 오디오만 회원 2단계 이상)
+    import { auth, db, storage } from './firebase-config.js';
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+    import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+    import { ref, getBlob } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
+    window.CHURCH = {
+      user: null, level: 0, ready: false,
+      getBlob: function (path) { return getBlob(ref(storage, path)); }
+    };
+    onAuthStateChanged(auth, async function (u) {
+      window.CHURCH.user = u; window.CHURCH.ready = true;
+      var lv = 0;
+      if (u) { try { var s = await getDoc(doc(db, 'users', u.uid)); lv = s.exists() ? (s.data().level || 0) : 0; } catch (e) {} }
+      window.CHURCH.level = lv;
+      if (window.AUDIO && window.AUDIO.onAuth) window.AUDIO.onAuth();
+    });
+  </script>
   <script>
     function adjustHeadSpace() {
       var head = document.getElementById('fixedHead');
@@ -820,50 +870,70 @@
     document.getElementById('fsDown').addEventListener('click', function () { setFont(FS - 2); });
     setFont(FS);
 
-    // ===== 오디오 플레이어 + 절 정밀 동기화 (개역개정 빠른성경) =====
+    // ===== 오디오 플레이어 + 절 정밀 동기화 (Firebase Storage → 기기 저장 → 오프라인) =====
     window.AUDIO = (function () {
-      var MAN = null, SYNC = null;
+      var SYNC = null;
+      var BOOKS66 = ['창세기','출애굽기','레위기','민수기','신명기','여호수아','사사기','룻기','사무엘상','사무엘하','열왕기상','열왕기하','역대상','역대하','에스라','느헤미야','에스더','욥기','시편','잠언','전도서','아가','이사야','예레미야','예레미야애가','에스겔','다니엘','호세아','요엘','아모스','오바댜','요나','미가','나훔','하박국','스바냐','학개','스가랴','말라기','마태복음','마가복음','누가복음','요한복음','사도행전','로마서','고린도전서','고린도후서','갈라디아서','에베소서','빌립보서','골로새서','데살로니가전서','데살로니가후서','디모데전서','디모데후서','디도서','빌레몬서','히브리서','야고보서','베드로전서','베드로후서','요한일서','요한이서','요한삼서','유다서','요한계시록'];
+      var NAME2NO = {}; BOOKS66.forEach(function (n, i) { NAME2NO[n] = i + 1; });
+
       var au = document.getElementById('bAudio');
       var bar = document.getElementById('audioBar');
       var elTitle = document.getElementById('auTitle'), elCur = document.getElementById('auCur'),
           elDur = document.getElementById('auDur'), elSeek = document.getElementById('auSeek'),
           btnPlay = document.getElementById('auPlay'), btnPrev = document.getElementById('auPrev'),
           btnNext = document.getElementById('auNext'), btnRate = document.getElementById('auRate'),
-          btnAuto = document.getElementById('auAuto'), btnClose = document.getElementById('auClose'),
-          audioBtn = document.getElementById('audioBtn');
-      var on = false, curName = '', curCh = 0, curVIdx = -1, seeking = false;
+          btnAuto = document.getElementById('auAuto'), btnManage = document.getElementById('auManage'),
+          btnClose = document.getElementById('auClose'), audioBtn = document.getElementById('audioBtn');
+      var mgr = document.getElementById('auMgr'), mgrBody = document.getElementById('auMgrBody'),
+          mgrMask = document.getElementById('auMgrMask'), mgrX = document.getElementById('auMgrX');
+      var on = false, curName = '', curCh = 0, curVIdx = -1, seeking = false, curURL = null;
       var RATES = [1, 1.25, 1.5, 2, 0.8];
       var rate = parseFloat(localStorage.getItem('bibleAuRate') || '1') || 1;
       var autoAdv = localStorage.getItem('bibleAuAuto') !== '0';
 
+      function tst(m) { try { toast(m); } catch (e) {} }
       function fmt(s) { s = Math.max(0, s | 0); var m = (s / 60) | 0, x = s % 60; return m + ':' + (x < 10 ? '0' : '') + x; }
       function rlabel(r) { return (String(r).indexOf('.') === -1 ? r + '.0' : String(r)) + '×'; }
       function bookName() { return (BIBLE && BIBLE.books && BIBLE.books[curBook]) ? BIBLE.books[curBook].name : ''; }
-      function avail(name, ch) { return !!(MAN && MAN[name] && MAN[name][String(ch)]); }
+      function bookNo(name) { return NAME2NO[name] || 0; }
+      function isMember() { return !!(window.CHURCH && window.CHURCH.level >= 2); }
 
-      function load(cb) {
-        var n = 0; function fin() { if (++n >= 2) cb && cb(); }
-        fetch('data/bible/audio_manifest.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { MAN = j || {}; fin(); }).catch(function () { MAN = {}; fin(); });
-        fetch('data/bible/audio_sync.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { SYNC = j || {}; fin(); }).catch(function () { SYNC = {}; fin(); });
-      }
-      function updateBtn() {
-        if (!MAN) { audioBtn.style.display = 'none'; return; }
-        audioBtn.style.display = (BIBLE && avail(bookName(), curChap + 1)) ? '' : 'none';
-      }
+      // --- IndexedDB 오디오 저장소 (key "책번호/장") ---
+      function akey(no, ch) { return no + '/' + ch; }
+      function putAudio(no, ch, blob, cb) { if (!LEXDB) { cb && cb(false); return; } try { var tx = LEXDB.transaction('audio', 'readwrite'); tx.objectStore('audio').put(blob, akey(no, ch)); tx.oncomplete = function () { cb && cb(true); }; tx.onerror = function () { cb && cb(false); }; } catch (e) { cb && cb(false); } }
+      function getAudio(no, ch, cb) { if (!LEXDB) { cb && cb(null); return; } try { var r = LEXDB.transaction('audio', 'readonly').objectStore('audio').get(akey(no, ch)); r.onsuccess = function () { cb && cb(r.result || null); }; r.onerror = function () { cb && cb(null); }; } catch (e) { cb && cb(null); } }
+      function delAudio(no, ch, cb) { if (!LEXDB) { cb && cb(); return; } try { var tx = LEXDB.transaction('audio', 'readwrite'); tx.objectStore('audio').delete(akey(no, ch)); tx.oncomplete = function () { cb && cb(); }; tx.onerror = function () { cb && cb(); }; } catch (e) { cb && cb(); } }
+      function audioKeys(cb) { if (!LEXDB) { cb && cb([]); return; } try { var r = LEXDB.transaction('audio', 'readonly').objectStore('audio').getAllKeys(); r.onsuccess = function () { cb && cb(r.result || []); }; r.onerror = function () { cb && cb([]); }; } catch (e) { cb && cb([]); } }
+
+      // --- 재생 ---
       function setTitle() { elTitle.textContent = bookName() + ' ' + (curChap + 1) + '장'; }
-
-      function playCur(startAt) {
-        var name = bookName(), ch = curChap + 1;
-        if (!avail(name, ch)) { au.pause(); clearHL(); setTitle(); return; }
-        curName = name; curCh = ch; curVIdx = -1;
-        au.src = encodeURI(MAN[name][String(ch)]);
-        au.playbackRate = rate;
+      function revokeURL() { if (curURL) { try { URL.revokeObjectURL(curURL); } catch (e) {} curURL = null; } }
+      function playBlob(blob, startAt) {
+        revokeURL(); curURL = URL.createObjectURL(blob);
+        au.src = curURL; au.playbackRate = rate;
         if (startAt != null) { try { au.currentTime = startAt; } catch (e) {} }
-        setTitle(); mediaMeta();
         au.play().catch(function () {});
       }
+      function fetchChapter(no, ch, cb) {
+        if (!window.CHURCH || !window.CHURCH.getBlob) { cb(false); return; }
+        window.CHURCH.getBlob('audio/' + no + '/' + ch + '.mp3').then(function (b) { cb(true, b); }).catch(function () { cb(false); });
+      }
+      function playCur(startAt) {
+        var name = bookName(), no = bookNo(name), ch = curChap + 1;
+        if (!no) { au.pause(); clearHL(); setTitle(); return; }
+        curName = name; curCh = ch; curVIdx = -1; setTitle(); mediaMeta();
+        getAudio(no, ch, function (blob) {
+          if (blob) { playBlob(blob, startAt); return; }
+          if (!isMember()) { openManage(); return; }
+          elTitle.textContent = name + ' ' + ch + '장 · 받는 중…';
+          fetchChapter(no, ch, function (ok, blob2) {
+            if (ok && blob2) { putAudio(no, ch, blob2, function () { playBlob(blob2, startAt); refreshManage(); }); }
+            else { tst('오디오를 불러오지 못했습니다'); setTitle(); }
+          });
+        });
+      }
       function openBar() { on = true; bar.hidden = false; document.body.classList.add('auopen'); audioBtn.classList.add('on'); playCur(null); }
-      function closeBar() { on = false; bar.hidden = true; document.body.classList.remove('auopen'); audioBtn.classList.remove('on'); au.pause(); clearHL(); }
+      function closeBar() { on = false; bar.hidden = true; document.body.classList.remove('auopen'); audioBtn.classList.remove('on'); au.pause(); revokeURL(); clearHL(); }
 
       function clearHL() { var e = contentEl.querySelector('.verse.auplay'); if (e) e.classList.remove('auplay'); }
       function highlightPlaying(vidx) {
@@ -883,21 +953,10 @@
         if (t < arr[0]) i = 0;
         highlightPlaying(i);
       }
-      function gotoNext() {
-        if (curChap < BIBLE.books[curBook].chapters.length - 1) showChapter(curBook, curChap + 1);
-        else if (curBook < BIBLE.books.length - 1) showChapter(curBook + 1, 0);
-        else return false;
-        return true;
-      }
-      function gotoPrev() {
-        if (curChap > 0) showChapter(curBook, curChap - 1);
-        else if (curBook > 0) showChapter(curBook - 1, BIBLE.books[curBook - 1].chapters.length - 1);
-      }
+      function gotoNext() { if (curChap < BIBLE.books[curBook].chapters.length - 1) showChapter(curBook, curChap + 1); else if (curBook < BIBLE.books.length - 1) showChapter(curBook + 1, 0); else return false; return true; }
+      function gotoPrev() { if (curChap > 0) showChapter(curBook, curChap - 1); else if (curBook > 0) showChapter(curBook - 1, BIBLE.books[curBook - 1].chapters.length - 1); }
 
-      au.addEventListener('timeupdate', function () {
-        if (!seeking && au.duration) { elSeek.value = (au.currentTime / au.duration * 1000) | 0; elCur.textContent = fmt(au.currentTime); }
-        syncVerse();
-      });
+      au.addEventListener('timeupdate', function () { if (!seeking && au.duration) { elSeek.value = (au.currentTime / au.duration * 1000) | 0; elCur.textContent = fmt(au.currentTime); } syncVerse(); });
       au.addEventListener('loadedmetadata', function () { elDur.textContent = fmt(au.duration); });
       au.addEventListener('play', function () { btnPlay.textContent = '⏸'; });
       au.addEventListener('pause', function () { btnPlay.textContent = '▶'; });
@@ -908,15 +967,10 @@
       btnPrev.addEventListener('click', gotoPrev);
       btnNext.addEventListener('click', gotoNext);
       btnClose.addEventListener('click', closeBar);
-      btnRate.addEventListener('click', function () {
-        rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length]; au.playbackRate = rate;
-        btnRate.textContent = rlabel(rate); try { localStorage.setItem('bibleAuRate', rate); } catch (e) {}
-      });
-      btnAuto.addEventListener('click', function () {
-        autoAdv = !autoAdv; btnAuto.classList.toggle('on', autoAdv);
-        try { localStorage.setItem('bibleAuAuto', autoAdv ? '1' : '0'); } catch (e) {}
-      });
-      audioBtn.addEventListener('click', function () { if (on) closeBar(); else openBar(); });
+      btnRate.addEventListener('click', function () { rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length]; au.playbackRate = rate; btnRate.textContent = rlabel(rate); try { localStorage.setItem('bibleAuRate', rate); } catch (e) {} });
+      btnAuto.addEventListener('click', function () { autoAdv = !autoAdv; btnAuto.classList.toggle('on', autoAdv); try { localStorage.setItem('bibleAuAuto', autoAdv ? '1' : '0'); } catch (e) {} });
+      if (btnManage) btnManage.addEventListener('click', openManage);
+      audioBtn.addEventListener('click', function () { if (on) { closeBar(); return; } if (!isMember()) { openManage(); return; } openBar(); });
       contentEl.addEventListener('click', function (e) {
         if (!on) return;
         var p = e.target.closest && e.target.closest('.verse'); if (!p || !p.id) return;
@@ -925,29 +979,73 @@
         if (arr && arr[v - 1] != null) { au.currentTime = arr[v - 1]; au.play(); }
       });
 
-      function onRender() {
-        updateBtn();
-        if (!on) return;
-        if (bookName() !== curName || (curChap + 1) !== curCh) {
-          if (avail(bookName(), curChap + 1)) playCur(null);
-          else { au.pause(); clearHL(); setTitle(); }
-        } else { curVIdx = -1; syncVerse(); }
+      // --- 다운로드 관리 ---
+      function chaptersOf(names) { var out = []; names.forEach(function (nm) { var no = NAME2NO[nm]; var chs = SYNC && SYNC[nm] ? Object.keys(SYNC[nm]) : []; chs.forEach(function (c) { out.push({ no: no, ch: parseInt(c, 10) }); }); }); return out; }
+      function scopeList(scope) { if (scope === 'all') return chaptersOf(BOOKS66); if (scope === 'ot') return chaptersOf(BOOKS66.slice(0, 39)); if (scope === 'nt') return chaptersOf(BOOKS66.slice(39)); return chaptersOf([scope]); }
+      var dlBusy = false;
+      function downloadScope(scope, btn) {
+        if (dlBusy) { tst('다운로드 진행 중입니다'); return; }
+        if (!isMember()) { tst('성도 로그인이 필요합니다'); return; }
+        var list = scopeList(scope); if (!list.length) return;
+        dlBusy = true; var i = 0, okc = 0; var orig = btn ? btn.textContent : '';
+        function step() {
+          if (i >= list.length) { dlBusy = false; if (btn) btn.textContent = orig; refreshManage(); tst('다운로드 완료: ' + okc + '장'); return; }
+          var it = list[i++];
+          if (btn) btn.textContent = Math.round(i / list.length * 100) + '%';
+          getAudio(it.no, it.ch, function (existing) {
+            if (existing) { okc++; step(); return; }
+            fetchChapter(it.no, it.ch, function (ok, blob) {
+              if (ok && blob) { putAudio(it.no, it.ch, blob, function () { okc++; step(); }); }
+              else { step(); }
+            });
+          });
+        }
+        step();
       }
-      function mediaMeta() {
-        if (!('mediaSession' in navigator)) return;
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({ title: bookName() + ' ' + (curChap + 1) + '장', artist: '개역개정 · 빠른성경' });
-          navigator.mediaSession.setActionHandler('play', function () { au.play(); });
-          navigator.mediaSession.setActionHandler('pause', function () { au.pause(); });
-          navigator.mediaSession.setActionHandler('previoustrack', gotoPrev);
-          navigator.mediaSession.setActionHandler('nexttrack', gotoNext);
-        } catch (e) {}
-      }
+      function deleteScope(scope) { var list = scopeList(scope), i = 0; function step() { if (i >= list.length) { refreshManage(); return; } var it = list[i++]; delAudio(it.no, it.ch, step); } step(); }
 
-      btnRate.textContent = rlabel(rate);
-      btnAuto.classList.toggle('on', autoAdv);
-      load(function () { updateBtn(); });
-      return { onRender: onRender, updateBtn: updateBtn };
+      function openManage() { if (!mgr) return; mgr.hidden = false; mgrMask.hidden = false; document.body.classList.add('mgropen'); refreshManage(); }
+      function closeManage() { if (!mgr) return; mgr.hidden = true; mgrMask.hidden = true; document.body.classList.remove('mgropen'); }
+      function rowHTML(label, scope, set) {
+        var list = scopeList(scope), have = 0; list.forEach(function (it) { if (set[it.no + '/' + it.ch]) have++; });
+        return '<div class="mgr-row"><div class="mgr-nm">' + label + ' <span class="mgr-sub">' + have + '/' + list.length + '장</span></div>' +
+          '<div class="mgr-act"><button class="mgr-dl" data-dl="' + scope + '">' + (list.length && have >= list.length ? '완료' : '다운로드') + '</button>' +
+          (have > 0 ? '<button class="mgr-del" data-del="' + scope + '">삭제</button>' : '') + '</div></div>';
+      }
+      function refreshManage() {
+        if (!mgr || mgr.hidden) return;
+        if (!window.CHURCH || !window.CHURCH.ready) { mgrBody.innerHTML = '<div class="mgr-msg">로그인 상태 확인 중…</div>'; return; }
+        if (!isMember()) {
+          mgrBody.innerHTML = '<div class="mgr-msg">오디오 성경은 <b>성도(회원 2단계 이상)</b>만 이용할 수 있습니다.<br>로그인 후 관리자 승인이 필요합니다.</div>' +
+            '<div class="mgr-act" style="justify-content:center"><a class="mgr-dl" href="index.html">로그인 하러 가기</a></div>';
+          return;
+        }
+        if (!SYNC) { mgrBody.innerHTML = '<div class="mgr-msg">준비 중…</div>'; return; }
+        audioKeys(function (keys) {
+          var set = {}; keys.forEach(function (k) { set[k] = 1; });
+          var mb = Math.round(keys.length * 2.6);
+          var h = '<div class="mgr-msg">저장됨 <b>' + keys.length + '장</b> (약 ' + mb + 'MB) · 다운로드 후엔 오프라인 재생됩니다</div>';
+          h += rowHTML('전체', 'all', set) + rowHTML('구약', 'ot', set) + rowHTML('신약', 'nt', set);
+          h += '<div class="mgr-hd">책별 (탭하면 그 책 다운로드)</div><div class="mgr-books">';
+          BOOKS66.forEach(function (nm) { var list = scopeList(nm), have = 0; list.forEach(function (it) { if (set[it.no + '/' + it.ch]) have++; });
+            h += '<button class="mgr-book' + (list.length && have >= list.length ? ' done' : '') + '" data-dl="' + nm + '">' + nm + (have > 0 ? ' <span class="mgr-sub">' + have + '/' + list.length + '</span>' : '') + '</button>'; });
+          h += '</div>';
+          mgrBody.innerHTML = h;
+          mgrBody.querySelectorAll('[data-dl]').forEach(function (b) { b.onclick = function () { downloadScope(b.getAttribute('data-dl'), b); }; });
+          mgrBody.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function () { if (confirm('삭제할까요?')) deleteScope(b.getAttribute('data-del')); }; });
+        });
+      }
+      if (mgrMask) mgrMask.addEventListener('click', closeManage);
+      if (mgrX) mgrX.addEventListener('click', closeManage);
+
+      function onRender() { updateBtn(); if (!on) return; if (bookName() !== curName || (curChap + 1) !== curCh) { playCur(null); } else { curVIdx = -1; syncVerse(); } }
+      function onAuth() { updateBtn(); refreshManage(); }
+      function updateBtn() { audioBtn.style.display = (SYNC && bookNo(bookName())) ? '' : 'none'; }
+      function mediaMeta() { if (!('mediaSession' in navigator)) return; try { navigator.mediaSession.metadata = new MediaMetadata({ title: bookName() + ' ' + (curChap + 1) + '장', artist: '개역개정 · 빠른성경' }); navigator.mediaSession.setActionHandler('play', function () { au.play(); }); navigator.mediaSession.setActionHandler('pause', function () { au.pause(); }); navigator.mediaSession.setActionHandler('previoustrack', gotoPrev); navigator.mediaSession.setActionHandler('nexttrack', gotoNext); } catch (e) {} }
+
+      btnRate.textContent = rlabel(rate); btnAuto.classList.toggle('on', autoAdv);
+      fetch('data/bible/audio_sync.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { SYNC = j || {}; updateBtn(); }).catch(function () { SYNC = {}; });
+      return { onRender: onRender, updateBtn: updateBtn, onAuth: onAuth };
     })();
 
     // ===== 원어(스트롱) 기능 =====
@@ -965,13 +1063,14 @@
     //  store 'wonjeon'  : 원전분해 (장 단위) key="책|장" -> {book,chap,verses:{절:[토큰]}}
     function openLexDB(cb) {
       try {
-        var req = indexedDB.open('bibleLex', 4);
+        var req = indexedDB.open('bibleLex', 5);
         req.onupgradeneeded = function (e) {
           var db = e.target.result;
           if (!db.objectStoreNames.contains('lex')) db.createObjectStore('lex');
           if (!db.objectStoreNames.contains('versions')) db.createObjectStore('versions');
           if (!db.objectStoreNames.contains('comm')) db.createObjectStore('comm');
           if (!db.objectStoreNames.contains('wonjeon')) db.createObjectStore('wonjeon');
+          if (!db.objectStoreNames.contains('audio')) db.createObjectStore('audio'); // 오디오 blob: key "책번호/장"
         };
         req.onsuccess = function (e) { LEXDB = e.target.result; cb && cb(); };
         req.onerror = function () { LEXDB = null; cb && cb(); };
