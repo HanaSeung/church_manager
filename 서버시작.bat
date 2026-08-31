@@ -10,7 +10,7 @@ echo   Stop   : close this window or press Ctrl+C
 echo   ----------------------------------------
 echo.
 start "" http://localhost:8002
-python -m http.server 8002
+python serve.py 8002
 echo.
 echo   Server stopped. Press any key to close.
 pause >nul
