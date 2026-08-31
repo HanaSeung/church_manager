@@ -55,6 +55,7 @@
           <button id="wjbBtn" class="stronbtn" title="원전분해 보기">원전분해</button>
           <button id="commBtn" class="stronbtn" title="주석 보기">주석</button>
           <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
+          <button id="audioBtn" class="stronbtn" title="오디오 듣기" style="display:none;">듣기</button>
           <span id="parBar" class="parbar" style="display:none;"></span>
         </div>
         <span class="row-spacer"></span>
@@ -146,6 +147,52 @@
     <div id="status" class="status">데이터를 불러오는 중…</div>
     <div id="content"></div>
   </div>
+
+  <!-- 오디오 플레이어 -->
+  <audio id="bAudio" preload="none"></audio>
+  <div id="audioBar" class="aubar" hidden>
+    <div class="au-top">
+      <span id="auTitle" class="au-title">—</span>
+      <span class="au-right">
+        <button id="auRate" class="au-chip" title="배속">1.0×</button>
+        <button id="auAuto" class="au-chip on" title="자동 다음 장">자동 ▶</button>
+        <button id="auClose" class="au-chip" title="닫기">✕</button>
+      </span>
+    </div>
+    <div class="au-seek">
+      <span id="auCur" class="au-time">0:00</span>
+      <input id="auSeek" class="au-range" type="range" min="0" max="1000" value="0" step="1">
+      <span id="auDur" class="au-time">0:00</span>
+    </div>
+    <div class="au-ctrls">
+      <button id="auPrev" class="au-cbtn" title="이전 장">⏮</button>
+      <button id="auPlay" class="au-cbtn main" title="재생/일시정지">▶</button>
+      <button id="auNext" class="au-cbtn" title="다음 장">⏭</button>
+    </div>
+  </div>
+  <style>
+    .aubar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--card,#fff);
+      border-top:1px solid var(--line,#e6eae8);box-shadow:0 -4px 16px rgba(30,60,45,.10);
+      padding:9px 14px calc(9px + env(safe-area-inset-bottom,0px));max-width:820px;margin:0 auto}
+    .aubar[hidden]{display:none}
+    .au-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .au-title{font-size:13px;font-weight:700;color:var(--green,#4b8a68);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .au-right{margin-left:auto;display:flex;gap:6px;flex:0 0 auto}
+    .au-chip{border:1px solid var(--line,#d7ddda);background:#fff;border-radius:16px;padding:4px 10px;
+      font-size:12px;color:var(--text,#3a4c41);font-weight:600;cursor:pointer}
+    .au-chip.on{background:var(--green,#4b8a68);color:#fff;border-color:var(--green,#4b8a68)}
+    .au-seek{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+    .au-time{font-size:11px;color:var(--muted,#8a97a0);min-width:36px;text-align:center;font-variant-numeric:tabular-nums}
+    .au-range{flex:1;height:22px;accent-color:var(--green,#4b8a68);cursor:pointer}
+    .au-ctrls{display:flex;align-items:center;justify-content:center;gap:30px;margin-bottom:2px}
+    .au-cbtn{width:42px;height:42px;border-radius:50%;background:#fff;border:1px solid var(--line,#d7ddda);
+      font-size:18px;color:#3a4c41;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .au-cbtn.main{width:54px;height:54px;background:var(--green,#4b8a68);border-color:var(--green,#4b8a68);color:#fff;font-size:22px}
+    body.auopen{padding-bottom:158px}
+    .verse.auplay{background:rgba(75,138,104,.13);border-radius:8px}
+    .verse.auplay .vnum{color:var(--green,#4b8a68)}
+    #audioBtn.on{background:var(--green,#4b8a68);color:#fff;border-color:var(--green,#4b8a68)}
+  </style>
 
   <style>
     .controls { background:var(--card); border:1px solid var(--line); border-radius:12px;
@@ -595,6 +642,7 @@
       }
       updateTopVerse();
       if (!VIEW_RESTORED) { VIEW_RESTORED = true; applyPendingView(); } // 최초 렌더 후 저장된 보기 상태 복원
+      if (window.AUDIO) window.AUDIO.onRender();
       saveLast();
     }
 
@@ -771,6 +819,136 @@
     document.getElementById('fsUp').addEventListener('click', function () { setFont(FS + 2); });
     document.getElementById('fsDown').addEventListener('click', function () { setFont(FS - 2); });
     setFont(FS);
+
+    // ===== 오디오 플레이어 + 절 정밀 동기화 (개역개정 빠른성경) =====
+    window.AUDIO = (function () {
+      var MAN = null, SYNC = null;
+      var au = document.getElementById('bAudio');
+      var bar = document.getElementById('audioBar');
+      var elTitle = document.getElementById('auTitle'), elCur = document.getElementById('auCur'),
+          elDur = document.getElementById('auDur'), elSeek = document.getElementById('auSeek'),
+          btnPlay = document.getElementById('auPlay'), btnPrev = document.getElementById('auPrev'),
+          btnNext = document.getElementById('auNext'), btnRate = document.getElementById('auRate'),
+          btnAuto = document.getElementById('auAuto'), btnClose = document.getElementById('auClose'),
+          audioBtn = document.getElementById('audioBtn');
+      var on = false, curName = '', curCh = 0, curVIdx = -1, seeking = false;
+      var RATES = [1, 1.25, 1.5, 2, 0.8];
+      var rate = parseFloat(localStorage.getItem('bibleAuRate') || '1') || 1;
+      var autoAdv = localStorage.getItem('bibleAuAuto') !== '0';
+
+      function fmt(s) { s = Math.max(0, s | 0); var m = (s / 60) | 0, x = s % 60; return m + ':' + (x < 10 ? '0' : '') + x; }
+      function rlabel(r) { return (String(r).indexOf('.') === -1 ? r + '.0' : String(r)) + '×'; }
+      function bookName() { return (BIBLE && BIBLE.books && BIBLE.books[curBook]) ? BIBLE.books[curBook].name : ''; }
+      function avail(name, ch) { return !!(MAN && MAN[name] && MAN[name][String(ch)]); }
+
+      function load(cb) {
+        var n = 0; function fin() { if (++n >= 2) cb && cb(); }
+        fetch('data/bible/audio_manifest.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { MAN = j || {}; fin(); }).catch(function () { MAN = {}; fin(); });
+        fetch('data/bible/audio_sync.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { SYNC = j || {}; fin(); }).catch(function () { SYNC = {}; fin(); });
+      }
+      function updateBtn() {
+        if (!MAN) { audioBtn.style.display = 'none'; return; }
+        audioBtn.style.display = (BIBLE && avail(bookName(), curChap + 1)) ? '' : 'none';
+      }
+      function setTitle() { elTitle.textContent = bookName() + ' ' + (curChap + 1) + '장'; }
+
+      function playCur(startAt) {
+        var name = bookName(), ch = curChap + 1;
+        if (!avail(name, ch)) { au.pause(); clearHL(); setTitle(); return; }
+        curName = name; curCh = ch; curVIdx = -1;
+        au.src = encodeURI(MAN[name][String(ch)]);
+        au.playbackRate = rate;
+        if (startAt != null) { try { au.currentTime = startAt; } catch (e) {} }
+        setTitle(); mediaMeta();
+        au.play().catch(function () {});
+      }
+      function openBar() { on = true; bar.hidden = false; document.body.classList.add('auopen'); audioBtn.classList.add('on'); playCur(null); }
+      function closeBar() { on = false; bar.hidden = true; document.body.classList.remove('auopen'); audioBtn.classList.remove('on'); au.pause(); clearHL(); }
+
+      function clearHL() { var e = contentEl.querySelector('.verse.auplay'); if (e) e.classList.remove('auplay'); }
+      function highlightPlaying(vidx) {
+        if (vidx === curVIdx) return; curVIdx = vidx; clearHL();
+        if (vidx < 1) return;
+        var el = document.getElementById('v' + vidx); if (!el) return;
+        el.classList.add('auplay');
+        var r = el.getBoundingClientRect(), head = document.getElementById('fixedHead');
+        var top = (head ? head.offsetHeight : 0) + 70, bot = window.innerHeight - 170;
+        if (r.top < top || r.bottom > bot) window.scrollTo({ top: r.top + window.pageYOffset - top, behavior: 'smooth' });
+      }
+      function syncVerse() {
+        var arr = SYNC && SYNC[curName] && SYNC[curName][String(curCh)];
+        if (!arr || !arr.length) return;
+        var t = au.currentTime, i = 0;
+        for (var k = 0; k < arr.length; k++) { if (arr[k] <= t + 0.02) i = k + 1; else break; }
+        if (t < arr[0]) i = 0;
+        highlightPlaying(i);
+      }
+      function gotoNext() {
+        if (curChap < BIBLE.books[curBook].chapters.length - 1) showChapter(curBook, curChap + 1);
+        else if (curBook < BIBLE.books.length - 1) showChapter(curBook + 1, 0);
+        else return false;
+        return true;
+      }
+      function gotoPrev() {
+        if (curChap > 0) showChapter(curBook, curChap - 1);
+        else if (curBook > 0) showChapter(curBook - 1, BIBLE.books[curBook - 1].chapters.length - 1);
+      }
+
+      au.addEventListener('timeupdate', function () {
+        if (!seeking && au.duration) { elSeek.value = (au.currentTime / au.duration * 1000) | 0; elCur.textContent = fmt(au.currentTime); }
+        syncVerse();
+      });
+      au.addEventListener('loadedmetadata', function () { elDur.textContent = fmt(au.duration); });
+      au.addEventListener('play', function () { btnPlay.textContent = '⏸'; });
+      au.addEventListener('pause', function () { btnPlay.textContent = '▶'; });
+      au.addEventListener('ended', function () { if (!(autoAdv && gotoNext())) clearHL(); });
+      elSeek.addEventListener('input', function () { seeking = true; if (au.duration) { au.currentTime = au.duration * elSeek.value / 1000; elCur.textContent = fmt(au.currentTime); } });
+      elSeek.addEventListener('change', function () { seeking = false; });
+      btnPlay.addEventListener('click', function () { if (au.paused) au.play(); else au.pause(); });
+      btnPrev.addEventListener('click', gotoPrev);
+      btnNext.addEventListener('click', gotoNext);
+      btnClose.addEventListener('click', closeBar);
+      btnRate.addEventListener('click', function () {
+        rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length]; au.playbackRate = rate;
+        btnRate.textContent = rlabel(rate); try { localStorage.setItem('bibleAuRate', rate); } catch (e) {}
+      });
+      btnAuto.addEventListener('click', function () {
+        autoAdv = !autoAdv; btnAuto.classList.toggle('on', autoAdv);
+        try { localStorage.setItem('bibleAuAuto', autoAdv ? '1' : '0'); } catch (e) {}
+      });
+      audioBtn.addEventListener('click', function () { if (on) closeBar(); else openBar(); });
+      contentEl.addEventListener('click', function (e) {
+        if (!on) return;
+        var p = e.target.closest && e.target.closest('.verse'); if (!p || !p.id) return;
+        var v = parseInt(p.id.slice(1), 10); if (!v) return;
+        var arr = SYNC && SYNC[curName] && SYNC[curName][String(curCh)];
+        if (arr && arr[v - 1] != null) { au.currentTime = arr[v - 1]; au.play(); }
+      });
+
+      function onRender() {
+        updateBtn();
+        if (!on) return;
+        if (bookName() !== curName || (curChap + 1) !== curCh) {
+          if (avail(bookName(), curChap + 1)) playCur(null);
+          else { au.pause(); clearHL(); setTitle(); }
+        } else { curVIdx = -1; syncVerse(); }
+      }
+      function mediaMeta() {
+        if (!('mediaSession' in navigator)) return;
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({ title: bookName() + ' ' + (curChap + 1) + '장', artist: '개역개정 · 빠른성경' });
+          navigator.mediaSession.setActionHandler('play', function () { au.play(); });
+          navigator.mediaSession.setActionHandler('pause', function () { au.pause(); });
+          navigator.mediaSession.setActionHandler('previoustrack', gotoPrev);
+          navigator.mediaSession.setActionHandler('nexttrack', gotoNext);
+        } catch (e) {}
+      }
+
+      btnRate.textContent = rlabel(rate);
+      btnAuto.classList.toggle('on', autoAdv);
+      load(function () { updateBtn(); });
+      return { onRender: onRender, updateBtn: updateBtn };
+    })();
 
     // ===== 원어(스트롱) 기능 =====
     var HAS_CODES = false;
