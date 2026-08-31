@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// 예닮교회 — Firebase Storage 보안 규칙
+// 오디오(audio/**)는 저작권상 "로그인 + 회원 2단계(level>=2) 이상"만 읽기 허용.
+// 업로드(쓰기)는 앱에서 금지 — 관리자가 콘솔/CLI(서비스계정)로만 올린다.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 오디오 성경: 로그인 + users/{uid}.level >= 2 (관리자가 지정한 회원)
+    match /audio/{allPaths=**} {
+      allow read: if request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.level >= 2;
+      allow write: if false;
+    }
+
+    // 그 외 전부 차단
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
