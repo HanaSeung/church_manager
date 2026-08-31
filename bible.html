@@ -400,7 +400,7 @@
             if (typeof e === 'string') { DEPLOYED_VERSIONS.push(e); }
             else if (e && e.name) { DEPLOYED_VERSIONS.push(e.name); setDesc(e.name, e.desc); }
           });
-          if (!DEPLOYED_VERSIONS.length) DEPLOYED_VERSIONS = ['개역개정'];
+          // 모든 성경은 개인 불러오기(IndexedDB) — 배포 기본값 없음
           refreshVersions(function () {
             if (!VERSIONS.length) { showBlank(); return; }
             var last = readLast();
@@ -412,8 +412,14 @@
           });
         })
         .catch(function () {
-          DEPLOYED_VERSIONS = ['개역개정'];
-          refreshVersions(function () { loadVersion('개역개정', 0, 0); });
+          DEPLOYED_VERSIONS = [];
+          refreshVersions(function () {
+            if (!VERSIONS.length) { showBlank(); return; }
+            var last = readLast();
+            var v = (last && last.v && VERSIONS.indexOf(last.v) !== -1) ? last.v : VERSIONS[0];
+            curVersion = v;
+            loadVersion(v, 0, 0);
+          });
         });
     }
     openLexDB(startApp);
