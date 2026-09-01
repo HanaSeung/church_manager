@@ -1,7 +1,8 @@
-const CACHE = 'church-manager-v267';
+const CACHE = 'church-manager-v288';
 const ASSETS = [
   'index.html',
   'Sortable.min.js',
+  'bible-sermon.js',
   'manifest.json',
   'icon-192.png',
   'icon-512.png',

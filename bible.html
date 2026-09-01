@@ -56,6 +56,7 @@
           <button id="commBtn" class="stronbtn" title="주석 보기">주석</button>
           <button id="parBtn" class="stronbtn" title="병행 보기">병행</button>
           <button id="audioBtn" class="stronbtn" title="오디오 듣기" style="display:none;">듣기</button>
+          <button id="sermonBtn" class="stronbtn" title="설교준비 (PC · 회원 2단계 이상)" style="display:none;">설교준비</button>
           <span id="parBar" class="parbar" style="display:none;"></span>
         </div>
         <span class="row-spacer"></span>
@@ -448,6 +449,7 @@
       if (u) { try { var s = await getDoc(doc(db, 'users', u.uid)); lv = s.exists() ? (s.data().level || 0) : 0; } catch (e) {} }
       window.CHURCH.level = lv;
       if (window.AUDIO && window.AUDIO.onAuth) window.AUDIO.onAuth();
+      if (window._updSermonBtn) window._updSermonBtn();
     });
   </script>
   <script>
@@ -1861,7 +1863,42 @@
         });
       });
     }
+    // ===== 설교준비 모드 연동 (엔진 노출 + PC 게이팅) =====
+    window.BIBLEVIEW = {
+      get bible() { return BIBLE; },
+      get curBook() { return curBook; },
+      get curChap() { return curChap; },
+      get curVerse() { return curVerse; },
+      get curVersion() { return curVersion; },
+      versions: function () { return VERSIONS.slice(); },
+      getVersion: getVersion,
+      getVersionData: getVersionData,
+      renderVerseText: renderVerseText,
+      parText: parText,
+      lexGet: lexGet,
+      lexCount: lexCount,
+      getComm: getCommChapter,
+      commNames: function () { return COMM_NAMES.slice(); },
+      getWonjeon: getWonjeonChapter,
+      ensureWonjeon: ensureWonjeon,
+      gotoRef: function (b, c, v) { showChapter(b, c, v); }
+    };
+    var _mqPC = null;
+    try { _mqPC = window.matchMedia('(min-width:1024px) and (pointer:fine)'); } catch (e) {}
+    function _updSermonBtn() {
+      var btn = document.getElementById('sermonBtn'); if (!btn) return;
+      var pc = _mqPC ? _mqPC.matches : (window.innerWidth >= 1024);
+      var lv = (window.CHURCH && window.CHURCH.level) || 0;
+      btn.style.display = (pc && lv >= 2) ? '' : 'none';
+    }
+    window._updSermonBtn = _updSermonBtn;
+    if (_mqPC) { try { _mqPC.addEventListener('change', _updSermonBtn); } catch (e) { try { _mqPC.addListener(_updSermonBtn); } catch (_) {} } }
+    window.addEventListener('resize', _updSermonBtn);
+    (function () { var b = document.getElementById('sermonBtn'); if (b) b.addEventListener('click', function () { if (window.SERMON && window.SERMON.open) window.SERMON.open(); else alert('설교준비 모듈을 불러오지 못했습니다.'); }); })();
+    _updSermonBtn();
+
     processSharedIfAny();
   </script>
+  <script src="bible-sermon.js"></script>
 </body>
 </html>
