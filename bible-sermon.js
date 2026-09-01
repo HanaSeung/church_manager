@@ -73,10 +73,13 @@
     + "#sermonRoot .sp-empty{color:#93a096;font-size:13px;text-align:center;padding:32px 10px;line-height:1.7}"
     + "#sermonRoot .sp-cref{font-weight:700;font-size:15px;color:#2f6147;margin:0 0 6px}#sermonRoot .sp-csrc{font-size:11px;color:#93a096;font-weight:600;margin-bottom:10px}#sermonRoot .sp-ctxt{font-size:14px;line-height:1.8}"
     + "#sermonRoot .sp-xr{display:inline-block;border:1px solid #e3e8e2;background:#f6f8f5;color:#2f6147;font-weight:600;border-radius:8px;padding:7px 11px;font-size:13px;margin:0 8px 8px 0;cursor:pointer}#sermonRoot .sp-xr:hover{border-color:#3f7d5c;background:#e8f2ea}"
-    + "#sermonRoot .sp-sbar{display:flex;gap:8px;margin-bottom:13px;flex-wrap:wrap}#sermonRoot .sp-sbar input{flex:1;min-width:110px;border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:9px 11px;font-size:13.5px;font-family:inherit}#sermonRoot .sp-sbar input:focus{outline:none;border-color:#3f7d5c}#sermonRoot .sp-sbar select{border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:0 8px;font-size:13px;font-weight:600}"
+    + "#sermonRoot .sp-sbar{display:flex;gap:8px;margin-bottom:13px;flex-wrap:wrap}#sermonRoot .sp-sbar input{flex:1;min-width:110px;border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:9px 11px;font-size:13.5px;font-family:inherit}#sermonRoot .sp-sbar input:focus{outline:none;border-color:#3f7d5c}#sermonRoot .sp-sbar select{border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:0 8px;font-size:13px;font-weight:600}#sermonRoot .sp-sbar select:disabled{opacity:.45;cursor:not-allowed}#sermonRoot .sp-sbar .sp-sin2{min-width:82px}"
+    + "#sermonRoot .sp-dd{position:relative}#sermonRoot .sp-ddbtn{display:flex;align-items:center;gap:7px;border:1px solid #e3e8e2;background:#f6f8f5;border-radius:9px;padding:8px 10px;font-size:13px;cursor:pointer;min-width:132px}#sermonRoot .sp-ddbtn .nm{font-weight:700;color:#232a24}#sermonRoot .sp-ddbtn .rg{color:#93a096;font-weight:400;font-size:12px}#sermonRoot .sp-ddbtn .car{margin-left:auto;color:#9aa89e;font-size:11px}#sermonRoot .sp-dd.dis{opacity:.45;pointer-events:none}"
+    + "#sermonRoot .sp-ddmenu{position:absolute;top:calc(100% + 5px);left:0;z-index:30;background:#fff;border:1px solid #e3e8e2;border-radius:11px;box-shadow:0 10px 34px rgba(24,40,30,.16);padding:5px;min-width:190px;max-height:320px;overflow:auto}#sermonRoot .sp-ddmenu[hidden]{display:none}#sermonRoot .sp-ddit{display:flex;align-items:baseline;gap:8px;padding:8px 11px;border-radius:8px;cursor:pointer;white-space:nowrap}#sermonRoot .sp-ddit .nm{font-weight:700;color:#232a24;font-size:13.5px}#sermonRoot .sp-ddit .rg{color:#93a096;font-weight:400;font-size:12px;margin-left:auto;padding-left:14px}#sermonRoot .sp-ddit:hover{background:#f3f5f2}#sermonRoot .sp-ddit.sel{background:#e8f2ea}#sermonRoot .sp-ddit.sel .nm{color:#2f6147}"
     + "#sermonRoot .sp-sres{border:1px solid #eef1ec;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;background:#f6f8f5}#sermonRoot .sp-sres:hover{border-color:#3f7d5c}#sermonRoot .sp-sres .r{font-weight:700;color:#2f6147;font-size:12px;margin-bottom:3px}#sermonRoot .sp-sres .t{font-size:13px;line-height:1.6}#sermonRoot .sp-scount{font-size:12px;color:#68766c;margin-bottom:10px}#sermonRoot mark.q{background:#ffe6a0;border-radius:3px;padding:0 2px;box-shadow:inset 0 -2px 0 #e0b73f}"
     + "#sermonRoot .sp-ta{width:100%;min-height:150px;border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:10px;padding:11px 12px;font-size:13.5px;font-family:inherit;line-height:1.7;resize:vertical}#sermonRoot .sp-ta:focus{outline:none;border-color:#3f7d5c}#sermonRoot .sp-nhd{display:flex;align-items:center;gap:8px;margin-bottom:10px}#sermonRoot .sp-nhd .r{font-weight:700;color:#2f6147;font-size:14px}#sermonRoot .sp-saved{font-size:11.5px;color:#3f7d5c;font-weight:600;opacity:0;transition:opacity .2s}#sermonRoot .sp-saved.show{opacity:1}"
-    + "#sermonRoot .sp-cprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:13px}#sermonRoot .sp-cplab{font-size:11px;font-weight:700;color:#93a096;min-width:32px}#sermonRoot .sp-cpsel{border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:8px 10px;font-size:13.5px;font-weight:600;font-family:inherit}#sermonRoot .sp-cpin{flex:1;min-width:92px;border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:8px 11px;font-size:14px;font-weight:600;font-family:inherit}#sermonRoot .sp-cpin:focus{outline:none;border-color:#3f7d5c}#sermonRoot .sp-cpgo{border:1px solid #3f7d5c;background:#3f7d5c;color:#fff;font-weight:700;border-radius:9px;padding:8px 15px;font-size:13px;cursor:pointer}#sermonRoot .sp-cpgo:hover{background:#2f6147}#sermonRoot .sp-cpv{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}#sermonRoot .sp-mini{border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;font-weight:600;border-radius:8px;padding:6px 11px;font-size:12.5px;cursor:pointer}#sermonRoot .sp-mini:hover{border-color:#3f7d5c;color:#2f6147}"
+    + "#sermonRoot .sp-cprow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:13px}#sermonRoot .sp-cplab{font-size:11px;font-weight:700;color:#93a096;min-width:32px}#sermonRoot .sp-cpsel{border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:8px 10px;font-size:13.5px;font-weight:600;font-family:inherit}#sermonRoot .sp-cpin{flex:1;min-width:92px;border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;border-radius:9px;padding:8px 11px;font-size:14px;font-weight:600;font-family:inherit}#sermonRoot .sp-cpin:focus{outline:none;border-color:#3f7d5c}#sermonRoot .sp-cpgo{border:1px solid #3f7d5c;background:#3f7d5c;color:#fff;font-weight:700;border-radius:9px;padding:8px 15px;font-size:13px;cursor:pointer}#sermonRoot .sp-cpgo:hover{background:#2f6147}#sermonRoot .sp-cpv{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}#sermonRoot .sp-mini{border:1px solid #e3e8e2;background:#f6f8f5;color:#1f2421;font-weight:600;border-radius:8px;padding:6px 11px;font-size:12.5px;cursor:pointer}#sermonRoot .sp-mini:hover{border-color:#3f7d5c;color:#2f6147}#sermonRoot .sp-cpcopy{flex:0 0 auto}"
+    + "#sermonRoot .sp-cpwrap{display:flex;flex-direction:column;height:100%;min-height:0}#sermonRoot .sp-cpout{flex:1;min-height:120px;resize:none;margin-bottom:0}"
     + "#sermonRoot .sp-hdiv{flex:0 0 auto;height:7px;cursor:row-resize;background:#e0e5df;position:relative}#sermonRoot .sp-hdiv::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:2px;width:34px;border-radius:2px;background:#9aa89e}#sermonRoot .sp-hdiv:hover{background:#e5f0e8}"
     + "#sermonRoot .sp-info{flex:0 0 auto;height:230px;display:flex;flex-direction:column;background:#f6f8f5}#sermonRoot .sp-ihd{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #eef1ec}#sermonRoot .sp-it{font-weight:700;font-size:13px;color:#2f6147}#sermonRoot .sp-isub{font-size:11.5px;color:#93a096}#sermonRoot .sp-ix{border:0;background:transparent;color:#93a096;font-size:15px;cursor:pointer;padding:2px 6px;border-radius:6px}#sermonRoot .sp-ix:hover{color:#1f2421;background:#eef1ec}#sermonRoot .sp-ibody{flex:1;overflow:auto;padding:13px 16px}"
     + "#sermonRoot .sp-iw{font-weight:700;font-size:18px;margin-bottom:2px}#sermonRoot .sp-iref{font-size:11.5px;color:#93a096;font-weight:600;margin-bottom:12px}#sermonRoot .sp-irow{display:flex;gap:10px;margin:7px 0;font-size:14px}#sermonRoot .sp-irow .k{flex:0 0 52px;font-size:12px;font-weight:700;color:#93a096}#sermonRoot .sp-irow .v{flex:1;line-height:1.6}#sermonRoot .sp-icode{color:#2f6147;font-weight:700}#sermonRoot .sp-iempty{color:#93a096;font-size:12.5px;text-align:center;padding:26px 10px;line-height:1.7}"
@@ -459,9 +462,28 @@
     } else if (st.tab === "search") {
       var cur = (st._sv && st.cols.indexOf(st._sv) >= 0) ? st._sv : st.cols[0];
       var opts = st.cols.map(function (n) { return "<option value='" + esc(n) + "'" + (n === cur ? " selected" : "") + ">" + esc(n) + "</option>"; }).join("");
-      b.innerHTML = "<div class='sp-sbar'><select id='spSVer'>" + opts + "</select><input id='spSIn' placeholder='이 역본·이 장에서 단어 검색' value='" + esc(st._sq || "") + "'></div><div id='spSOut'></div>";
-      var run = function () { st._sv = $("#spSVer").value; st._sq = $("#spSIn").value; save(); runSearch(); };
-      $("#spSVer").onchange = run; $("#spSIn").oninput = run; runSearch(); $("#spSIn").focus();
+      var scv = st._scope || "all", g0 = GROUP_MAP[scv] || GROUP_MAP.all;
+      var items = SGROUPS.map(function (g) { return "<div class='sp-ddit" + (g.key === scv ? " sel" : "") + "' data-k='" + g.key + "'><span class='nm'>" + esc(g.label) + "</span><span class='rg'>" + esc(g.hint) + "</span></div>"; }).join("");
+      b.innerHTML = "<div class='sp-sbar'>"
+        + "<select id='spSVer'>" + opts + "</select>"
+        + "<div class='sp-dd' id='spScopeDD'><div class='sp-ddbtn' id='spScopeBtn'><span class='nm' id='spScopeNm'>" + esc(g0.label) + "</span><span class='rg' id='spScopeRg'>" + esc(g0.hint) + "</span><span class='car'>&#9662;</span></div><div class='sp-ddmenu' id='spScopeMenu' hidden>" + items + "</div></div>"
+        + "<input id='spSRange' class='sp-sin2' placeholder='범위: 창, 시119, 창-신' value='" + esc(st._srange || "") + "'>"
+        + "</div>"
+        + "<div class='sp-sbar'>"
+        + "<input id='spSIn' placeholder='검색 단어' value='" + esc(st._sq || "") + "'>"
+        + "<button class='sp-cpgo' id='spSGo'>검색</button>"
+        + "</div><div id='spSOut'></div>";
+      var apply = function () { st._sv = $("#spSVer").value; st._sq = $("#spSIn").value; st._srange = $("#spSRange").value; save(); syncScopeUI(); };
+      var run = function () { apply(); runSearch(); };
+      $("#spSVer").onchange = apply;
+      $("#spSRange").oninput = apply;
+      $("#spSIn").oninput = apply;
+      $("#spSIn").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); run(); } });
+      $("#spSGo").onclick = run;
+      var ddBtn = $("#spScopeBtn"), ddMenu = $("#spScopeMenu");
+      ddBtn.onclick = function (e) { e.stopPropagation(); if ($("#spScopeDD").classList.contains("dis")) return; ddMenu.hidden = !ddMenu.hidden; };
+      ddMenu.onclick = function (e) { e.stopPropagation(); var it = e.target.closest(".sp-ddit"); if (!it) return; st._scope = it.getAttribute("data-k"); var g = GROUP_MAP[st._scope] || GROUP_MAP.all; $("#spScopeNm").textContent = g.label; $("#spScopeRg").textContent = g.hint; ddMenu.querySelectorAll(".sp-ddit").forEach(function (x) { x.classList.toggle("sel", x === it); }); ddMenu.hidden = true; save(); };
+      syncScopeUI(); runSearch(); $("#spSIn").focus();
     } else if (st.tab === "note") {
       if (st.sel == null) { b.innerHTML = "<div class='sp-empty'>절을 선택하면 그 절에 대한<br>개인 노트를 적을 수 있습니다.</div>"; return; }
       var key = book + "|" + chap + "|" + st.sel;
@@ -471,10 +493,11 @@
     } else if (st.tab === "passage") {
       var rv = esc(st.cpRef || ""), cv = st.cpVer || st.cols[0];
       var vopts = st.cols.map(function (n) { return "<option value='" + esc(n) + "'" + (n === cv ? " selected" : "") + ">" + esc(n) + "</option>"; }).join("");
-      b.innerHTML = "<div class='sp-cprow'><span class='sp-cplab'>본문</span><select id='spCpVer' class='sp-cpsel'>" + vopts + "</select><input id='spCpRef' class='sp-cpin' placeholder='예: 창1:1~10' value='" + rv + "'><button class='sp-cpgo' id='spCpGo'>검색</button></div>"
+      b.innerHTML = "<div class='sp-cpwrap'>"
+        + "<div class='sp-cprow'><span class='sp-cplab'>본문</span><select id='spCpVer' class='sp-cpsel'>" + vopts + "</select><input id='spCpRef' class='sp-cpin' placeholder='예: 창1:1~10' value='" + rv + "'><button class='sp-cpgo' id='spCpGo'>검색</button><button class='sp-mini sp-cpcopy' id='spCpCopy'>&#10696; 본문 복사</button></div>"
         + "<div class='sp-cprow'><span class='sp-cplab'>옵션</span><label class='sp-cpv'><input type='checkbox' id='spCpNums'" + (st.cpNums !== false ? " checked" : "") + ">절 번호 포함</label></div>"
-        + "<textarea class='sp-ta' id='spCpOut' readonly style='min-height:190px' placeholder='본문을 입력하고 검색을 누르면 결과가 나옵니다.'></textarea>"
-        + "<div style='margin-top:11px'><button class='sp-mini' id='spCpCopy'>&#10696; 본문 복사</button></div>";
+        + "<textarea class='sp-ta sp-cpout' id='spCpOut' readonly placeholder='본문을 입력하고 검색을 누르면 결과가 나옵니다.'></textarea>"
+        + "</div>";
       var go = function () { var txt = passageText(); if (!txt) { toast("본문 형식을 확인하세요 (예: 창1:1~10)"); return; } $("#spCpOut").value = txt; };
       $("#spCpRef").oninput = function () { st.cpRef = this.value; save(); };
       $("#spCpRef").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); go(); } });
@@ -482,21 +505,72 @@
       $("#spCpNums").onchange = function () { st.cpNums = this.checked; save(); if ($("#spCpOut").value) go(); };
       $("#spCpGo").onclick = go;
       $("#spCpCopy").onclick = function () { var t = $("#spCpOut").value; if (!t) { toast("먼저 검색하세요"); return; } doCopy(t); };
-      var init = passageText(); if (init) $("#spCpOut").value = init;
+      var init = passageText(); if (init) $("#spCpOut").value = init; // 재렌더(탭 전환·대조 토글) 시 검색 결과 복원. open에선 cpRef=""이라 빈 칸 유지
     }
   }
+  // 단어검색 범위 그룹 (개신교 66권 순서, 인덱스 0~65)
+  var SGROUPS = [
+    { key: "all", label: "전체", hint: "창~계", r: [0, 65] },
+    { key: "ot", label: "구약", hint: "창~말", r: [0, 38] },
+    { key: "nt", label: "신약", hint: "마~계", r: [39, 65] },
+    { key: "penta", label: "모세오경", hint: "창~신", r: [0, 4] },
+    { key: "hist", label: "역사서", hint: "수~에", r: [5, 16] },
+    { key: "poetry", label: "시가서", hint: "욥~아", r: [17, 21] },
+    { key: "major", label: "대선지서", hint: "사~단", r: [22, 26] },
+    { key: "minor", label: "소선지서", hint: "호~말", r: [27, 38] },
+    { key: "gospel", label: "복음서", hint: "마~요", r: [39, 42] },
+    { key: "acts", label: "사도행전", hint: "행", r: [43, 43] },
+    { key: "paul", label: "바울서신", hint: "롬~몬", r: [44, 56] },
+    { key: "general", label: "공동서신", hint: "히~유", r: [57, 64] },
+    { key: "rev", label: "계시록", hint: "계", r: [65, 65] }
+  ];
+  var GROUP_MAP = {}; SGROUPS.forEach(function (g) { GROUP_MAP[g.key] = g; });
+  function syncScopeUI() { var r = $("#spSRange"), dd = $("#spScopeDD"); if (!r || !dd) return; var dis = !!r.value.trim(); dd.classList.toggle("dis", dis); if (dis) { var m = $("#spScopeMenu"); if (m) m.hidden = true; } } // 직접 입력 있으면 범위 드롭다운 비활성
+  var searchTimer = null; function scheduleSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 160); }
+  function parseScopeInput(raw) {                 // "창" / "창-신" / "시119" / "시119-121" / "시119:1~16"
+    var s = (raw || "").replace(/\s+/g, ""); if (!s) return null;
+    var bv = BV(); if (!bv || !bv.bible) return null; var data = bv.bible, m;
+    if ((m = s.match(/^(\D+)[-~](\D+)$/))) { var b1 = findBook(data, m[1]), b2 = findBook(data, m[2]); if (b1 < 0 || b2 < 0) return null; return [{ bFrom: Math.min(b1, b2), bTo: Math.max(b1, b2) }]; }
+    if ((m = s.match(/^(\D+)(\d+):(\d+)(?:[-~](\d+))?$/))) { var bb = findBook(data, m[1]); if (bb < 0) return null; var c = (+m[2]) - 1, vF = +m[3], vT = m[4] ? +m[4] : +m[3]; return [{ bFrom: bb, bTo: bb, cFrom: c, cTo: c, vFrom: Math.min(vF, vT), vTo: Math.max(vF, vT) }]; }
+    if ((m = s.match(/^(\D+)(\d+)(?:[-~](\d+))?$/))) { var b3 = findBook(data, m[1]); if (b3 < 0) return null; var cF = (+m[2]) - 1, cT = m[3] ? (+m[3]) - 1 : cF; return [{ bFrom: b3, bTo: b3, cFrom: Math.min(cF, cT), cTo: Math.max(cF, cT) }]; }
+    if ((m = s.match(/^(\D+)$/))) { var b4 = findBook(data, m[1]); if (b4 < 0) return null; return [{ bFrom: b4, bTo: b4 }]; }
+    return null;
+  }
   function runSearch() {
-    var out = $("#spSOut"), nm = st._sv || st.cols[0], q = (st._sq || "").trim();
-    if (!q) { out.innerHTML = "<div class='sp-empty'>" + esc(nm) + "에서 검색할 단어를 입력하세요.</div>"; return; }
+    var out = $("#spSOut"); if (!out) return;
+    var nm = st._sv || st.cols[0], q = (st._sq || "").trim(), bs = books();
+    var rangeRaw = (st._srange || "").trim(), segs, scopeLabel;
+    if (rangeRaw) { segs = parseScopeInput(rangeRaw); scopeLabel = rangeRaw; }
+    else { var g = GROUP_MAP[st._scope] || GROUP_MAP.all; segs = [{ bFrom: g.r[0], bTo: g.r[1] }]; scopeLabel = g.label + " (" + g.hint + ")"; }
+    if (!q) { out.innerHTML = "<div class='sp-empty'>" + esc(nm) + "에서 검색할 단어를 입력하세요.<br><span style='color:#93a096'>범위: " + esc(scopeLabel) + "</span></div>"; return; }
+    if (segs === null) { out.innerHTML = "<div class='sp-empty'>범위 형식을 확인하세요.<br>예: <b>창</b>(창세기 전체) · <b>시119</b> · <b>시119:1~16</b> · <b>창-신</b></div>"; return; }
+    out.innerHTML = "<div class='sp-scount'>검색 중…</div>";
     getData(nm, function (d) {
-      var vs = chapVerses(d) || []; var ql = q.toLowerCase(), hits = [];
-      for (var i = 0; i < vs.length; i++) { var p = plain(vs[i]); if (p.toLowerCase().indexOf(ql) >= 0) hits.push({ v: i + 1, t: p }); }
-      if (!hits.length) { out.innerHTML = "<div class='sp-scount'>‘" + esc(q) + "’ — 이 장에서 일치 없음</div>"; return; }
+      if (!d || !d.books) { out.innerHTML = "<div class='sp-empty'>역본 데이터를 불러오지 못했습니다.</div>"; return; }
+      var ql = q.toLowerCase(), hits = [];
+      for (var si = 0; si < segs.length; si++) {
+        var seg = segs[si];
+        for (var b = seg.bFrom; b <= seg.bTo; b++) {
+          var bk = d.books[b]; if (!bk || !bk.chapters) continue;
+          var cLo = seg.cFrom != null ? seg.cFrom : 0, cHi = seg.cTo != null ? Math.min(seg.cTo, bk.chapters.length - 1) : bk.chapters.length - 1;
+          for (var c = cLo; c <= cHi; c++) {
+            var vs = bk.chapters[c]; if (!vs) continue;
+            var vLo = seg.vFrom != null ? seg.vFrom : 1, vHi = seg.vTo != null ? Math.min(seg.vTo, vs.length) : vs.length;
+            for (var v = vLo; v <= vHi; v++) {
+              var p = plain(vs[v - 1]); if (p && p.toLowerCase().indexOf(ql) >= 0) hits.push({ b: b, c: c, v: v, t: p });
+            }
+          }
+        }
+      }
+      if (!hits.length) { out.innerHTML = "<div class='sp-scount'>‘" + esc(q) + "’ — " + esc(scopeLabel) + "에서 일치 없음</div>"; return; }
       var re = new RegExp("(" + q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "ig");
-      var h = "<div class='sp-scount'>‘" + esc(q) + "’ · " + esc(nm) + " · " + hits.length + "절 일치</div>";
-      hits.forEach(function (hh) { h += "<div class='sp-sres' data-v='" + hh.v + "'><div class='r'>" + esc(bookLabel()) + " " + (chap + 1) + ":" + hh.v + "</div><div class='t'>" + esc(hh.t).replace(re, "<mark class='q'>$1</mark>") + "</div></div>"; });
+      var h = "<div class='sp-scount'>‘" + esc(q) + "’ · " + esc(nm) + " · " + esc(scopeLabel) + " · " + hits.length + "절</div>";
+      hits.forEach(function (hh) {
+        var ab = (bs[hh.b] && (bs[hh.b].abbr || bs[hh.b].name)) || (hh.b + 1);
+        h += "<div class='sp-sres' data-b='" + hh.b + "' data-c='" + hh.c + "' data-v='" + hh.v + "'><div class='r'>" + esc(ab) + " " + (hh.c + 1) + ":" + hh.v + "</div><div class='t'>" + esc(hh.t).replace(re, "<mark class='q'>$1</mark>") + "</div></div>";
+      });
       out.innerHTML = h;
-      out.querySelectorAll(".sp-sres").forEach(function (it) { it.onclick = function () { selectVerse(+it.dataset.v); }; });
+      out.querySelectorAll(".sp-sres").forEach(function (it) { it.onclick = function () { gotoPassage(+it.dataset.b, +it.dataset.c, +it.dataset.v); }; });
     });
   }
 
@@ -543,14 +617,16 @@
   /* ---------- 토글·리사이저 ---------- */
   var CMP_COL_MIN = 361; // 열 1개 최소폭(360 + 우측 경계 1px)
   function applyWs() {
-    var f = Math.max(.08, Math.min(.92, st.wsFrac || .58)), lmin = "0";
+    var f = Math.max(.08, Math.min(.92, st.wsFrac || .58)), ws = $("#spWs"); if (!ws) return;
     if (st.mode === "cmp") {
       var n = (st.cmpCols && st.cmpCols.length) || 1;
-      var need = n * CMP_COL_MIN;                  // 현재 열 전부를 담는 폭 = 대조창 최소 크기
-      var ws = $("#spWs"), avail = ws ? (ws.clientWidth - 7) : need;
-      lmin = Math.min(need, Math.max(200, avail)) + "px"; // 화면보다 크면 화면까지만
+      var need = n * CMP_COL_MIN;                        // 현재 열 전부를 담는 폭 = 대조창 최소 크기
+      var avail = ws.clientWidth - 7; if (avail < 1) avail = need;
+      var leftPx = Math.min(Math.max(need, Math.round(f * avail)), avail); // 최소폭 보장 + 화면 넘지 않게
+      ws.style.gridTemplateColumns = leftPx + "px 7px 1fr"; // 오른쪽(주석)이 남은 폭 전부 채움 → 여백 없음
+    } else {
+      ws.style.gridTemplateColumns = "minmax(0," + f + "fr) 7px minmax(0," + (1 - f) + "fr)";
     }
-    $("#spWs").style.gridTemplateColumns = "minmax(" + lmin + "," + f + "fr) 7px minmax(0," + (1 - f) + "fr)";
   }
   function applyInfoH() { var pr = $("#spR"); var max = pr ? Math.max(160, pr.clientHeight - 150) : 460; $(".sp-info").style.height = Math.max(110, Math.min(max, st.infoH || 230)) + "px"; }
   function syncStudy() { $("#spStron").classList.toggle("on", st.stron); $("#spWjb").classList.toggle("on", st.wonjeon); root.classList.toggle("sp-stron", st.stron); }
@@ -635,7 +711,7 @@
     };
     $("#spIX").onclick = clearInfo;
     $("#spTabs").onclick = function (e) { var t = e.target.closest(".sp-tab"); if (!t) return; st.tab = t.dataset.tab; save(); syncTabs(); renderTab(); };
-    document.addEventListener("click", function () { var m = root && root.querySelector(".sp-menu.open"); if (m) m.classList.remove("open"); });
+    document.addEventListener("click", function () { var m = root && root.querySelector(".sp-menu.open"); if (m) m.classList.remove("open"); var dm = root && root.querySelector(".sp-ddmenu"); if (dm && !dm.hidden) dm.hidden = true; });
     // 세로 경계
     (function () { var dv = $("#spDiv"), ws = $("#spWs"), dr = false;
       function mv(e) { if (!dr) return; var r = ws.getBoundingClientRect(); var cx = e.touches ? e.touches[0].clientX : e.clientX; st.wsFrac = Math.max(.08, Math.min(.92, (cx - r.left) / r.width)); applyWs(); if (e.cancelable) e.preventDefault(); }
@@ -672,9 +748,8 @@
     if (st.cols.indexOf(baseVer) < 0 && st.cols.indexOf(codedOf(baseVer)) < 0 && avail.indexOf(baseVer) >= 0) st.cols.unshift(baseVer);
     if (!st.cols.length) st.cols = avail.slice(0, 1);
     if (!st.cpVer || st.cols.indexOf(st.cpVer) < 0) st.cpVer = st.cols[0];
-    // 본문복사 기본값: 현재 장 전체
-    var vs = chapVerses(bv.bible), cnt = vs ? vs.length : 1;
-    st.cpRef = (bookLabel() || "창") + " " + (chap + 1) + ":1~" + cnt;
+    st.cpRef = "";   // 본문복사: 열 때마다 빈 칸으로 시작
+    st._sq = ""; st._srange = ""; st._scope = "all";   // 단어검색: 열 때마다 빈 칸으로 시작(범위=전체)
     st.sel = null; wjData = null;
 
     document.body.style.overflow = "hidden";
