@@ -607,7 +607,7 @@
     var nums = st.cpNums !== false;
     var bi = d ? findBook(d, p.token) : -1;
     var label = (bi >= 0 ? (d.books[bi].abbr || d.books[bi].name) : p.token) + " " + p.chap + ":" + (p.from === p.to ? p.from : p.from + "-" + p.to);
-    var lines = [nm + " · " + label];
+    var lines = [label];
     for (var v = p.from; v <= p.to; v++) {
       var txt = "(본문 없음)";
       if (bi >= 0) { try { var raw = d.books[bi].chapters[p.chap - 1][v - 1]; if (raw != null) txt = plain(raw); } catch (e) {} }
