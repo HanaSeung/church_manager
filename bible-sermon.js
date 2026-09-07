@@ -259,7 +259,13 @@
     $("#spNavPrev").onclick = function () { if (chap > 0) gotoPassage(book, chap - 1, null); };
     $("#spNavNext").onclick = function () { var m = (bs[book] && bs[book].chapters) ? bs[book].chapters.length : 1; if (chap < m - 1) gotoPassage(book, chap + 1, null); };
   }
-  function scrollToVerse(v) { var g = $("#spGrid"); if (!g) return; var el = g.querySelector('[data-n="' + v + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" }); }
+  function scrollToVerse(v) {
+    var g = $("#spGrid"); if (!g) return; var el = g.querySelector('[data-n="' + v + '"]'); if (!el) return;
+    var sc = el.closest ? el.closest(".sp-scroll") : null;
+    if (!sc) { if (el.scrollIntoView) el.scrollIntoView({ block: "start" }); return; }
+    var head = sc.querySelector(".sp-head"), hh = head ? head.offsetHeight : 0;
+    sc.scrollTop += el.getBoundingClientRect().top - sc.getBoundingClientRect().top - hh; // 고정 헤더 아래 최상단에 위치
+  }
   function gotoPassage(b, c, v) {
     var bs = books(); if (!bs.length) return;
     if (b < 0 || b >= bs.length) return;
