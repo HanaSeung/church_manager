@@ -590,15 +590,11 @@
   }
   function parseRef(str) {
     var s = (str || "").trim(); if (!s) return null;
-    var i = s.lastIndexOf(":"); if (i < 0) return null;
-    var left = s.slice(0, i).replace(/\s+/g, ""), rest = s.slice(i + 1);
-    var lm = left.match(/^(.+?)(\d+)$/); if (!lm) return null;
-    var token = lm[1], ch = parseInt(lm[2], 10);
-    var m = rest.match(/(\d+)\s*[-~–]\s*(\d+)/), from, to;
-    if (m) { from = +m[1]; to = +m[2]; } else { var one = rest.match(/(\d+)/); if (!one) return null; from = to = +one[1]; }
-    if (from > to) { var x = from; from = to; to = x; }
-    if (to - from > 200) to = from + 200;
-    return { token: token, chap: ch, from: from, to: to };
+    // 책 장:절 [- [장:]절]  (예: 역대상4:1 / 역대상4:1-5 / 역대상4:1-5:3)
+    var m = s.replace(/\s+/g, "").match(/^(.+?)(\d+):(\d+)(?:[-~–](?:(\d+):)?(\d+))?$/); if (!m) return null;
+    var token = m[1], ch = +m[2], from = +m[3], ch2 = m[4] ? +m[4] : ch, to = m[5] ? +m[5] : from;
+    if (ch2 < ch || (ch2 === ch && to < from)) { var x = ch; ch = ch2; ch2 = x; x = from; from = to; to = x; }
+    return { token: token, chap: ch, from: from, chap2: ch2, to: to };
   }
   function passageText() {
     var p = parseRef(st.cpRef); if (!p) return "";
@@ -606,12 +602,21 @@
     if (!d) { getData(nm, function () { var o = $("#spCpOut"); if (o) { var t = passageText(); if (t) o.value = t; } }); }
     var nums = st.cpNums !== false;
     var bi = d ? findBook(d, p.token) : -1;
-    var label = (bi >= 0 ? (d.books[bi].abbr || d.books[bi].name) : p.token) + " " + p.chap + ":" + (p.from === p.to ? p.from : p.from + "-" + p.to);
-    var lines = [label];
-    for (var v = p.from; v <= p.to; v++) {
-      var txt = "(본문 없음)";
-      if (bi >= 0) { try { var raw = d.books[bi].chapters[p.chap - 1][v - 1]; if (raw != null) txt = plain(raw); } catch (e) {} }
-      lines.push((nums ? v + " " : "") + txt);
+    var multi = p.chap2 !== p.chap;
+    var range = multi ? p.chap + ":" + p.from + "-" + p.chap2 + ":" + p.to : p.chap + ":" + (p.from === p.to ? p.from : p.from + "-" + p.to);
+    var label = (bi >= 0 ? (d.books[bi].abbr || d.books[bi].name) : p.token) + " " + range;
+    var lines = [label], count = 0, MAX = 200;
+    for (var c = p.chap; c <= p.chap2 && count < MAX; c++) {
+      var chap = (bi >= 0 && d.books[bi].chapters[c - 1]) || null;
+      var vFrom = c === p.chap ? p.from : 1;
+      var vTo = c === p.chap2 ? p.to : (chap ? chap.length : 0);
+      if (multi && lines.length > 1) lines.push("");                     // 장 경계 빈 줄
+      if (multi) lines.push(c + "장");
+      for (var v = vFrom; v <= vTo && count < MAX; v++, count++) {
+        var txt = "(본문 없음)";
+        if (chap) { try { var raw = chap[v - 1]; if (raw != null) txt = plain(raw); } catch (e) {} }
+        lines.push((nums ? v + " " : "") + txt);
+      }
     }
     return lines.join("\n");
   }
